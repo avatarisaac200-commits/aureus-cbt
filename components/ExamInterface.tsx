@@ -18,10 +18,11 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, onFinish, onE
   const [activeSectionIndex, setActiveSectionIndex] = useState<number | null>(null);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [timeRemaining, setTimeRemaining] = useState(test.totalDurationSeconds);
+  const [hasStarted, setHasStarted] = useState(false); // New state to control timer start
   const [answers, setAnswers] = useState<Record<string, number>>({});
   const [completedSections, setCompletedSections] = useState<number[]>([]);
   const [showCalculator, setShowCalculator] = useState(false);
-  const [showNav, setShowNav] = useState(false); // Mobile navigation toggle
+  const [showNav, setShowNav] = useState(false);
   const [allQuestions, setAllQuestions] = useState<Record<string, Question>>({});
   const [isFinishing, setIsFinishing] = useState(false);
 
@@ -73,12 +74,13 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, onFinish, onE
       onFinish({ ...result, id: docRef.id } as ExamResult);
     } catch (e) {
       console.error("Failed to save results:", e);
-      // Still finish even if cloud save fails (for user feedback)
       onFinish({ ...result, id: 'temp-' + Date.now() } as ExamResult);
     }
   }, [allQuestions, answers, onFinish, test, user.id]);
 
   useEffect(() => {
+    if (!hasStarted) return; // Only start timer if hasStarted is true
+
     timerRef.current = setInterval(() => {
       setTimeRemaining(prev => {
         if (prev <= 1) {
@@ -90,10 +92,11 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, onFinish, onE
       });
     }, 1000);
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [calculateResult]);
+  }, [calculateResult, hasStarted]);
 
   const enterSection = (idx: number) => {
     if (completedSections.includes(idx)) return;
+    setHasStarted(true); // Begin countdown when user starts their first section
     setActiveSectionIndex(idx);
     setCurrentQuestionIndex(0);
     setView('testing');
@@ -138,14 +141,16 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, onFinish, onE
             </div>
           </div>
           <div className="bg-slate-900 border border-slate-800 px-3 py-1 md:px-6 md:py-2 rounded-xl text-amber-400 font-mono text-base md:text-xl font-black">
-            {formatTime(timeRemaining)}
+            {hasStarted ? formatTime(timeRemaining) : "WAITING"}
           </div>
         </header>
 
         <main className="flex-1 max-w-4xl mx-auto w-full p-4 md:p-8">
           <div className="bg-white rounded-3xl shadow-sm border border-gray-200 p-6 md:p-10">
             <h2 className="text-lg md:text-xl font-black text-slate-950 mb-1 uppercase tracking-tight">Test Sections</h2>
-            <p className="text-slate-400 text-[10px] md:text-xs font-medium mb-8">Complete sections in sequence. Locks upon submission.</p>
+            <p className="text-slate-400 text-[10px] md:text-xs font-medium mb-8">
+              {!hasStarted ? "Timer will start upon entering any section." : "Exam is in progress. Complete remaining sections."}
+            </p>
             
             <div className="space-y-3">
               {test.sections.map((section, idx) => {
@@ -201,7 +206,6 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, onFinish, onE
     );
   }
 
-  // Testing View
   const activeSection = test.sections[activeSectionIndex!];
   const currentQuestionId = activeSection.questionIds[currentQuestionIndex];
   const currentQuestion = allQuestions[currentQuestionId];
@@ -272,12 +276,10 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, onFinish, onE
               ))}
             </div>
             
-            {/* Added spacer for mobile overflow */}
             <div className="h-20 md:hidden"></div>
           </div>
         </main>
 
-        {/* Question Navigation Drawer/Sidebar */}
         <aside className={`
           fixed inset-y-0 right-0 w-72 bg-white border-l border-gray-200 z-40 transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0 md:w-80 md:flex md:flex-col shadow-2xl md:shadow-none
           ${showNav ? 'translate-x-0' : 'translate-x-full'}
@@ -306,7 +308,7 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, onFinish, onE
             </div>
             <div className="p-4 bg-slate-50 border-t border-gray-100 space-y-2 pb-safe">
               <button onClick={() => { setShowCalculator(!showCalculator); setShowNav(false); }} className="w-full py-3 bg-slate-950 text-amber-500 rounded-xl text-[9px] font-black uppercase tracking-widest">Scientific Calc</button>
-              <div className="text-[8px] text-slate-400 font-bold text-center uppercase py-2">Candidate Stats: {Object.keys(answers).filter(k => activeSection.questionIds.includes(k)).length} / {activeSection.questionIds.length} Attempted</div>
+              <div className="text-[8px] text-slate-400 font-bold text-center uppercase py-2">Attempted: {Object.keys(answers).filter(k => activeSection.questionIds.includes(k)).length} / {activeSection.questionIds.length}</div>
             </div>
           </div>
         </aside>
@@ -314,7 +316,7 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, onFinish, onE
 
       <footer className="bg-white border-t border-gray-200 p-3 md:p-5 px-4 md:px-10 flex justify-between items-center z-20 pb-safe">
          <button onClick={() => setView('lobby')} className="text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-slate-900 py-2">
-            Lobby
+            Main Menu
          </button>
          
          <div className="flex gap-2">
