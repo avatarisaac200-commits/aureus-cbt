@@ -26,21 +26,28 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onStartTest, onRe
     const fetchData = async () => {
       try {
         setLoading(true);
+        console.log("Fetching data for user:", user.id);
+        
         const testsSnap = await getDocs(collection(db, 'tests'));
-        setTests(testsSnap.docs.map(d => ({ ...d.data(), id: d.id } as MockTest)));
+        const testsList = testsSnap.docs.map(d => ({ ...d.data(), id: d.id } as MockTest));
+        setTests(testsList);
 
-        // Removed order by to avoid composite index requirement which was likely causing issues on Vercel
         const resultsQuery = query(
           collection(db, 'results'), 
           where('userId', '==', user.id)
         );
         const resultsSnap = await getDocs(resultsQuery);
-        const results = resultsSnap.docs.map(d => ({ ...d.data(), id: d.id } as ExamResult));
+        const resultsList = resultsSnap.docs.map(d => ({ ...d.data(), id: d.id } as ExamResult));
         
-        // Sort client-side instead
-        setHistory(results.sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime()));
+        // Ensure sorting by completion date (most recent first)
+        const sortedHistory = resultsList.sort((a, b) => 
+          new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime()
+        );
+        
+        console.log("Fetched history count:", sortedHistory.length);
+        setHistory(sortedHistory);
       } catch (err) {
-        console.error("Error fetching dashboard data:", err);
+        console.error("Dashboard error:", err);
       } finally {
         setLoading(false);
       }
@@ -64,13 +71,16 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onStartTest, onRe
       : 0
   };
 
-  const isTestCompleted = (testId: string) => history.some(h => h.testId === testId);
+  // Robust check for test completion
+  const isTestCompleted = (testId: string) => {
+    return history.some(h => String(h.testId) === String(testId) && h.status === 'completed');
+  };
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-6 md:p-8 pb-20">
       <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
         <div className="flex items-center gap-3 w-full md:w-auto">
-          <img src={logo} alt="Aureus Medicos" className="w-12 h-12 md:w-16 md:h-16" />
+          <img src={logo} alt="Aureus Medicos" className="w-12 h-12 md:w-16 md:h-16 object-contain" />
           <div className="flex-1">
             <h1 className="text-xl md:text-2xl font-black text-slate-900 uppercase tracking-tighter flex items-center gap-2 flex-wrap">
               Aureus Medicos CBT
@@ -124,16 +134,14 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onStartTest, onRe
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2">
-            <div className="flex justify-between items-center mb-4">
-               <h2 className="text-lg md:text-xl font-black text-slate-900 uppercase tracking-tight">
-                  {isOffline ? 'Cached Practice Exams' : 'Available Practice Exams'}
-               </h2>
-            </div>
+            <h2 className="text-lg md:text-xl font-black mb-4 text-slate-900 uppercase tracking-tight">
+              {isOffline ? 'Cached Practice Exams' : 'Available Practice Exams'}
+            </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {tests.length === 0 ? (
                 <div className="col-span-full p-12 text-center bg-white rounded-3xl border-2 border-dashed border-slate-200">
                   <p className="text-slate-400 font-bold uppercase text-[10px] tracking-widest">
-                    {isOffline ? 'No cached exams available. Connect to sync.' : 'No active exams found in the cloud.'}
+                    {isOffline ? 'No cached exams available.' : 'No active exams published.'}
                   </p>
                 </div>
               ) : (
@@ -178,7 +186,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onStartTest, onRe
             <h2 className="text-lg md:text-xl font-black mb-6 text-slate-950 uppercase tracking-tight text-center">History</h2>
             <div className="space-y-3">
               {history.length === 0 ? (
-                 <p className="text-[9px] font-black text-slate-300 text-center py-6 uppercase tracking-widest">No previous attempts found.</p>
+                 <p className="text-[9px] font-black text-slate-300 text-center py-6 uppercase tracking-widest">No history found.</p>
               ) : (
                  history.map(item => (
                    <div key={item.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 transition-all hover:border-amber-200 group">
