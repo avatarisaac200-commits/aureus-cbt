@@ -16,6 +16,8 @@ export interface Question {
   options: string[];
   correctAnswerIndex: number;
   explanation?: string;
+  createdBy: string;
+  createdAt: string;
 }
 
 export interface TestSection {
@@ -32,6 +34,10 @@ export interface MockTest {
   sections: TestSection[];
   totalDurationSeconds: number;
   allowRetake: boolean;
+  createdBy: string;
+  creatorName: string;
+  isApproved: boolean;
+  createdAt: string;
 }
 
 export interface ExamResult {

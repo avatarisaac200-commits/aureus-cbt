@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { User, MockTest, ExamResult, Question, TestSection } from '../types';
-import { db } from '../firebase';
+import { User, MockTest, ExamResult, Question, TestSection } from './types';
+import { db } from './firebase';
 import { collection, getDocs, query, where, addDoc, orderBy } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
-import ScientificText from './ScientificText';
-import logo from '../assets/logo.png';
+import ScientificText from './components/ScientificText';
+import logo from './assets/logo.png';
 
 interface DashboardProps {
   user: User;
