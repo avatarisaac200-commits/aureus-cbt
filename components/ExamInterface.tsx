@@ -4,6 +4,7 @@ import { db } from '../firebase';
 import { collection, getDocs, addDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import Calculator from './Calculator';
 import ScientificText from './ScientificText';
+import logo from '../assets/logo.png';
 
 interface ExamInterfaceProps {
   test: MockTest;
@@ -129,7 +130,7 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, onFinish, onE
       <div className="min-h-screen bg-slate-50 flex flex-col">
         <header className="bg-slate-950 p-4 md:p-6 flex justify-between items-center border-b-4 border-amber-500 text-white shadow-xl">
           <div className="flex items-center gap-3">
-            <img src="logo.png" className="w-10 h-10 md:w-12 md:h-12" alt="Logo" />
+            <img src={logo} className="w-10 h-10 md:w-12 md:h-12" alt="Logo" />
             <div>
               <h1 className="text-xs md:text-sm font-black uppercase tracking-widest text-amber-500 truncate max-w-[150px] md:max-w-none">{test.name}</h1>
               <p className="text-[8px] md:text-[10px] text-slate-400 font-bold uppercase">Dr. {user.name}</p>
@@ -208,7 +209,7 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, onFinish, onE
     <div className="flex flex-col h-screen bg-gray-50 select-none overflow-hidden">
       <header className="bg-slate-950 text-white px-4 md:px-8 py-3 md:py-4 flex justify-between items-center border-b-4 border-amber-500 z-30">
         <div className="flex items-center gap-3">
-          <img src="logo.png" className="w-8 h-8 md:w-10 md:h-10" alt="Logo" />
+          <img src={logo} className="w-8 h-8 md:w-10 md:h-10" alt="Logo" />
           <div className="hidden sm:block">
             <h1 className="text-[10px] font-black uppercase tracking-widest text-amber-500">{test.name}</h1>
             <p className="text-[8px] text-slate-400 font-bold uppercase truncate max-w-[120px]">Section: {activeSection.name}</p>

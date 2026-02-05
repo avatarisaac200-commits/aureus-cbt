@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { User, MockTest, ExamResult, ViewState } from './types';
 import { auth, db } from './firebase';
@@ -9,6 +8,7 @@ import Dashboard from './components/Dashboard';
 import AdminDashboard from './components/AdminDashboard';
 import ExamInterface from './components/ExamInterface';
 import ResultScreen from './components/ResultScreen';
+import logo from './assets/logo.png';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -61,7 +61,7 @@ const App: React.FC = () => {
   if (isLoading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50">
-        <img src="logo.png" className="w-20 h-20 mb-4 animate-pulse" alt="Loading" />
+        <img src={logo} className="w-20 h-20 mb-4 animate-pulse" alt="Loading" />
         <p className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-400">Authenticating...</p>
       </div>
     );

@@ -1,6 +1,6 @@
-
 import React from 'react';
 import { ExamResult } from '../types';
+import logo from '../assets/logo.png';
 
 interface ResultScreenProps {
   result: ExamResult;
@@ -24,7 +24,7 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ result, onClose }) => {
        <div className="max-w-3xl w-full bg-white rounded-[2.5rem] shadow-2xl overflow-hidden border border-gray-200">
           <div className="bg-slate-950 p-12 text-center relative border-b-8 border-amber-500">
              <div className="flex justify-center mb-6">
-                <img src="logo.png" alt="Crest" className="w-24 h-24 drop-shadow-lg" />
+                <img src={logo} alt="Crest" className="w-24 h-24 drop-shadow-lg" />
              </div>
              <p className="text-amber-500 text-[10px] font-black uppercase tracking-[0.3em] mb-2">Practice Test Results</p>
              <h1 className="text-3xl font-black text-white uppercase tracking-tight">{result.testName}</h1>

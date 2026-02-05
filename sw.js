@@ -1,10 +1,9 @@
-
 const CACHE_NAME = 'aureus-medicos-cbt-v1';
 const ASSETS = [
-  './',
-  './index.html',
-  './logo.png',
-  './manifest.json'
+  '/',
+  '/index.html',
+  '/assets/logo.png',
+  '/manifest.json'
 ];
 
 self.addEventListener('install', (event) => {

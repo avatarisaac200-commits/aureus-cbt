@@ -1,9 +1,9 @@
-
 import React, { useState, useEffect } from 'react';
 import { User, Question, MockTest, TestSection } from '../types';
 import { db } from '../firebase';
 import { collection, addDoc, getDocs, deleteDoc, doc, query, orderBy } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import ScientificText from './ScientificText';
+import logo from '../assets/logo.png';
 
 interface AdminDashboardProps {
   user: User;
@@ -140,7 +140,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onSwitc
     <div className="max-w-7xl mx-auto p-8">
       <div className="flex flex-col md:flex-row justify-between items-center mb-10 gap-6">
         <div className="flex items-center gap-4">
-           <img src="logo.png" className="w-16 h-16" alt="Logo" />
+           <img src={logo} className="w-16 h-16" alt="Logo" />
            <div>
               <h1 className="text-2xl font-black text-slate-950 uppercase tracking-tighter leading-none">Admin Console</h1>
               <p className="text-amber-600 text-[10px] font-black uppercase tracking-widest mt-1">Cloud Synchronized</p>

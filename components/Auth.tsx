@@ -1,9 +1,9 @@
-
 import React, { useState } from 'react';
 import { User } from '../types';
 import { auth, db } from '../firebase';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 import { doc, setDoc, getDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+import logo from '../assets/logo.png';
 
 interface AuthProps {
   onLogin: (user: User) => void;
@@ -55,7 +55,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col justify-center items-center p-6">
       <div className="mb-8 flex flex-col items-center">
-        <img src="logo.png" alt="Aureus Medicos Logo" className="w-24 h-24 md:w-32 md:h-32 mb-4 drop-shadow-xl" />
+        <img src={logo} alt="Aureus Medicos Logo" className="w-24 h-24 md:w-32 md:h-32 mb-4 drop-shadow-xl" />
         <h2 className="text-slate-900 font-black text-2xl tracking-tighter uppercase">Aureus Medicos CBT</h2>
       </div>
 

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { User, MockTest, ExamResult } from '../types';
 import { db } from '../firebase';
 import { collection, getDocs, query, where, orderBy } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+import logo from '../assets/logo.png';
 
 interface DashboardProps {
   user: User;
@@ -65,7 +66,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onStartTest, onRe
     <div className="max-w-6xl mx-auto px-4 py-6 md:p-8 pb-20">
       <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
         <div className="flex items-center gap-3 w-full md:w-auto">
-          <img src="logo.png" alt="Aureus Medicos" className="w-12 h-12 md:w-16 md:h-16" />
+          <img src={logo} alt="Aureus Medicos" className="w-12 h-12 md:w-16 md:h-16" />
           <div className="flex-1">
             <h1 className="text-xl md:text-2xl font-black text-slate-900 uppercase tracking-tighter flex items-center gap-2 flex-wrap">
               Aureus Medicos CBT
