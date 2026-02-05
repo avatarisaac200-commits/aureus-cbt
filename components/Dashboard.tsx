@@ -1,17 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { User, MockTest, ExamResult } from '../types';
 import { db } from '../firebase';
-import { collection, getDocs, query, where, orderBy } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+import { collection, getDocs, query, where } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import logo from '../assets/logo.png';
 
 interface DashboardProps {
   user: User;
   onLogout: () => void;
   onStartTest: (test: MockTest) => void;
+  onReviewResult: (result: ExamResult) => void;
   onReturnToAdmin?: () => void;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onStartTest, onReturnToAdmin }) => {
+const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onStartTest, onReviewResult, onReturnToAdmin }) => {
   const [tests, setTests] = useState<MockTest[]>([]);
   const [history, setHistory] = useState<ExamResult[]>([]);
   const [loading, setLoading] = useState(true);
@@ -28,13 +29,16 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onStartTest, onRe
         const testsSnap = await getDocs(collection(db, 'tests'));
         setTests(testsSnap.docs.map(d => ({ ...d.data(), id: d.id } as MockTest)));
 
+        // Removed order by to avoid composite index requirement which was likely causing issues on Vercel
         const resultsQuery = query(
           collection(db, 'results'), 
-          where('userId', '==', user.id),
-          orderBy('completedAt', 'desc')
+          where('userId', '==', user.id)
         );
         const resultsSnap = await getDocs(resultsQuery);
-        setHistory(resultsSnap.docs.map(d => ({ ...d.data(), id: d.id } as ExamResult)));
+        const results = resultsSnap.docs.map(d => ({ ...d.data(), id: d.id } as ExamResult));
+        
+        // Sort client-side instead
+        setHistory(results.sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime()));
       } catch (err) {
         console.error("Error fetching dashboard data:", err);
       } finally {
@@ -120,9 +124,11 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onStartTest, onRe
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2">
-            <h2 className="text-lg md:text-xl font-black mb-4 text-slate-900 uppercase tracking-tight">
-              {isOffline ? 'Cached Practice Exams' : 'Available Practice Exams'}
-            </h2>
+            <div className="flex justify-between items-center mb-4">
+               <h2 className="text-lg md:text-xl font-black text-slate-900 uppercase tracking-tight">
+                  {isOffline ? 'Cached Practice Exams' : 'Available Practice Exams'}
+               </h2>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {tests.length === 0 ? (
                 <div className="col-span-full p-12 text-center bg-white rounded-3xl border-2 border-dashed border-slate-200">
@@ -136,8 +142,13 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onStartTest, onRe
                   const canStart = test.allowRetake || !completed;
                   
                   return (
-                    <div key={test.id} className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 hover:shadow-md transition-all group flex flex-col">
-                       <h3 className="font-black text-base md:text-lg text-slate-900 mb-2 group-hover:text-amber-600 transition-colors uppercase tracking-tight leading-tight">{test.name}</h3>
+                    <div key={test.id} className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 hover:shadow-md transition-all group flex flex-col relative overflow-hidden">
+                       {completed && (
+                         <div className="absolute top-0 right-0 bg-emerald-500 text-white text-[8px] font-black uppercase px-3 py-1 rounded-bl-xl tracking-widest z-10 shadow-sm">
+                           Completed
+                         </div>
+                       )}
+                       <h3 className="font-black text-base md:text-lg text-slate-900 mb-2 group-hover:text-amber-600 transition-colors uppercase tracking-tight leading-tight pr-12">{test.name}</h3>
                        <p className="text-[10px] md:text-xs text-slate-500 mb-6 line-clamp-3 font-medium flex-1">"{test.description}"</p>
                        
                        <div className="flex gap-2 text-[8px] md:text-[9px] font-black text-slate-400 uppercase tracking-widest mb-6">
@@ -154,7 +165,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onStartTest, onRe
                             : 'bg-slate-100 text-slate-400 cursor-not-allowed grayscale'
                           }`}
                        >
-                          {!canStart ? 'Completed' : 'Start Exam'}
+                          {!canStart ? 'Already Attempted' : 'Start Exam'}
                        </button>
                     </div>
                   );
@@ -167,10 +178,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onStartTest, onRe
             <h2 className="text-lg md:text-xl font-black mb-6 text-slate-950 uppercase tracking-tight text-center">History</h2>
             <div className="space-y-3">
               {history.length === 0 ? (
-                 <p className="text-[9px] font-black text-slate-300 text-center py-6 uppercase tracking-widest">No previous attempts.</p>
+                 <p className="text-[9px] font-black text-slate-300 text-center py-6 uppercase tracking-widest">No previous attempts found.</p>
               ) : (
                  history.map(item => (
-                   <div key={item.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 transition-all">
+                   <div key={item.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 transition-all hover:border-amber-200 group">
                       <div className="flex justify-between items-start mb-2">
                         <h4 className="text-[9px] font-black text-slate-950 uppercase truncate max-w-[120px] tracking-tight">{item.testName}</h4>
                         <span className={`text-[7px] px-2 py-0.5 rounded font-black uppercase ${
@@ -179,10 +190,16 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onStartTest, onRe
                           {item.status}
                         </span>
                       </div>
-                      <div className="flex justify-between items-end">
+                      <div className="flex justify-between items-end mb-3">
                          <span className="text-[8px] text-slate-400 font-bold uppercase">{new Date(item.completedAt).toLocaleDateString()}</span>
                          <span className="text-xl font-black text-slate-950 tracking-tighter">{Math.round((item.score / item.maxScore) * 100)}%</span>
                       </div>
+                      <button 
+                        onClick={() => onReviewResult(item)}
+                        className="w-full py-2 bg-white border border-slate-200 text-[8px] font-black uppercase tracking-widest rounded-lg hover:bg-amber-50 hover:border-amber-200 hover:text-amber-600 transition-all"
+                      >
+                        Review Mistakes
+                      </button>
                    </div>
                  ))
               )}

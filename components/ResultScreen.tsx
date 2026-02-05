@@ -5,9 +5,10 @@ import logo from '../assets/logo.png';
 interface ResultScreenProps {
   result: ExamResult;
   onClose: () => void;
+  onReview: () => void;
 }
 
-const ResultScreen: React.FC<ResultScreenProps> = ({ result, onClose }) => {
+const ResultScreen: React.FC<ResultScreenProps> = ({ result, onClose, onReview }) => {
   const percentage = Math.round((result.score / result.maxScore) * 100);
   
   const getFeedback = () => {
@@ -20,7 +21,7 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ result, onClose }) => {
   const feedback = getFeedback();
 
   return (
-    <div className="min-h-screen bg-slate-100 flex items-center justify-center p-6">
+    <div className="min-h-screen bg-slate-100 flex items-center justify-center p-6 pb-20">
        <div className="max-w-3xl w-full bg-white rounded-[2.5rem] shadow-2xl overflow-hidden border border-gray-200">
           <div className="bg-slate-950 p-12 text-center relative border-b-8 border-amber-500">
              <div className="flex justify-center mb-6">
@@ -76,18 +77,20 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ result, onClose }) => {
                 })}
              </div>
 
-             <div className="bg-slate-950 p-6 rounded-2xl border-l-4 border-amber-500 mb-12">
-                <p className="text-[10px] text-amber-500/70 font-bold italic text-center uppercase tracking-widest leading-relaxed">
-                  Your performance data has been saved to your student history. <br/> Use this to track your progress over time.
-                </p>
+             <div className="flex flex-col gap-3">
+                <button 
+                   onClick={onReview}
+                   className="w-full py-5 bg-amber-500 text-slate-950 rounded-2xl font-black uppercase tracking-[0.3em] text-xs hover:bg-amber-400 shadow-xl transition-all"
+                >
+                   Review Answers
+                </button>
+                <button 
+                   onClick={onClose}
+                   className="w-full py-5 bg-slate-950 text-amber-500 rounded-2xl font-black uppercase tracking-[0.3em] text-xs hover:bg-slate-800 shadow-xl transition-all"
+                >
+                   Back to Dashboard
+                </button>
              </div>
-
-             <button 
-                onClick={onClose}
-                className="w-full py-5 bg-slate-950 text-amber-500 rounded-2xl font-black uppercase tracking-[0.3em] text-xs hover:bg-slate-800 shadow-2xl transition-all"
-             >
-                Back to Dashboard
-             </button>
           </div>
        </div>
     </div>

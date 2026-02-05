@@ -64,6 +64,7 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, onFinish, onE
       maxScore: maxScore,
       completedAt: new Date().toISOString(),
       status: status,
+      userAnswers: answers,
       sectionBreakdown
     };
 

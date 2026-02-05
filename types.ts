@@ -1,4 +1,3 @@
-
 export type UserRole = 'student' | 'admin';
 
 export interface User {
@@ -44,6 +43,7 @@ export interface ExamResult {
   maxScore: number;
   completedAt: string;
   status: 'completed' | 'abandoned' | 'auto-submitted';
+  userAnswers: Record<string, number>;
   sectionBreakdown: {
     sectionName: string;
     score: number;
@@ -51,4 +51,4 @@ export interface ExamResult {
   }[];
 }
 
-export type ViewState = 'auth' | 'dashboard' | 'exam' | 'admin' | 'results';
+export type ViewState = 'auth' | 'dashboard' | 'exam' | 'admin' | 'results' | 'review';

@@ -8,12 +8,14 @@ import Dashboard from './components/Dashboard';
 import AdminDashboard from './components/AdminDashboard';
 import ExamInterface from './components/ExamInterface';
 import ResultScreen from './components/ResultScreen';
+import ReviewInterface from './components/ReviewInterface';
 import logo from './assets/logo.png';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentView, setCurrentView] = useState<ViewState>('auth');
   const [activeTest, setActiveTest] = useState<MockTest | null>(null);
+  const [reviewResult, setReviewResult] = useState<ExamResult | null>(null);
   const [recentResult, setRecentResult] = useState<ExamResult | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -52,6 +54,11 @@ const App: React.FC = () => {
     setCurrentView('exam');
   };
 
+  const startReview = (result: ExamResult) => {
+    setReviewResult(result);
+    setCurrentView('review');
+  };
+
   const completeExam = (result: ExamResult) => {
     setRecentResult(result);
     setCurrentView('results');
@@ -76,6 +83,7 @@ const App: React.FC = () => {
           user={currentUser} 
           onLogout={handleLogout} 
           onStartTest={startExam}
+          onReviewResult={startReview}
           onReturnToAdmin={() => setCurrentView('admin')}
         />
       )}
@@ -100,7 +108,15 @@ const App: React.FC = () => {
       {currentView === 'results' && recentResult && (
         <ResultScreen 
           result={recentResult} 
-          onClose={() => setCurrentView('dashboard')} 
+          onClose={() => setCurrentView('dashboard')}
+          onReview={() => startReview(recentResult)}
+        />
+      )}
+
+      {currentView === 'review' && reviewResult && (
+        <ReviewInterface 
+          result={reviewResult} 
+          onExit={() => setCurrentView('dashboard')} 
         />
       )}
     </div>
