@@ -4,6 +4,7 @@ import { ExamResult, MockTest, Question } from '../types';
 import { db } from '../firebase';
 import { collection, getDocs, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import ScientificText from './ScientificText';
+import logo from '../assets/logo.png';
 
 interface ReviewInterfaceProps {
   result: ExamResult;
@@ -47,18 +48,18 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
 
   if (loading || !test) {
     return (
-      <div className="h-full w-full flex flex-col items-center justify-center bg-slate-950">
-        <img src="/assets/logo.png" className="w-16 h-16 animate-spin mb-6" alt="Aureus Logo" />
+      <div className="h-full w-full flex flex-col items-center justify-center bg-slate-950 safe-top safe-bottom">
+        <img src={logo} className="w-16 h-16 animate-spin mb-6" alt="Aureus Logo" />
         <p className="text-[11px] font-black uppercase tracking-[0.4em] text-amber-500">Recalibrating Transcript...</p>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-full bg-slate-50 select-none overflow-hidden">
-      <header className="bg-slate-950 text-white px-6 py-5 flex justify-between items-center border-b-4 border-amber-500 z-30 shrink-0 safe-top">
+    <div className="flex flex-col h-full bg-slate-50 select-none overflow-hidden safe-top">
+      <header className="bg-slate-950 text-white px-6 py-5 flex justify-between items-center border-b-4 border-amber-500 z-30 shrink-0">
         <div className="flex items-center gap-4">
-          <img src="/assets/logo.png" className="w-10 h-10" alt="Aureus Logo" />
+          <img src={logo} className="w-10 h-10" alt="Aureus Logo" />
           <div>
             <h1 className="text-[11px] font-black uppercase tracking-[0.4em] text-amber-500 leading-none">Aureus Review</h1>
             <p className="text-[9px] text-slate-400 font-bold uppercase truncate max-w-[200px] mt-1">{test.name}</p>
@@ -171,7 +172,7 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
                   <ScientificText text={currentQuestion.explanation!} />
                 </div>
                 <div className="absolute top-0 right-0 p-8 opacity-5">
-                   <img src="/assets/logo.png" className="w-40 h-40" alt="" />
+                   <img src={logo} className="w-40 h-40" alt="" />
                 </div>
               </div>
             )}
@@ -208,7 +209,7 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
                   setCurrentQuestionIndex(0);
                 }
              }}
-             className="flex-1 sm:flex-none px-8 py-4 bg-slate-950 text-amber-500 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-900 transition-all shadow-xl"
+             className="flex-1 sm:flex-none px-8 py-4 bg-slate-950 text-amber-500 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl transition-all"
            >
              Next Item
            </button>

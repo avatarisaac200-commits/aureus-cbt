@@ -11,10 +11,11 @@ import RootAdminDashboard from './components/RootAdminDashboard';
 import ExamInterface from './components/ExamInterface';
 import ResultScreen from './components/ResultScreen';
 import ReviewInterface from './components/ReviewInterface';
+import logo from './assets/logo.png';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [currentView, setCurrentView] = useState<ViewState>('auth');
+  const [currentView, setCurrentView] = useState('auth');
   const [adminDefaultTab, setAdminDefaultTab] = useState<string>('questions');
   const [activeTest, setActiveTest] = useState<MockTest | null>(null);
   const [reviewResult, setReviewResult] = useState<ExamResult | null>(null);
@@ -66,8 +67,8 @@ const App: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="h-full w-full flex flex-col items-center justify-center bg-slate-950">
-        <img src="/assets/logo.png" className="w-20 h-20 animate-pulse mb-6" alt="Aureus Medicos Logo" />
+      <div className="h-full w-full flex flex-col items-center justify-center bg-slate-950 safe-top safe-bottom">
+        <img src={logo} className="w-20 h-20 animate-pulse mb-6" alt="Aureus Medicos Logo" />
         <div className="flex flex-col items-center">
           <p className="text-amber-500 text-[10px] font-black uppercase tracking-[0.5em] mb-2">Aureus Medicos</p>
           <div className="w-32 h-1 bg-slate-900 rounded-full overflow-hidden">

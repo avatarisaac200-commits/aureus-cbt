@@ -5,6 +5,7 @@ import { db } from '../firebase';
 import { collection, getDocs, addDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import Calculator from './Calculator';
 import ScientificText from './ScientificText';
+import logo from '../assets/logo.png';
 
 interface ExamInterfaceProps {
   test: MockTest;
@@ -120,10 +121,10 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, onFinish, onE
 
   if (view === 'lobby') {
     return (
-      <div className="h-full w-full bg-slate-50 flex flex-col overflow-hidden">
-        <header className="bg-slate-950 p-6 flex justify-between items-center border-b-4 border-amber-500 text-white shadow-2xl safe-top">
+      <div className="h-full w-full bg-slate-50 flex flex-col overflow-hidden safe-top">
+        <header className="bg-slate-950 p-6 flex justify-between items-center border-b-4 border-amber-500 text-white shadow-2xl">
           <div className="flex items-center gap-4">
-            <img src="/assets/logo.png" className="w-10 h-10" alt="Aureus Logo" />
+            <img src={logo} className="w-10 h-10" alt="Aureus Logo" />
             <div>
               <h1 className="text-[10px] font-black uppercase tracking-[0.4em] text-amber-500 truncate max-w-[150px]">Aureus Medicos</h1>
               <p className="text-[8px] text-slate-400 font-bold uppercase truncate max-w-[150px]">{test.name}</p>
@@ -150,7 +151,7 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, onFinish, onE
                         <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">{section.questionIds.length} Medical Items</p>
                       </div>
                     </div>
-                    <span className={`text-[10px] font-black px-6 py-2.5 rounded-2xl uppercase tracking-widest transition-all ${isCompleted ? 'bg-slate-200 text-slate-400' : 'bg-amber-100 text-amber-600 group-hover:bg-amber-500 group-hover:text-slate-950'}`}>{isCompleted ? 'Complete' : 'Start Section'}</span>
+                    <span className={`text-[10px] font-black px-6 py-2.5 rounded-2xl uppercase tracking-widest transition-all ${isCompleted ? 'bg-slate-200 text-slate-400' : 'bg-amber-100 text-amber-600'}`}>{isCompleted ? 'Complete' : 'Start'}</span>
                   </button>
                 );
               })}
@@ -170,25 +171,24 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, onFinish, onE
   const currentQuestion = allQuestions[currentQuestionId];
 
   return (
-    <div className="flex flex-col h-full bg-slate-50 select-none overflow-hidden">
-      <header className="bg-slate-950 text-white px-6 py-4 flex justify-between items-center border-b-4 border-amber-500 z-30 shrink-0 safe-top">
+    <div className="flex flex-col h-full bg-slate-50 select-none overflow-hidden safe-top">
+      <header className="bg-slate-950 text-white px-6 py-4 flex justify-between items-center border-b-4 border-amber-500 z-30 shrink-0">
         <div className="flex items-center gap-4">
-          <img src="/assets/logo.png" className="w-9 h-9" alt="Aureus Logo" />
+          <img src={logo} className="w-9 h-9" alt="Aureus Logo" />
           <div className="hidden sm:block">
             <h1 className="text-[10px] font-black uppercase tracking-[0.3em] text-amber-500">Aureus Medicos</h1>
             <p className="text-[9px] text-slate-400 font-bold uppercase truncate max-w-[250px] leading-none mt-1">{test.name}</p>
           </div>
-          <div className="sm:hidden px-3 py-1 bg-slate-900 rounded-lg border border-slate-800 text-[10px] font-black uppercase text-amber-500">Item {currentQuestionIndex + 1}</div>
         </div>
         <div className="flex items-center gap-4">
           <div className="font-mono text-xl font-black text-amber-400 bg-slate-900 px-4 py-1.5 rounded-xl shadow-inner border border-slate-800">{formatTime(timeRemaining)}</div>
-          <button onClick={() => setShowNav(!showNav)} className="md:hidden p-2 text-amber-500 bg-slate-900 rounded-xl border border-slate-800 hover:bg-slate-800 transition-all"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16m-7 6h7"></path></svg></button>
+          <button onClick={() => setShowNav(!showNav)} className="md:hidden p-2 text-amber-500 bg-slate-900 rounded-xl border border-slate-800"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16m-7 6h7"></path></svg></button>
         </div>
       </header>
 
       <div className="flex-1 flex overflow-hidden relative">
         <main className="flex-1 flex flex-col p-4 md:p-8 overflow-hidden">
-          <div className="flex-1 bg-white rounded-[2.5rem] md:rounded-[4rem] shadow-sm border border-slate-100 overflow-y-auto p-10 md:p-20 no-scrollbar animate-in fade-in duration-500">
+          <div className="flex-1 bg-white rounded-[2.5rem] md:rounded-[4rem] shadow-sm border border-slate-100 overflow-y-auto p-10 md:p-20 no-scrollbar">
             <div className="mb-12 border-b border-slate-50 pb-6 flex justify-between items-center">
                <span className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">Clinical Item {currentQuestionIndex + 1} / {activeSection.questionIds.length}</span>
                <span className="text-[11px] font-black text-amber-600 bg-amber-50 px-4 py-1.5 rounded-full uppercase tracking-widest">{activeSection.name}</span>
@@ -197,7 +197,7 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, onFinish, onE
             <div className="space-y-5">
               {currentQuestion?.options.map((option, idx) => (
                 <button key={idx} onClick={() => setAnswers(prev => ({ ...prev, [currentQuestionId]: idx }))} className={`w-full text-left p-6 md:p-8 rounded-[2rem] border-2 transition-all flex items-center active:scale-[0.99] ${answers[currentQuestionId] === idx ? 'border-amber-500 bg-amber-50 ring-8 ring-amber-500/5' : 'border-slate-50 hover:bg-slate-50 hover:border-slate-200'}`}>
-                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mr-8 font-black text-lg transition-all ${answers[currentQuestionId] === idx ? 'bg-amber-500 text-slate-950 scale-110 shadow-lg' : 'bg-slate-100 text-slate-400'}`}>{String.fromCharCode(65 + idx)}</div>
+                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mr-8 font-black text-lg transition-all ${answers[currentQuestionId] === idx ? 'bg-amber-500 text-slate-950 shadow-lg' : 'bg-slate-100 text-slate-400'}`}>{String.fromCharCode(65 + idx)}</div>
                   <ScientificText text={option} className={`text-lg md:text-xl font-bold flex-1 ${answers[currentQuestionId] === idx ? 'text-slate-950' : 'text-slate-600'}`} />
                 </button>
               ))}
@@ -209,7 +209,7 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, onFinish, onE
           <div className="h-full flex flex-col">
             <div className="p-8 border-b border-slate-50 bg-slate-50/50 flex justify-between items-center">
               <h3 className="text-[11px] font-black text-slate-950 uppercase tracking-[0.3em]">Item Matrix</h3>
-              <button onClick={() => setShowNav(false)} className="md:hidden text-slate-400 hover:text-slate-950 transition-colors"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
+              <button onClick={() => setShowNav(false)} className="md:hidden text-slate-400"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
             </div>
             <div className="p-6 grid grid-cols-5 gap-3 content-start overflow-y-auto no-scrollbar flex-1">
               {activeSection.questionIds.map((id, idx) => (
@@ -226,14 +226,14 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, onFinish, onE
       <footer className="bg-white border-t border-slate-100 p-6 md:p-10 px-8 md:px-16 flex flex-col sm:flex-row gap-6 justify-between items-center z-20 shrink-0 safe-bottom">
          <button onClick={() => setView('lobby')} className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] hover:text-amber-600 transition-colors">Session Navigator</button>
          <div className="flex gap-4 w-full sm:w-auto">
-           <button onClick={() => setCurrentQuestionIndex(prev => Math.max(0, prev - 1))} disabled={currentQuestionIndex === 0} className="flex-1 sm:flex-none px-8 py-4 border-2 border-slate-100 rounded-2xl text-[10px] font-black uppercase tracking-widest disabled:opacity-20 hover:bg-slate-50 transition-all">Prev</button>
-           <button onClick={() => setCurrentQuestionIndex(prev => Math.min(activeSection.questionIds.length - 1, prev + 1))} disabled={currentQuestionIndex === activeSection.questionIds.length - 1} className="flex-1 sm:flex-none px-8 py-4 border-2 border-slate-100 rounded-2xl text-[10px] font-black uppercase tracking-widest disabled:opacity-20 hover:bg-slate-50 transition-all">Next</button>
-           <button onClick={handleSectionSubmit} className="ml-0 sm:ml-4 flex-1 sm:flex-none px-10 py-4 bg-amber-500 text-slate-950 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] shadow-xl hover:bg-amber-400 transition-all active:scale-95">Complete Section</button>
+           <button onClick={() => setCurrentQuestionIndex(prev => Math.max(0, prev - 1))} disabled={currentQuestionIndex === 0} className="flex-1 sm:flex-none px-8 py-4 border-2 border-slate-100 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all">Prev</button>
+           <button onClick={() => setCurrentQuestionIndex(prev => Math.min(activeSection.questionIds.length - 1, prev + 1))} disabled={currentQuestionIndex === activeSection.questionIds.length - 1} className="flex-1 sm:flex-none px-8 py-4 border-2 border-slate-100 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all">Next</button>
+           <button onClick={handleSectionSubmit} className="ml-0 sm:ml-4 flex-1 sm:flex-none px-10 py-4 bg-amber-500 text-slate-950 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] shadow-xl hover:bg-amber-400 transition-all">Complete Section</button>
          </div>
       </footer>
 
       {showCalculator && <Calculator onClose={() => setShowCalculator(false)} />}
-      {showNav && <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm z-30 md:hidden animate-in fade-in duration-300" onClick={() => setShowNav(false)}></div>}
+      {showNav && <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm z-30 md:hidden" onClick={() => setShowNav(false)}></div>}
     </div>
   );
 };

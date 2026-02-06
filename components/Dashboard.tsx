@@ -2,8 +2,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { User, MockTest, ExamResult } from '../types';
 import { db } from '../firebase';
-import { collection, query, where, onSnapshot, getDocs, orderBy, limit } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+import { collection, query, where, onSnapshot, getDocs } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import ScientificText from './ScientificText';
+import logo from '../assets/logo.png';
 
 interface DashboardProps {
   user: User;
@@ -19,21 +20,34 @@ const LeaderboardModal: React.FC<{ test: MockTest, onClose: () => void }> = ({ t
 
   useEffect(() => {
     const fetchTop = async () => {
-      const q = query(
-        collection(db, 'results'), 
-        where('testId', '==', test.id),
-        orderBy('score', 'desc'),
-        limit(10)
-      );
-      const snap = await getDocs(q);
-      setTopScores(snap.docs.map(d => ({ ...d.data(), id: d.id } as ExamResult)));
-      setLoading(false);
+      setLoading(true);
+      try {
+        // We remove the server-side orderBy to avoid requiring a composite index
+        // which often causes infinite loading in production if not manually created.
+        const q = query(
+          collection(db, 'results'), 
+          where('testId', '==', test.id)
+        );
+        const snap = await getDocs(q);
+        const results = snap.docs.map(d => ({ ...d.data(), id: d.id } as ExamResult));
+        
+        // Sort client-side for the top 10
+        const sorted = results
+          .sort((a, b) => b.score - a.score)
+          .slice(0, 10);
+          
+        setTopScores(sorted);
+      } catch (err) {
+        console.error("Leaderboard fetch failed:", err);
+      } finally {
+        setLoading(false);
+      }
     };
     fetchTop();
   }, [test.id]);
 
   return (
-    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm safe-top safe-bottom">
       <div className="w-full max-w-lg bg-white rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
         <div className="bg-slate-900 p-8 text-center relative border-b-4 border-amber-500">
           <button onClick={onClose} className="absolute top-6 right-6 text-slate-500 hover:text-white transition-colors">
@@ -44,9 +58,12 @@ const LeaderboardModal: React.FC<{ test: MockTest, onClose: () => void }> = ({ t
         </div>
         <div className="p-8 max-h-[60vh] overflow-y-auto no-scrollbar">
           {loading ? (
-            <div className="flex justify-center py-10"><div className="w-6 h-6 border-b-2 border-amber-500 rounded-full animate-spin"></div></div>
+            <div className="flex flex-col items-center justify-center py-10">
+              <div className="w-8 h-8 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Retrieving Scores...</p>
+            </div>
           ) : topScores.length === 0 ? (
-            <p className="text-center py-10 text-slate-400 font-black text-[10px] uppercase tracking-widest">No rankings yet</p>
+            <p className="text-center py-10 text-slate-400 font-black text-[10px] uppercase tracking-widest">No rankings recorded</p>
           ) : (
             <div className="space-y-3">
               {topScores.map((res, i) => (
@@ -55,7 +72,7 @@ const LeaderboardModal: React.FC<{ test: MockTest, onClose: () => void }> = ({ t
                     {i + 1}
                   </div>
                   <div className="flex-1">
-                    <p className="text-[10px] font-black text-slate-900 uppercase truncate">{res.userName || 'Student'}</p>
+                    <p className="text-[10px] font-black text-slate-900 uppercase truncate">{res.userName || 'Candidate'}</p>
                     <p className="text-[8px] text-slate-400 font-bold uppercase">{new Date(res.completedAt).toLocaleDateString()}</p>
                   </div>
                   <div className="text-right">
@@ -75,7 +92,6 @@ const LeaderboardModal: React.FC<{ test: MockTest, onClose: () => void }> = ({ t
 const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onStartTest, onReviewResult, onReturnToAdmin }) => {
   const [tests, setTests] = useState<MockTest[]>([]);
   const [history, setHistory] = useState<ExamResult[]>([]);
-  const [allResults, setAllResults] = useState<ExamResult[]>([]);
   const [loading, setLoading] = useState(true);
   const [showLeaderboard, setShowLeaderboard] = useState<MockTest | null>(null);
 
@@ -92,12 +108,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onStartTest, onRe
         .sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime()));
     });
 
-    const allResultsQuery = query(collection(db, 'results'));
-    const unsubAll = onSnapshot(allResultsQuery, (snapshot) => {
-      setAllResults(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as ExamResult)));
-    });
-
-    return () => { unsubTests(); unsubResults(); unsubAll(); };
+    return () => { unsubTests(); unsubResults(); };
   }, [user.id]);
 
   const stats = useMemo(() => {
@@ -110,6 +121,15 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onStartTest, onRe
     };
   }, [history]);
 
+  if (loading) {
+    return (
+      <div className="h-full w-full flex flex-col items-center justify-center bg-slate-50 safe-top safe-bottom">
+        <img src={logo} className="w-16 h-16 animate-pulse mb-4" alt="Loading..." />
+        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em]">Syncing Portal...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="flex-1 w-full bg-slate-50 flex flex-col overflow-hidden relative">
       {showLeaderboard && <LeaderboardModal test={showLeaderboard} onClose={() => setShowLeaderboard(null)} />}
@@ -117,33 +137,33 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onStartTest, onRe
       <div className="max-w-6xl mx-auto w-full flex-1 overflow-y-auto no-scrollbar p-4 md:p-8 safe-top safe-bottom">
         <div className="flex flex-col md:flex-row justify-between items-center mb-10 gap-6 bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 shrink-0">
           <div className="flex items-center gap-4 w-full md:w-auto">
-            <img src="/assets/logo.png" alt="Aureus Logo" className="w-14 h-14 object-contain" />
+            <img src={logo} alt="Aureus Logo" className="w-14 h-14 object-contain" />
             <div className="flex-1">
               <h1 className="text-xl font-black text-slate-950 uppercase tracking-tighter leading-none">
                 Aureus Medicos
               </h1>
-              <p className="text-amber-600 text-[9px] tracking-[0.3em] font-black uppercase mt-1">Academic Progress</p>
+              <p className="text-amber-600 text-[9px] tracking-[0.3em] font-black uppercase mt-1">Candidate Dashboard</p>
             </div>
           </div>
           <div className="flex gap-2 w-full md:w-auto">
             {(user.role === 'admin' || user.role === 'root-admin') && onReturnToAdmin && (
               <button onClick={onReturnToAdmin} className="flex-1 md:flex-none px-6 py-3 text-[10px] font-black text-amber-600 bg-amber-50 border border-amber-200 rounded-xl hover:bg-amber-100 transition-all active:scale-95 uppercase tracking-widest">Admin Hub</button>
             )}
-            <button onClick={onLogout} className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-red-500 transition-all">Sign Out</button>
+            <button onClick={onLogout} className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-red-500 transition-all">Logout</button>
           </div>
         </div>
 
         <div className="grid grid-cols-3 gap-3 md:gap-6 mb-12">
           <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex flex-col items-center">
-            <span className="text-slate-400 text-[8px] md:text-[9px] font-black uppercase tracking-widest mb-2">Global Average</span>
+            <span className="text-slate-400 text-[8px] md:text-[9px] font-black uppercase tracking-widest mb-2">Average</span>
             <span className="text-xl md:text-3xl font-black text-slate-900">{stats.avgScore}%</span>
           </div>
           <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex flex-col items-center">
-            <span className="text-amber-600 text-[8px] md:text-[9px] font-black uppercase tracking-widest mb-2">Peak Performance</span>
+            <span className="text-amber-600 text-[8px] md:text-[9px] font-black uppercase tracking-widest mb-2">Peak</span>
             <span className="text-xl md:text-3xl font-black text-amber-500">{stats.highestScore}%</span>
           </div>
           <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex flex-col items-center">
-            <span className="text-slate-400 text-[8px] md:text-[9px] font-black uppercase tracking-widest mb-2">Assessments</span>
+            <span className="text-slate-400 text-[8px] md:text-[9px] font-black uppercase tracking-widest mb-2">Sessions</span>
             <span className="text-xl md:text-3xl font-black text-slate-900">{stats.totalTaken}</span>
           </div>
         </div>
@@ -163,7 +183,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onStartTest, onRe
                     <h3 className="font-black text-lg text-slate-900 mb-2 group-hover:text-amber-600 transition-colors uppercase tracking-tight">{test.name}</h3>
                     <p className="text-[10px] text-slate-400 mb-6 line-clamp-3 font-medium flex-1 italic">{test.description}</p>
                     <div className="flex flex-wrap gap-2 text-[8px] font-black uppercase tracking-widest mb-8">
-                       <span className="bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-full text-slate-500">{test.totalDurationSeconds / 60} Min Session</span>
+                       <span className="bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-full text-slate-500">{test.totalDurationSeconds / 60} Min</span>
                        <button onClick={(e) => { e.stopPropagation(); setShowLeaderboard(test); }} className="bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-full text-amber-600 hover:bg-amber-500 hover:text-white transition-all">
                          Rankings
                        </button>
@@ -171,6 +191,11 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onStartTest, onRe
                     <button onClick={() => onStartTest(test)} className="w-full py-4 bg-slate-950 text-amber-500 rounded-2xl font-black uppercase tracking-[0.2em] text-[10px] transition-all active:scale-95 shadow-lg">Start Examination</button>
                   </div>
                 ))}
+                {tests.length === 0 && (
+                  <div className="col-span-full py-20 text-center bg-white rounded-[2.5rem] border-2 border-dashed border-slate-100">
+                    <p className="text-[10px] font-black text-slate-300 uppercase tracking-[0.4em]">No assessments active</p>
+                  </div>
+                )}
               </div>
             </section>
           </div>

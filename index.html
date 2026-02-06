@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>CBT Exam Suite</title>
+    <title>Aureus Medicos</title>
     
     <!-- PWA & Mobile Icons -->
     <link rel="icon" type="image/png" href="/assets/logo.png">
@@ -13,7 +13,7 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="CBT Suite">
+    <meta name="apple-mobile-web-app-title" content="Aureus Medicos">
     <meta name="theme-color" content="#020617">
 
     <!-- MathJax Configuration -->
@@ -64,7 +64,6 @@
             position: relative;
         }
 
-        /* Helper to add safe area padding only to headers and scrolling content */
         .safe-top { padding-top: var(--sat); }
         .safe-bottom { padding-bottom: var(--sab); }
         .safe-left { padding-left: var(--sal); }
@@ -89,14 +88,14 @@
 <script type="importmap">
 {
   "imports": {
-    "react": "https://esm.sh/react@^19.2.4",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
-    "react/": "https://esm.sh/react@^19.2.4/",
     "vite": "https://esm.sh/vite@^7.3.1",
+    "@google/genai": "https://esm.sh/@google/genai@^1.40.0",
     "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.3",
+    "react/": "https://esm.sh/react@^19.2.4/",
+    "react": "https://esm.sh/react@^19.2.4",
     "path": "https://esm.sh/path@^0.12.7",
-    "url": "https://esm.sh/url@^0.11.4",
-    "@google/genai": "https://esm.sh/@google/genai@latest"
+    "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
+    "url": "https://esm.sh/url@^0.11.4"
   }
 }
 </script>

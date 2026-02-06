@@ -1,6 +1,7 @@
 
 import React from 'react';
 import { ExamResult } from '../types';
+import logo from '../assets/logo.png';
 
 interface ResultScreenProps {
   result: ExamResult;
@@ -25,7 +26,7 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ result, onClose, onReview }
        <div className="max-w-3xl w-full bg-white rounded-[3rem] shadow-2xl overflow-hidden border border-slate-100 animate-in zoom-in-95 fade-in duration-700">
           <div className="bg-slate-950 p-14 text-center relative border-b-8 border-amber-500">
              <div className="flex justify-center mb-8">
-                <img src="/assets/logo.png" alt="Aureus Logo" className="w-24 h-24 drop-shadow-2xl" />
+                <img src={logo} alt="Aureus Logo" className="w-24 h-24 drop-shadow-2xl" />
              </div>
              <p className="text-amber-500 text-[11px] font-black uppercase tracking-[0.4em] mb-3">Academic Performance Transcript</p>
              <h1 className="text-3xl font-black text-white uppercase tracking-tight leading-tight">{result.testName}</h1>
@@ -81,13 +82,13 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ result, onClose, onReview }
              <div className="flex flex-col sm:flex-row gap-4">
                 <button 
                    onClick={onReview}
-                   className="flex-1 py-6 bg-amber-500 text-slate-950 rounded-3xl font-black uppercase tracking-[0.3em] text-xs shadow-xl hover:bg-amber-400 transition-all active:scale-95"
+                   className="flex-1 py-6 bg-amber-500 text-slate-950 rounded-3xl font-black uppercase tracking-[0.3em] text-xs shadow-xl transition-all"
                 >
                    Review Items
                 </button>
                 <button 
                    onClick={onClose}
-                   className="flex-1 py-6 bg-slate-950 text-amber-500 rounded-3xl font-black uppercase tracking-[0.3em] text-xs shadow-xl hover:bg-slate-900 transition-all active:scale-95"
+                   className="flex-1 py-6 bg-slate-950 text-amber-500 rounded-3xl font-black uppercase tracking-[0.3em] text-xs shadow-xl transition-all"
                 >
                    Close Transcript
                 </button>
