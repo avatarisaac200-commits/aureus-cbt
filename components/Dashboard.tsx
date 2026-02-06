@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { User, MockTest, ExamResult } from '../types';
 import { db } from '../firebase';
-import { collection, getDocs, query, where } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+import { collection, query, where, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import ScientificText from './ScientificText';
 import logo from '../assets/logo.png';
 
@@ -18,7 +18,61 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onStartTest, onRe
   const [tests, setTests] = useState<MockTest[]>([]);
   const [history, setHistory] = useState<ExamResult[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  const [lastSeenTimestamp, setLastSeenTimestamp] = useState<number>(() => {
+    const saved = localStorage.getItem(`aureus_last_seen_${user.id}`);
+    return saved ? parseInt(saved) : Date.now();
+  });
+  const [showNewTestToast, setShowNewTestToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Request notification permission
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+
+    // Real-time listener for available tests
+    const testsQuery = query(collection(db, 'tests'), where('isApproved', '==', true));
+    const unsubscribeTests = onSnapshot(testsQuery, (snapshot) => {
+      const testsData = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as MockTest));
+      
+      // Check for new tests since the user's last interaction
+      const mostRecentTest = testsData.reduce((prev, curr) => {
+        const currTime = new Date(curr.createdAt).getTime();
+        const prevTime = prev ? new Date(prev.createdAt).getTime() : 0;
+        return currTime > prevTime ? curr : prev;
+      }, null as MockTest | null);
+
+      if (mostRecentTest) {
+        const testTime = new Date(mostRecentTest.createdAt).getTime();
+        if (testTime > lastSeenTimestamp) {
+          // Trigger browser notification
+          if (Notification.permission === "granted") {
+            new Notification("New Exam Available", {
+              body: `${mostRecentTest.name} is now ready for practice.`,
+              icon: logo
+            });
+          }
+          // Trigger in-app UI alert
+          setShowNewTestToast(mostRecentTest.name);
+        }
+      }
+
+      setTests(testsData);
+      setLoading(false);
+    });
+
+    // Real-time listener for user results
+    const resultsQuery = query(collection(db, 'results'), where('userId', '==', user.id));
+    const unsubscribeResults = onSnapshot(resultsQuery, (snapshot) => {
+      setHistory(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as ExamResult))
+        .sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime()));
+    });
+
+    return () => {
+      unsubscribeTests();
+      unsubscribeResults();
+    };
+  }, [user.id, lastSeenTimestamp]);
 
   const stats = useMemo(() => {
     if (history.length === 0) return { avgScore: 0, highestScore: 0, totalTaken: 0 };
@@ -30,46 +84,37 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onStartTest, onRe
     };
   }, [history]);
 
-  const fetchData = async () => {
-    try {
-      setLoading(true);
-      const testsQuery = query(collection(db, 'tests'), where('isApproved', '==', true));
-      const testsSnap = await getDocs(testsQuery);
-      setTests(testsSnap.docs.map(d => ({ ...d.data(), id: d.id } as MockTest)));
-
-      const resultsQuery = query(collection(db, 'results'), where('userId', '==', user.id));
-      const resultsSnap = await getDocs(resultsQuery);
-      setHistory(resultsSnap.docs.map(d => ({ ...d.data(), id: d.id } as ExamResult))
-        .sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime()));
-    } catch (err) {
-      console.error("Error loading dashboard:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    const handleStatusChange = () => setIsOffline(!navigator.onLine);
-    window.addEventListener('online', handleStatusChange);
-    window.addEventListener('offline', handleStatusChange);
-    fetchData();
-    return () => {
-      window.removeEventListener('online', handleStatusChange);
-      window.removeEventListener('offline', handleStatusChange);
-    };
-  }, [user.id]);
-
-  const copyShareLink = (testId: string) => {
-    const link = `${window.location.origin}/?testId=${testId}`;
-    navigator.clipboard.writeText(link).then(() => {
-      alert("Link copied to clipboard!");
-    });
+  const handleStartTest = (test: MockTest) => {
+    // Update last seen timestamp to current time to "clear" new badges
+    const now = Date.now();
+    setLastSeenTimestamp(now);
+    localStorage.setItem(`aureus_last_seen_${user.id}`, now.toString());
+    setShowNewTestToast(null);
+    onStartTest(test);
   };
 
   const isTestCompleted = (testId: string) => history.some(h => String(h.testId) === String(testId) && h.status === 'completed');
 
   return (
-    <div className="flex-1 w-full bg-slate-50 flex flex-col overflow-hidden">
+    <div className="flex-1 w-full bg-slate-50 flex flex-col overflow-hidden relative">
+      {/* New Test Notification Toast */}
+      {showNewTestToast && (
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[100] w-[90%] max-w-sm animate-bounce">
+          <div className="bg-slate-950 text-white p-4 rounded-2xl shadow-2xl border border-amber-500 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-2 h-2 bg-amber-500 rounded-full animate-ping"></div>
+              <p className="text-[10px] font-black uppercase tracking-widest">New Exam: {showNewTestToast}</p>
+            </div>
+            <button 
+              onClick={() => setShowNewTestToast(null)}
+              className="text-slate-400 hover:text-white"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-6xl mx-auto w-full flex-1 overflow-y-auto no-scrollbar p-4 md:p-8 safe-top safe-bottom">
         <div className="flex flex-col md:flex-row justify-between items-center mb-10 gap-6 bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100 shrink-0">
           <div className="flex items-center gap-4 w-full md:w-auto">
@@ -119,24 +164,29 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onStartTest, onRe
                 <span className="bg-amber-500 text-slate-950 text-[10px] px-2 py-0.5 rounded-lg">{tests.length}</span>
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {tests.length === 0 ? (
+                {tests.length === 0 && !loading ? (
                   <div className="col-span-full p-20 text-center bg-white rounded-[2.5rem] border-2 border-dashed border-slate-100">
                     <p className="text-slate-300 font-black uppercase text-xs tracking-[0.2em]">No tests available yet.</p>
                   </div>
                 ) : (
                   tests.map(test => {
                     const completed = isTestCompleted(test.id);
+                    const isNew = new Date(test.createdAt).getTime() > lastSeenTimestamp;
+                    
                     return (
                       <div key={test.id} className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-100 hover:shadow-xl transition-all group flex flex-col relative overflow-hidden">
                         {completed && <div className="absolute top-0 right-0 bg-emerald-500 text-white text-[8px] font-black uppercase px-4 py-1.5 rounded-bl-xl tracking-widest z-10 shadow-sm">Done</div>}
+                        {isNew && !completed && <div className="absolute top-0 right-0 bg-amber-500 text-slate-950 text-[8px] font-black uppercase px-4 py-1.5 rounded-bl-xl tracking-widest z-10 shadow-sm">New</div>}
+                        
                         <h3 className="font-black text-lg text-slate-900 mb-2 group-hover:text-amber-600 transition-colors uppercase tracking-tight leading-tight pr-10">{test.name}</h3>
                         <p className="text-[10px] text-slate-400 mb-6 line-clamp-3 font-medium flex-1">{test.description}</p>
+                        
                         <div className="flex gap-2 text-[8px] font-black text-slate-400 uppercase tracking-widest mb-8">
                            <span className="bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-full">{test.totalDurationSeconds / 60} Mins</span>
-                           <button onClick={() => copyShareLink(test.id)} className="bg-amber-50 text-amber-600 border border-amber-100 px-3 py-1.5 rounded-full hover:bg-amber-100 transition-all">Copy Link</button>
                         </div>
+                        
                         <button 
-                          onClick={() => onStartTest(test)}
+                          onClick={() => handleStartTest(test)}
                           className="w-full py-4 bg-slate-950 text-amber-500 rounded-xl font-black uppercase tracking-widest text-[10px] transition-all active:scale-95 shadow-lg"
                         >
                           Start Test

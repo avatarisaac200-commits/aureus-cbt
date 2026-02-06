@@ -201,7 +201,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onSwitc
         <button onClick={() => setActiveTab('tests')} className={`px-6 py-4 text-[9px] font-black uppercase tracking-widest whitespace-nowrap ${activeTab === 'tests' ? 'border-b-4 border-amber-500 text-slate-950' : 'text-slate-400'}`}>Tests</button>
         <button onClick={() => setActiveTab('approvals')} className={`px-6 py-4 text-[9px] font-black uppercase tracking-widest whitespace-nowrap flex items-center gap-2 ${activeTab === 'approvals' ? 'border-b-4 border-amber-500 text-slate-950' : 'text-slate-400'}`}>
           Pending
-          {testList.filter(t => !t.isApproved).length > 0 && <span className="bg-amber-500 text-slate-950 text-[8px] px-2 py-0.5 rounded-full">{testList.filter(t => !t.isApproved).length}</span>}
+          {/* Fix: Explicitly type MockTest in filter for length access */}
+          {testList.filter((t: MockTest) => !t.isApproved).length > 0 && <span className="bg-amber-500 text-slate-950 text-[8px] px-2 py-0.5 rounded-full">{testList.filter((t: MockTest) => !t.isApproved).length}</span>}
         </button>
       </nav>
 
@@ -244,7 +245,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onSwitc
                      </button>
                      {expandedSubjects[subject] && (
                        <div className="p-4 space-y-4">
-                         {qs.map(q => (
+                         {qs.map((q: Question) => (
                            <div key={q.id} className="p-5 rounded-2xl border border-slate-100 hover:border-amber-200 transition-all relative">
                              <div className="flex justify-between items-start mb-2">
                                <span className="text-[8px] font-black bg-amber-50 text-amber-600 px-3 py-1 rounded-full uppercase tracking-widest">{q.topic}</span>
@@ -282,7 +283,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onSwitc
                         <input placeholder="Search questions..." className="w-full p-3 text-xs bg-slate-900 text-white rounded-xl mb-3 border border-slate-800 outline-none focus:border-amber-500 font-bold" value={qSearchQuery} onChange={e => setQSearchQuery(e.target.value)} />
                         {filteredQuestionsForArchitect.length > 0 && (
                           <div className="max-h-48 overflow-y-auto mb-4 space-y-2 no-scrollbar">
-                             {filteredQuestionsForArchitect.map(q => (
+                             {filteredQuestionsForArchitect.map((q: Question) => (
                                <div key={q.id} onClick={() => toggleQuestionSelection(q.id)} className={`p-3 rounded-xl border transition-all cursor-pointer ${selectedQuestionIds.includes(q.id) ? 'border-amber-500 bg-amber-500/10' : 'border-slate-800 bg-slate-800/20'}`}>
                                   <p className="text-[9px] text-white font-bold line-clamp-2"><ScientificText text={q.text} /></p>
                                </div>
@@ -296,7 +297,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onSwitc
                         <button onClick={addSectionToTest} className="w-full py-4 bg-amber-500 text-slate-950 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-400 active:scale-95 transition-all">Add to Test ({selectedQuestionIds.length})</button>
                       </div>
 
-                      {tSections.map((s, idx) => (
+                      {/* Fix: Explicitly type TestSection in map */}
+                      {tSections.map((s: TestSection, idx: number) => (
                         <div key={idx} className="p-4 bg-slate-50 border border-slate-100 rounded-2xl flex justify-between items-center">
                           <span className="text-[10px] font-black uppercase text-slate-900">{s.name}</span>
                           <span className="text-[9px] font-black text-slate-400">{s.questionIds.length} Qs</span>
@@ -308,13 +310,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onSwitc
                 </div>
               </div>
               <div className="xl:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
-                 {testList.filter(t => t.isApproved).map(test => (
+                 {/* Fix: Explicitly type MockTest in map */}
+                 {testList.filter((t: MockTest) => t.isApproved).map((test: MockTest) => (
                    <div key={test.id} className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm relative group h-fit">
                      <button onClick={() => deleteTest(test.id!)} className="absolute top-8 right-8 text-slate-200 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>
                      <h4 className="text-lg font-black text-slate-950 mb-3 uppercase tracking-tight leading-tight">{test.name}</h4>
                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-6">{new Date(test.createdAt).toLocaleDateString()}</p>
                      <div className="flex flex-wrap gap-2 mb-8">
-                        {test.sections.map((s, i) => <span key={i} className="text-[8px] font-black bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-full text-slate-400 uppercase">{s.name}</span>)}
+                        {/* Fix: Explicitly type TestSection in map */}
+                        {test.sections.map((s: TestSection, i: number) => <span key={i} className="text-[8px] font-black bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-full text-slate-400 uppercase">{s.name}</span>)}
                      </div>
                      <button onClick={() => handleToggleApproval(test.id!, true)} className="w-full py-3 bg-slate-900 text-amber-500 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-slate-800 transition-all">Disable</button>
                    </div>
@@ -325,12 +329,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onSwitc
 
           {activeTab === 'approvals' && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {testList.filter(t => !t.isApproved).map(test => (
+              {/* Fix: Explicitly type MockTest in map */}
+              {testList.filter((t: MockTest) => !t.isApproved).map((test: MockTest) => (
                 <div key={test.id} className="bg-white p-8 rounded-[2.5rem] border-2 border-amber-200 shadow-xl flex flex-col">
                   <h3 className="text-lg font-black text-slate-950 mb-4 uppercase tracking-tight leading-tight">{test.name}</h3>
                   <p className="text-[10px] text-slate-500 mb-6 italic flex-1 truncate">{test.description}</p>
                   <div className="flex gap-2 mb-8">
-                     <span className="bg-slate-50 text-slate-400 text-[8px] font-black uppercase px-3 py-1.5 rounded-full border border-slate-100">{test.sections[0].questionIds.length} Qs</span>
+                     {/* Fix: Explicit cast to TestSection for length access */}
+                     <span className="bg-slate-50 text-slate-400 text-[8px] font-black uppercase px-3 py-1.5 rounded-full border border-slate-100">{(test.sections[0] as TestSection).questionIds.length} Qs</span>
                      <span className="bg-slate-50 text-slate-400 text-[8px] font-black uppercase px-3 py-1.5 rounded-full border border-slate-100">{test.totalDurationSeconds / 60} Mins</span>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
@@ -339,7 +345,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onSwitc
                   </div>
                 </div>
               ))}
-              {testList.filter(t => !t.isApproved).length === 0 && (
+              {testList.filter((t: MockTest) => !t.isApproved).length === 0 && (
                 <div className="col-span-full py-32 text-center bg-white rounded-[3rem] border-2 border-dashed border-slate-100 text-slate-300 font-black uppercase text-[10px] tracking-[0.4em]">Empty Queue</div>
               )}
             </div>
