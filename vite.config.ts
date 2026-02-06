@@ -10,7 +10,8 @@ const __dirname = path.dirname(__filename);
 export default defineConfig(({ mode }) => {
   // Load env file based on `mode` in the current working directory.
   // Set the third parameter to '' to load all envs regardless of the `VITE_` prefix.
-  const env = loadEnv(mode, process.cwd(), '');
+  // Fix: Using __dirname instead of process.cwd() to resolve type error on 'process'.
+  const env = loadEnv(mode, __dirname, '');
   
   return {
     plugins: [react()],

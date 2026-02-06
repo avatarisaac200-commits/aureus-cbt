@@ -5,7 +5,6 @@ import { db } from '../firebase';
 import { collection, addDoc, getDocs, deleteDoc, doc, query, orderBy, updateDoc, where, limit } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import { GoogleGenAI, Type } from '@google/genai';
 import ScientificText from './ScientificText';
-import { LOGO_URL } from '../App';
 
 interface AdminDashboardProps {
   user: User;
@@ -51,8 +50,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
   const processDocument = async (file: File) => {
     setImportStatus('parsing');
     setImportProgress(5);
+    
     const progressInterval = setInterval(() => {
-      setImportProgress(prev => (prev >= 95 ? prev : prev + (prev < 40 ? 3 : 1)));
+      setImportProgress(prev => {
+        if (prev >= 95) return prev;
+        const inc = prev < 40 ? 4 : (prev < 75 ? 1.5 : 0.5);
+        return prev + inc;
+      });
     }, 1000);
 
     try {
@@ -64,11 +68,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
       const base64Data = await base64Promise;
 
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      // Fix: Use gemini-3-pro-preview for complex extraction tasks and ensure contents follows the correct { parts: [...] } structure.
       const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: [
-          { parts: [{ inlineData: { mimeType: 'application/pdf', data: base64Data } }, { text: "Extract medical multiple choice questions. Return JSON array of objects with fields: subject, topic, text, options (array of 4 strings), correctAnswerIndex, explanation." }] }
-        ],
+        model: 'gemini-3-pro-preview',
+        contents: {
+          parts: [
+            { inlineData: { mimeType: 'application/pdf', data: base64Data } },
+            { text: "Extract medical multiple choice questions. Return JSON array of objects with fields: subject, topic, text, options (array of 4 strings), correctAnswerIndex, explanation." }
+          ]
+        },
         config: {
           responseMimeType: 'application/json',
           responseSchema: {
@@ -89,15 +97,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
         },
       });
 
+      // Fix: Use the .text property as per @google/genai guidelines.
       const data = JSON.parse(response.text || '[]');
       clearInterval(progressInterval);
       setImportProgress(100);
       setStagedQuestions(data);
-      setTimeout(() => setImportStatus('review'), 800);
+      setTimeout(() => { setImportStatus('review'); setImportProgress(0); }, 800);
     } catch (err) {
       clearInterval(progressInterval);
-      alert("Analysis failed.");
+      alert("Document analysis failed.");
       setImportStatus('idle');
+      setImportProgress(0);
     }
   };
 
@@ -125,33 +135,40 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
     } catch (err) { alert(err); } finally { setLoading(false); }
   };
 
+  const getStatusMessage = (progress: number) => {
+    if (progress < 25) return "Initializing extraction engine...";
+    if (progress < 50) return "Scanning document layers...";
+    if (progress < 75) return "Structuring clinical data...";
+    return "Syncing knowledge base...";
+  };
+
   return (
     <div className="flex-1 w-full bg-slate-50 flex flex-col overflow-hidden">
-      <div className="bg-white border-b border-gray-100 p-6 flex flex-col md:flex-row justify-between items-center gap-4 safe-top">
+      <div className="bg-white border-b border-slate-100 p-6 flex flex-col md:flex-row justify-between items-center gap-4 safe-top">
         <div className="flex items-center gap-4">
-          <img src={LOGO_URL} className="w-12 h-12" alt="Logo" />
+          <img src="/assets/logo.png" className="w-12 h-12" alt="Aureus Logo" />
           <div>
-            <h1 className="text-xl font-black text-slate-900 uppercase tracking-tighter">Aureus Admin</h1>
-            <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest">Workspace</p>
+            <h1 className="text-xl font-black text-slate-900 uppercase tracking-tighter leading-none">Aureus Admin</h1>
+            <p className="text-[9px] font-black text-amber-600 uppercase tracking-[0.3em] mt-1">Faculty Dashboard</p>
           </div>
         </div>
         <div className="flex gap-2">
-          <button onClick={onSwitchToStudent} className="px-4 py-2 text-[10px] font-black text-slate-600 border border-gray-200 rounded-xl uppercase">Student View</button>
-          <button onClick={onLogout} className="px-4 py-2 text-[10px] font-black text-red-600 border border-red-100 rounded-xl uppercase">Logout</button>
+          <button onClick={onSwitchToStudent} className="px-5 py-2.5 text-[10px] font-black text-slate-600 border border-slate-200 rounded-xl uppercase tracking-widest hover:bg-slate-50">Student Portal</button>
+          <button onClick={onLogout} className="px-5 py-2.5 text-[10px] font-black text-red-600 border border-red-50 rounded-xl uppercase tracking-widest hover:bg-red-50">Log Out</button>
         </div>
       </div>
 
-      <nav className="flex bg-white px-6 border-b border-gray-100 overflow-x-auto no-scrollbar">
+      <nav className="flex bg-white px-6 border-b border-slate-100 overflow-x-auto no-scrollbar">
         {[
-          { id: 'questions', label: 'Questions' },
-          { id: 'import', label: 'AI Import', badge: 'NEW' },
-          { id: 'tests', label: 'Tests' },
-          { id: 'approvals', label: 'Approvals' }
+          { id: 'questions', label: 'Item Bank' },
+          { id: 'import', label: 'PDF Import', badge: 'PRO' },
+          { id: 'tests', label: 'Exams' },
+          { id: 'approvals', label: 'Queue' }
         ].map((tab) => (
           <button 
             key={tab.id} 
             onClick={() => setActiveTab(tab.id as AdminTab)} 
-            className={`relative px-6 py-4 text-[9px] font-black uppercase tracking-widest whitespace-nowrap ${activeTab === tab.id ? 'border-b-4 border-amber-500 text-slate-950' : 'text-slate-400'}`}
+            className={`relative px-6 py-4 text-[9px] font-black uppercase tracking-[0.3em] whitespace-nowrap transition-all ${activeTab === tab.id ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50/50' : 'text-slate-400 hover:text-slate-600'}`}
           >
             {tab.label}
             {tab.badge && <span className="absolute top-2 right-1 bg-amber-500 text-slate-950 text-[6px] px-1 py-0.5 rounded-sm font-black">{tab.badge}</span>}
@@ -163,37 +180,60 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
         {activeTab === 'import' && (
           <div className="max-w-3xl mx-auto py-10">
             {importStatus === 'idle' && (
-              <div className="bg-white p-12 rounded-[3rem] border-4 border-dashed border-slate-100 text-center hover:border-amber-500 transition-all cursor-pointer" onClick={() => fileInputRef.current?.click()}>
+              <div className="bg-white p-12 rounded-[3rem] border-4 border-dashed border-slate-100 text-center hover:border-amber-500 transition-all cursor-pointer group" onClick={() => fileInputRef.current?.click()}>
                  <input type="file" ref={fileInputRef} className="hidden" accept=".pdf" onChange={(e) => e.target.files?.[0] && processDocument(e.target.files[0])} />
-                 <h3 className="text-xl font-black text-slate-950 mb-4 uppercase tracking-tight">Bulk PDF Analysis</h3>
-                 <p className="text-xs text-slate-400 mb-8 italic px-10">Upload a PDF containing medical items. Gemini AI will automatically extract questions, options, and rationales.</p>
-                 <button className="px-12 py-5 bg-slate-950 text-amber-500 rounded-2xl text-[10px] font-black uppercase tracking-[0.3em]">Select PDF File</button>
+                 <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-8 group-hover:bg-amber-50 transition-colors">
+                    <svg className="w-10 h-10 text-slate-300 group-hover:text-amber-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+                 </div>
+                 <h3 className="text-xl font-black text-slate-950 mb-4 uppercase tracking-tight leading-tight">Import questions from PDF</h3>
+                 <p className="text-xs text-slate-400 mb-10 italic px-10 leading-relaxed">Select a PDF file containing your medical examination items. The system will scan and structure the content for review.</p>
+                 <button className="px-12 py-5 bg-slate-950 text-amber-500 rounded-2xl text-[10px] font-black uppercase tracking-[0.3em] shadow-xl hover:bg-slate-900 transition-all">Select Document</button>
               </div>
             )}
             
             {importStatus === 'parsing' && (
-              <div className="bg-white p-12 rounded-[3rem] shadow-2xl text-center">
-                <div className="w-20 h-20 bg-slate-50 rounded-full mx-auto mb-8 flex items-center justify-center relative overflow-hidden">
-                  <div className="absolute bottom-0 left-0 w-full bg-amber-500 transition-all duration-500" style={{ height: `${importProgress}%` }}></div>
-                  <span className="relative z-10 text-sm font-black text-slate-950">{Math.round(importProgress)}%</span>
+              <div className="bg-white p-12 rounded-[3rem] shadow-2xl text-center border border-slate-100 animate-in fade-in zoom-in-95 duration-500">
+                <div className="w-24 h-24 bg-slate-50 rounded-[2rem] mx-auto mb-10 flex items-center justify-center relative overflow-hidden">
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span className="text-lg font-black text-slate-950 z-10">{Math.round(importProgress)}%</span>
+                  </div>
+                  <div className="absolute bottom-0 left-0 w-full bg-amber-500 transition-all duration-700 ease-out" style={{ height: `${importProgress}%` }}></div>
                 </div>
-                <h3 className="text-lg font-black text-slate-950 mb-2 uppercase tracking-tight">Gemini AI is Analyzing...</h3>
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest animate-pulse">Extracting medical knowledge</p>
+                <h3 className="text-lg font-black text-slate-950 mb-3 uppercase tracking-tight">Processing Content</h3>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest animate-pulse h-4">{getStatusMessage(importProgress)}</p>
+                
+                <div className="mt-12 max-w-sm mx-auto h-2 bg-slate-50 rounded-full overflow-hidden border border-slate-100">
+                  <div className="h-full bg-amber-500 transition-all duration-700 relative" style={{ width: `${importProgress}%` }}>
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer"></div>
+                  </div>
+                </div>
               </div>
             )}
 
             {importStatus === 'review' && (
-              <div className="space-y-6">
-                <div className="flex justify-between items-center bg-white p-6 rounded-2xl border border-gray-100 shadow-sm sticky top-0 z-10">
-                  <h3 className="text-lg font-black text-slate-950 uppercase tracking-tight">Review Staged Items ({stagedQuestions.length})</h3>
-                  <button onClick={commitImport} className="px-10 py-3 bg-slate-950 text-amber-500 rounded-xl text-[10px] font-black uppercase">Commit All</button>
+              <div className="space-y-6 animate-in slide-in-from-bottom-6 duration-500">
+                <div className="flex flex-col md:flex-row justify-between items-center bg-slate-950 p-8 rounded-[2rem] shadow-2xl sticky top-4 z-10 gap-4 border-b-4 border-amber-500">
+                  <div className="text-center md:text-left">
+                    <h3 className="text-lg font-black text-white uppercase tracking-tight">Extraction Complete</h3>
+                    <p className="text-[9px] font-black text-amber-400 uppercase tracking-widest">{stagedQuestions.length} Items ready for integration</p>
+                  </div>
+                  <button onClick={commitImport} className="w-full md:w-auto px-10 py-4 bg-amber-500 text-slate-950 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] shadow-lg hover:bg-amber-400 transition-all active:scale-95">Verify & Sync All</button>
                 </div>
                 <div className="grid grid-cols-1 gap-6">
                   {stagedQuestions.map((q, i) => (
-                    <div key={i} className="bg-white p-6 rounded-2xl border border-gray-100">
-                      <p className="text-sm font-bold text-slate-800 mb-4"><ScientificText text={q.text} /></p>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 opacity-60">
-                        {q.options.map((o, idx) => <div key={idx} className={`text-[10px] p-2 rounded-lg border ${idx === q.correctAnswerIndex ? 'bg-emerald-50 border-emerald-500/20' : ''}`}>{o}</div>)}
+                    <div key={i} className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm hover:border-amber-200 transition-all group">
+                      <div className="flex justify-between items-center mb-6">
+                         <span className="text-[8px] font-black bg-slate-100 text-slate-400 px-3 py-1 rounded-full uppercase tracking-widest">{q.subject}</span>
+                         <span className="text-[8px] font-black text-amber-600 uppercase tracking-widest">{q.topic}</span>
+                      </div>
+                      <p className="text-sm font-bold text-slate-800 mb-8 leading-relaxed"><ScientificText text={q.text} /></p>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 opacity-70">
+                        {q.options.map((o, idx) => (
+                           <div key={idx} className={`text-[10px] p-4 rounded-xl border flex items-center gap-3 ${idx === q.correctAnswerIndex ? 'bg-emerald-50 border-emerald-500/20 text-emerald-900 font-black' : 'bg-slate-50 border-slate-100'}`}>
+                             <span className="opacity-30">{String.fromCharCode(65+idx)}</span>
+                             <ScientificText text={o} />
+                           </div>
+                        ))}
                       </div>
                     </div>
                   ))}
@@ -206,34 +246,49 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
         {activeTab === 'questions' && (
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-10">
             <div className="xl:col-span-1">
-              <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-100">
-                <h3 className="text-lg font-black text-slate-950 mb-6 uppercase tracking-tight">Manual Question Entry</h3>
+              <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 sticky top-4">
+                <h3 className="text-lg font-black text-slate-950 mb-6 uppercase tracking-tight leading-tight">Manual Question Registry</h3>
                 <form onSubmit={handleAddOrUpdateQuestion} className="space-y-4">
-                  <textarea placeholder="Question Text" className="w-full p-4 bg-slate-50 border border-gray-100 rounded-2xl text-xs font-bold h-32" value={qText} onChange={e => setQText(e.target.value)} required />
+                  <div className="grid grid-cols-2 gap-3">
+                    <input placeholder="Subject" className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl text-[10px] font-black uppercase outline-none focus:ring-2 focus:ring-amber-500" value={qSubject} onChange={e => setQSubject(e.target.value)} required />
+                    <input placeholder="Topic" className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl text-[10px] font-black uppercase outline-none focus:ring-2 focus:ring-amber-500" value={qTopic} onChange={e => setQTopic(e.target.value)} required />
+                  </div>
+                  <textarea placeholder="Clinical Stem / Question Text" className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-bold h-32 outline-none focus:ring-2 focus:ring-amber-500" value={qText} onChange={e => setQText(e.target.value)} required />
                   {qOptions.map((o, i) => (
-                    <input key={i} className="w-full p-3 bg-slate-50 border border-gray-100 rounded-xl text-xs" value={o} placeholder={`Option ${String.fromCharCode(65+i)}`} onChange={e => { const n = [...qOptions]; n[i] = e.target.value; setQOptions(n); }} required />
+                    <div key={i} className="flex gap-2 group">
+                       <input type="radio" checked={qCorrect === i} onChange={() => setQCorrect(i)} className="accent-amber-500" />
+                       <input className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-medium outline-none focus:border-amber-500" value={o} placeholder={`Option ${String.fromCharCode(65+i)}`} onChange={e => { const n = [...qOptions]; n[i] = e.target.value; setQOptions(n); }} required />
+                    </div>
                   ))}
-                  <button className="w-full py-4 bg-slate-950 text-amber-500 rounded-2xl font-black uppercase text-xs">Save Question</button>
+                  <button className="w-full py-5 bg-slate-950 text-amber-500 rounded-2xl font-black uppercase tracking-[0.2em] text-[10px] shadow-xl hover:bg-slate-900 transition-all active:scale-95">Register Item</button>
                 </form>
-                <div className="mt-8 pt-8 border-t border-gray-100">
-                   <p className="text-[9px] text-slate-400 font-bold uppercase mb-4">Pro Tip</p>
-                   <button onClick={() => setActiveTab('import')} className="w-full p-4 bg-amber-50 border border-amber-200 rounded-2xl text-[10px] font-black text-amber-600 uppercase flex items-center justify-between group">
-                     Use AI PDF Analysis
-                     <svg className="w-4 h-4 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path></svg>
+                <div className="mt-8 pt-8 border-t border-slate-50">
+                   <p className="text-[9px] text-slate-300 font-black uppercase mb-4 tracking-[0.3em] text-center">Batch Operations</p>
+                   <button onClick={() => setActiveTab('import')} className="w-full p-5 bg-amber-50 border border-amber-200 rounded-2xl text-[10px] font-black text-amber-600 uppercase flex items-center justify-center gap-3 hover:bg-amber-100 transition-all shadow-sm">
+                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                     Import from PDF
                    </button>
                 </div>
               </div>
             </div>
             <div className="xl:col-span-2 space-y-4">
                {questions.map(q => (
-                 <div key={q.id} className="bg-white p-6 rounded-2xl border border-gray-100 flex justify-between items-start">
-                   <div>
-                     <span className="text-[8px] font-black bg-amber-50 text-amber-600 px-2 py-1 rounded uppercase">{q.subject}</span>
-                     <p className="text-sm font-bold text-slate-800 mt-2"><ScientificText text={q.text} /></p>
+                 <div key={q.id} className="bg-white p-6 rounded-3xl border border-slate-100 flex justify-between items-start hover:border-amber-200 transition-all group shadow-sm">
+                   <div className="flex-1 pr-6">
+                     <div className="flex gap-2 items-center mb-3">
+                        <span className="text-[8px] font-black bg-slate-100 text-slate-400 px-2.5 py-1 rounded uppercase tracking-widest">{q.subject}</span>
+                        <span className="text-[8px] font-black text-amber-600 uppercase tracking-widest">{q.topic}</span>
+                     </div>
+                     <p className="text-sm font-bold text-slate-800 leading-relaxed"><ScientificText text={q.text} /></p>
                    </div>
-                   <button onClick={() => deleteDoc(doc(db, 'questions', q.id!)).then(fetchData)} className="text-slate-300 hover:text-red-500 transition-colors p-2"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>
+                   <button onClick={() => deleteDoc(doc(db, 'questions', q.id!)).then(fetchData)} className="text-slate-200 hover:text-red-500 transition-colors p-2 bg-slate-50 rounded-xl group-hover:bg-red-50"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>
                  </div>
                ))}
+               {questions.length === 0 && (
+                 <div className="py-20 text-center bg-white rounded-[3rem] border-2 border-dashed border-slate-100">
+                    <p className="text-slate-300 font-black text-[10px] uppercase tracking-[0.4em]">Repository Vacant</p>
+                 </div>
+               )}
             </div>
           </div>
         )}

@@ -3,8 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { User } from '../types';
 import { db, auth } from '../firebase';
 import { collection, getDocs, doc, deleteDoc, setDoc, query, where } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
-import { createUserWithEmailAndPassword, sendPasswordResetEmail } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
-import { LOGO_URL } from '../App';
+import { createUserWithEmailAndPassword } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 
 interface RootAdminDashboardProps {
   user: User;
@@ -37,7 +36,7 @@ const RootAdminDashboard: React.FC<RootAdminDashboardProps> = ({ user, onLogout,
 
   const handleCreateAdmin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (admins.length >= 6) return alert("Staff limit reached.");
+    if (admins.length >= 6) return alert("System staff limit reached.");
     setLoading(true);
     try {
       const res = await createUserWithEmailAndPassword(auth, newEmail, newPass);
@@ -48,67 +47,77 @@ const RootAdminDashboard: React.FC<RootAdminDashboardProps> = ({ user, onLogout,
 
   return (
     <div className="flex-1 w-full bg-slate-50 flex flex-col overflow-hidden">
-      <div className="bg-white border-b border-gray-100 p-6 flex flex-col md:flex-row justify-between items-center gap-4 shrink-0 safe-top">
+      <div className="bg-white border-b border-slate-100 p-6 flex flex-col md:flex-row justify-between items-center gap-4 shrink-0 safe-top">
         <div className="flex items-center gap-4">
-          <img src={LOGO_URL} className="w-12 h-12" alt="Logo" />
+          <img src="/assets/logo.png" className="w-14 h-14" alt="Aureus Logo" />
           <div>
             <h1 className="text-xl font-black text-slate-900 uppercase tracking-tighter leading-none">Aureus Master</h1>
-            <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mt-1">Management Hub</p>
+            <p className="text-[10px] font-black text-amber-600 uppercase tracking-[0.3em] mt-1">System Oversight</p>
           </div>
         </div>
         <div className="flex gap-2">
-          <button onClick={onSwitchToAdmin} className="px-4 py-2 text-[10px] font-black text-slate-600 border border-gray-200 rounded-xl uppercase">Admin Panel</button>
-          <button onClick={onSwitchToStudent} className="px-4 py-2 text-[10px] font-black text-slate-600 border border-gray-200 rounded-xl uppercase">Student View</button>
-          <button onClick={onLogout} className="px-4 py-2 text-[10px] font-black text-red-600 border border-red-100 rounded-xl uppercase">Logout</button>
+          <button onClick={onSwitchToAdmin} className="px-5 py-2.5 text-[10px] font-black text-slate-600 border border-slate-200 rounded-xl uppercase tracking-widest">Faculty Hub</button>
+          <button onClick={onSwitchToStudent} className="px-5 py-2.5 text-[10px] font-black text-slate-600 border border-slate-200 rounded-xl uppercase tracking-widest">Student View</button>
+          <button onClick={onLogout} className="px-5 py-2.5 text-[10px] font-black text-red-600 border border-red-50 rounded-xl uppercase tracking-widest">Log Out</button>
         </div>
       </div>
 
-      <nav className="flex bg-white px-6 border-b border-gray-100">
-        <button onClick={() => setActiveView('staff')} className={`px-6 py-4 text-[9px] font-black uppercase tracking-widest ${activeView === 'staff' ? 'border-b-4 border-amber-500 text-slate-950' : 'text-slate-400'}`}>Staff Control</button>
-        <button onClick={() => setActiveView('tools')} className={`px-6 py-4 text-[9px] font-black uppercase tracking-widest ${activeView === 'tools' ? 'border-b-4 border-amber-500 text-slate-950' : 'text-slate-400'}`}>Content Hub</button>
+      <nav className="flex bg-white px-6 border-b border-slate-100">
+        <button onClick={() => setActiveView('staff')} className={`px-8 py-4 text-[10px] font-black uppercase tracking-[0.3em] transition-all ${activeView === 'staff' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50/50' : 'text-slate-400 hover:text-slate-600'}`}>Staff Matrix</button>
+        <button onClick={() => setActiveView('tools')} className={`px-8 py-4 text-[10px] font-black uppercase tracking-[0.3em] transition-all ${activeView === 'tools' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50/50' : 'text-slate-400 hover:text-slate-600'}`}>Core Modules</button>
       </nav>
 
       <div className="flex-1 p-6 md:p-10 overflow-y-auto no-scrollbar safe-bottom">
         {activeView === 'tools' ? (
           <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8">
-             <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm flex flex-col group hover:border-amber-500 transition-all cursor-pointer" onClick={onGoToImport}>
-                <div className="w-16 h-16 bg-amber-50 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-                   <svg className="w-8 h-8 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 01-.586 1.414l-2.828 2.828A2 2 0 0111 14.414V14a2 2 0 012-2h2a2 2 0 012 2v.414a2 2 0 01-.586 1.414l-2.828 2.828A2 2 0 0111 19.414V20"></path></svg>
+             <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-xl flex flex-col group hover:border-amber-500 transition-all cursor-pointer" onClick={onGoToImport}>
+                <div className="w-16 h-16 bg-amber-50 rounded-2xl flex items-center justify-center mb-8 group-hover:scale-110 transition-transform">
+                   <svg className="w-8 h-8 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
                 </div>
-                <h3 className="text-xl font-black text-slate-950 mb-2 uppercase tracking-tight">AI PDF Analysis</h3>
-                <p className="text-xs text-slate-400 mb-8 italic flex-1">Standard AI engine for bulk question extraction. Best for processing clinical vignettes and multi-section study materials.</p>
-                <button className="w-full py-4 bg-slate-950 text-amber-500 rounded-xl font-black uppercase text-[10px] tracking-widest">Launch Tool</button>
+                <h3 className="text-xl font-black text-slate-950 mb-3 uppercase tracking-tight">Import questions from PDF</h3>
+                <p className="text-xs text-slate-400 mb-10 italic flex-1 leading-relaxed">High-fidelity extraction module for bulk item processing. Automated structuring for medical datasets.</p>
+                <button className="w-full py-5 bg-slate-950 text-amber-500 rounded-2xl font-black uppercase text-[10px] tracking-[0.3em] shadow-2xl hover:bg-slate-900 transition-all">Launch Registry Module</button>
              </div>
-             <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm flex flex-col group opacity-60">
-                <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center mb-6">
+             <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm flex flex-col group opacity-40">
+                <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center mb-8">
                    <svg className="w-8 h-8 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
                 </div>
-                <h3 className="text-xl font-black text-slate-950 mb-2 uppercase tracking-tight">Analytics Suite</h3>
-                <p className="text-xs text-slate-400 mb-8 italic flex-1">Monitor global student performance trends and test difficulty indices. (Coming Soon)</p>
-                <button disabled className="w-full py-4 bg-slate-100 text-slate-300 rounded-xl font-black uppercase text-[10px] tracking-widest cursor-not-allowed">Locked</button>
+                <h3 className="text-xl font-black text-slate-950 mb-3 uppercase tracking-tight">Global Metrics</h3>
+                <p className="text-xs text-slate-400 mb-10 italic flex-1 leading-relaxed">Cross-platform performance analytics and system integrity logs. (Module Offline)</p>
+                <button disabled className="w-full py-5 bg-slate-50 text-slate-300 rounded-2xl font-black uppercase text-[10px] tracking-[0.3em] cursor-not-allowed">Restricted</button>
              </div>
           </div>
         ) : (
-          <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-10">
             <div className="lg:col-span-1">
-              <div className="bg-white p-8 rounded-[2rem] border border-gray-100 shadow-sm sticky top-0">
-                <h2 className="text-lg font-black text-slate-900 mb-6 uppercase tracking-tight">Add Staff</h2>
+              <div className="bg-white p-10 rounded-[2.5rem] border border-slate-100 shadow-2xl sticky top-0">
+                <h2 className="text-xl font-black text-slate-950 mb-8 uppercase tracking-tight">Authorize Personnel</h2>
                 <form onSubmit={handleCreateAdmin} className="space-y-4">
-                  <input value={newName} onChange={e => setNewName(e.target.value)} className="w-full p-3 bg-slate-50 border border-gray-100 rounded-xl text-xs font-bold" placeholder="Full Name" required />
-                  <input type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)} className="w-full p-3 bg-slate-50 border border-gray-100 rounded-xl text-xs font-bold" placeholder="Email" required />
-                  <input type="password" value={newPass} onChange={e => setNewPass(e.target.value)} className="w-full p-3 bg-slate-50 border border-gray-100 rounded-xl text-xs font-bold" placeholder="Initial Password" required />
-                  <button disabled={loading} className="w-full py-4 bg-slate-950 text-amber-500 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-lg">Authorize Staff</button>
+                  <input value={newName} onChange={e => setNewName(e.target.value)} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl text-[10px] font-black uppercase focus:ring-2 focus:ring-amber-500 outline-none" placeholder="Official Name" required />
+                  <input type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl text-[10px] font-black uppercase focus:ring-2 focus:ring-amber-500 outline-none" placeholder="University Email" required />
+                  <input type="password" value={newPass} onChange={e => setNewPass(e.target.value)} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl text-[10px] font-black uppercase focus:ring-2 focus:ring-amber-500 outline-none" placeholder="System Access Key" required />
+                  <button disabled={loading} className="w-full py-5 bg-slate-950 text-amber-500 rounded-2xl font-black uppercase text-[10px] tracking-[0.3em] shadow-xl hover:bg-slate-900 transition-all active:scale-95">Register System Admin</button>
                 </form>
               </div>
             </div>
-            <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
               {admins.map(admin => (
-                <div key={admin.id} className="bg-white p-6 rounded-[1.8rem] border border-gray-100 shadow-sm">
-                  <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight">{admin.name}</h3>
-                  <p className="text-[10px] text-slate-400 font-bold mb-4">{admin.email}</p>
-                  <button onClick={() => deleteDoc(doc(db, 'users', admin.id)).then(fetchAdmins)} className="w-full py-2 text-[8px] font-black text-red-600 uppercase border border-red-50 rounded-lg hover:bg-red-50">Dismiss Staff</button>
+                <div key={admin.id} className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm flex flex-col justify-between hover:border-amber-200 transition-all">
+                  <div>
+                    <h3 className="text-base font-black text-slate-950 uppercase tracking-tight leading-none">{admin.name}</h3>
+                    <p className="text-[10px] text-amber-600 font-black uppercase mt-2 tracking-widest">{admin.email}</p>
+                    <div className="mt-6 pt-6 border-t border-slate-50">
+                       <span className="text-[8px] font-bold text-slate-400 uppercase tracking-[0.2em]">Credential Level: Administrator</span>
+                    </div>
+                  </div>
+                  <button onClick={() => deleteDoc(doc(db, 'users', admin.id)).then(fetchAdmins)} className="mt-8 w-full py-3 text-[9px] font-black text-red-600 uppercase tracking-widest border border-red-50 rounded-xl hover:bg-red-50 transition-colors">Revoke Clearance</button>
                 </div>
               ))}
+              {admins.length === 0 && (
+                <div className="col-span-full py-24 text-center">
+                   <p className="text-slate-300 font-black text-[10px] uppercase tracking-[0.5em]">No personnel registered</p>
+                </div>
+              )}
             </div>
           </div>
         )}

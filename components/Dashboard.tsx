@@ -4,7 +4,6 @@ import { User, MockTest, ExamResult } from '../types';
 import { db } from '../firebase';
 import { collection, query, where, onSnapshot, getDocs, orderBy, limit } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import ScientificText from './ScientificText';
-import { LOGO_URL } from '../App';
 
 interface DashboardProps {
   user: User;
@@ -68,9 +67,6 @@ const LeaderboardModal: React.FC<{ test: MockTest, onClose: () => void }> = ({ t
             </div>
           )}
         </div>
-        <div className="p-6 bg-slate-50 border-t border-gray-100 text-center">
-          <p className="text-[8px] font-black text-slate-300 uppercase tracking-widest">Only Top 10 Participants Shown</p>
-        </div>
       </div>
     </div>
   );
@@ -104,17 +100,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onStartTest, onRe
     return () => { unsubTests(); unsubResults(); unsubAll(); };
   }, [user.id]);
 
-  const participantCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    allResults.forEach(res => {
-      if (!counts[res.testId]) counts[res.testId] = 0;
-      const testResults = allResults.filter(r => r.testId === res.testId);
-      const uniqueUsers = new Set(testResults.map(r => r.userId));
-      counts[res.testId] = uniqueUsers.size;
-    });
-    return counts;
-  }, [allResults]);
-
   const stats = useMemo(() => {
     if (history.length === 0) return { avgScore: 0, highestScore: 0, totalTaken: 0 };
     const scores = history.map(h => (h.score / (h.maxScore || 1)) * 100);
@@ -130,79 +115,81 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onStartTest, onRe
       {showLeaderboard && <LeaderboardModal test={showLeaderboard} onClose={() => setShowLeaderboard(null)} />}
 
       <div className="max-w-6xl mx-auto w-full flex-1 overflow-y-auto no-scrollbar p-4 md:p-8 safe-top safe-bottom">
-        <div className="flex flex-col md:flex-row justify-between items-center mb-10 gap-6 bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100 shrink-0">
+        <div className="flex flex-col md:flex-row justify-between items-center mb-10 gap-6 bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 shrink-0">
           <div className="flex items-center gap-4 w-full md:w-auto">
-            <img src={LOGO_URL} alt="Logo" className="w-12 h-12 md:w-16 md:h-16 object-contain" />
+            <img src="/assets/logo.png" alt="Aureus Logo" className="w-14 h-14 object-contain" />
             <div className="flex-1">
-              <h1 className="text-lg md:text-xl font-black text-slate-900 uppercase tracking-tighter flex flex-col leading-tight">
-                <span>Aureus Medicos</span>
-                <span className="text-amber-500 text-[10px] tracking-widest font-bold">CBT Practice App</span>
+              <h1 className="text-xl font-black text-slate-950 uppercase tracking-tighter leading-none">
+                Aureus Medicos
               </h1>
-              <p className="text-slate-500 text-[10px] md:text-xs font-bold truncate">{user.name}</p>
+              <p className="text-amber-600 text-[9px] tracking-[0.3em] font-black uppercase mt-1">Academic Progress</p>
             </div>
           </div>
           <div className="flex gap-2 w-full md:w-auto">
             {(user.role === 'admin' || user.role === 'root-admin') && onReturnToAdmin && (
-              <button onClick={onReturnToAdmin} className="flex-1 md:flex-none px-6 py-3 text-[10px] font-black text-amber-600 bg-amber-50 border border-amber-200 rounded-xl hover:bg-amber-100 transition-all active:scale-95">Admin Panel</button>
+              <button onClick={onReturnToAdmin} className="flex-1 md:flex-none px-6 py-3 text-[10px] font-black text-amber-600 bg-amber-50 border border-amber-200 rounded-xl hover:bg-amber-100 transition-all active:scale-95 uppercase tracking-widest">Admin Hub</button>
             )}
-            <button onClick={onLogout} className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase hover:text-red-500 transition-all">Logout</button>
+            <button onClick={onLogout} className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-red-500 transition-all">Sign Out</button>
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-3 md:gap-6 mb-12 shrink-0">
-          <div className="bg-white p-5 md:p-8 rounded-2xl md:rounded-3xl shadow-sm border border-gray-100 flex flex-col items-center">
-            <span className="text-slate-400 text-[8px] md:text-[10px] font-black uppercase tracking-widest mb-2 text-center">Avg Score</span>
-            <span className="text-xl md:text-4xl font-black text-slate-950">{stats.avgScore}%</span>
+        <div className="grid grid-cols-3 gap-3 md:gap-6 mb-12">
+          <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex flex-col items-center">
+            <span className="text-slate-400 text-[8px] md:text-[9px] font-black uppercase tracking-widest mb-2">Global Average</span>
+            <span className="text-xl md:text-3xl font-black text-slate-900">{stats.avgScore}%</span>
           </div>
-          <div className="bg-white p-5 md:p-8 rounded-2xl md:rounded-3xl shadow-sm border border-gray-100 flex flex-col items-center">
-            <span className="text-slate-400 text-[8px] md:text-[10px] font-black uppercase tracking-widest mb-2 text-center">Highest</span>
-            <span className="text-xl md:text-4xl font-black text-amber-500">{stats.highestScore}%</span>
+          <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex flex-col items-center">
+            <span className="text-amber-600 text-[8px] md:text-[9px] font-black uppercase tracking-widest mb-2">Peak Performance</span>
+            <span className="text-xl md:text-3xl font-black text-amber-500">{stats.highestScore}%</span>
           </div>
-          <div className="bg-white p-5 md:p-8 rounded-2xl md:rounded-3xl shadow-sm border border-gray-100 flex flex-col items-center">
-            <span className="text-slate-400 text-[8px] md:text-[10px] font-black uppercase tracking-widest mb-2 text-center">Total</span>
-            <span className="text-xl md:text-4xl font-black text-slate-950">{stats.totalTaken}</span>
+          <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex flex-col items-center">
+            <span className="text-slate-400 text-[8px] md:text-[9px] font-black uppercase tracking-widest mb-2">Assessments</span>
+            <span className="text-xl md:text-3xl font-black text-slate-900">{stats.totalTaken}</span>
           </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 md:gap-12 pb-10">
-          <div className="lg:col-span-2 space-y-12">
+          <div className="lg:col-span-2 space-y-10">
             <section>
-              <h2 className="text-xl font-black mb-6 text-slate-900 uppercase tracking-tight flex items-center gap-3">
-                Practice Exams
-                <span className="bg-amber-500 text-slate-950 text-[10px] px-2 py-0.5 rounded-lg">{tests.length}</span>
-              </h2>
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-3">
+                  Available Assessments
+                </h2>
+                <span className="bg-amber-100 text-amber-700 text-[10px] font-black px-3 py-1 rounded-full">{tests.length} Active</span>
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {tests.map(test => (
-                  <div key={test.id} className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-100 hover:shadow-xl transition-all group flex flex-col relative overflow-hidden">
-                    <h3 className="font-black text-lg text-slate-900 mb-2 group-hover:text-amber-600 transition-colors uppercase tracking-tight leading-tight">{test.name}</h3>
-                    <p className="text-[10px] text-slate-400 mb-6 line-clamp-3 font-medium flex-1">{test.description}</p>
+                  <div key={test.id} className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 hover:border-amber-200 transition-all group flex flex-col relative overflow-hidden">
+                    <h3 className="font-black text-lg text-slate-900 mb-2 group-hover:text-amber-600 transition-colors uppercase tracking-tight">{test.name}</h3>
+                    <p className="text-[10px] text-slate-400 mb-6 line-clamp-3 font-medium flex-1 italic">{test.description}</p>
                     <div className="flex flex-wrap gap-2 text-[8px] font-black uppercase tracking-widest mb-8">
-                       <span className="bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-full text-slate-400">{test.totalDurationSeconds / 60} Mins</span>
+                       <span className="bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-full text-slate-500">{test.totalDurationSeconds / 60} Min Session</span>
                        <button onClick={(e) => { e.stopPropagation(); setShowLeaderboard(test); }} className="bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-full text-amber-600 hover:bg-amber-500 hover:text-white transition-all">
-                         {participantCounts[test.id] || 0} Participants
+                         Rankings
                        </button>
                     </div>
-                    <button onClick={() => onStartTest(test)} className="w-full py-4 bg-slate-950 text-amber-500 rounded-xl font-black uppercase tracking-widest text-[10px] transition-all active:scale-95 shadow-lg">Start Simulation</button>
+                    <button onClick={() => onStartTest(test)} className="w-full py-4 bg-slate-950 text-amber-500 rounded-2xl font-black uppercase tracking-[0.2em] text-[10px] transition-all active:scale-95 shadow-lg">Start Examination</button>
                   </div>
                 ))}
               </div>
             </section>
           </div>
-          <aside className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-200 h-fit sticky top-8">
-            <h2 className="text-xl font-black mb-8 text-slate-950 uppercase tracking-tight text-center">Attempts</h2>
+          <aside className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-200 h-fit">
+            <h2 className="text-lg font-black mb-8 text-slate-950 uppercase tracking-tight text-center">Transcript History</h2>
             <div className="space-y-4">
               {history.map(item => (
                 <div key={item.id} className="p-5 bg-slate-50 rounded-2xl border border-slate-100 hover:border-amber-200 transition-all group">
-                  <div className="flex justify-between items-start mb-3">
-                    <h4 className="text-[10px] font-black text-slate-950 uppercase truncate max-w-[140px] tracking-tight">{item.testName}</h4>
-                    <span className="text-xl font-black text-slate-950 tracking-tighter leading-none">{Math.round((item.score / (item.maxScore || 1)) * 100)}%</span>
+                  <div className="flex justify-between items-start mb-2">
+                    <h4 className="text-[10px] font-black text-slate-900 uppercase truncate max-w-[140px] tracking-tight">{item.testName}</h4>
+                    <span className="text-lg font-black text-slate-950 tracking-tighter leading-none">{Math.round((item.score / (item.maxScore || 1)) * 100)}%</span>
                   </div>
                   <div className="flex justify-between items-center">
                      <span className="text-[8px] text-slate-400 font-bold uppercase">{new Date(item.completedAt).toLocaleDateString()}</span>
-                     <button onClick={() => onReviewResult(item)} className="text-[8px] font-black text-amber-600 uppercase tracking-widest">Review</button>
+                     <button onClick={() => onReviewResult(item)} className="text-[8px] font-black text-amber-600 uppercase tracking-widest hover:underline">Review Items</button>
                   </div>
                 </div>
               ))}
+              {history.length === 0 && <p className="text-center text-[10px] font-black text-slate-300 uppercase py-10">No records found</p>}
             </div>
           </aside>
         </div>
