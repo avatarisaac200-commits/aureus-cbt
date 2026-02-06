@@ -1,5 +1,6 @@
+
 {
-  "name": "Aureus Medicos CBT",
-  "description": "A high-fidelity computer-based testing simulator designed specifically for medical practice under strict examination conditions.",
+  "name": "CBT Exam Suite",
+  "description": "A professional-grade medical computer-based testing simulator with AI-powered rationales.",
   "requestFramePermissions": []
 }

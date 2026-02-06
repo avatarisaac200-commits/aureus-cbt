@@ -1,4 +1,4 @@
-export type UserRole = 'student' | 'admin';
+export type UserRole = 'student' | 'admin' | 'root-admin';
 
 export interface User {
   id: string;
@@ -6,6 +6,7 @@ export interface User {
   email: string;
   password?: string;
   role: UserRole;
+  title?: string; // e.g. "Content Manager"
 }
 
 export interface Question {
@@ -57,4 +58,4 @@ export interface ExamResult {
   }[];
 }
 
-export type ViewState = 'auth' | 'dashboard' | 'exam' | 'admin' | 'results' | 'review';
+export type ViewState = 'auth' | 'dashboard' | 'exam' | 'admin' | 'root-admin' | 'results' | 'review';

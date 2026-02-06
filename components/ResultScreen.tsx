@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { ExamResult } from '../types';
 import logo from '../assets/logo.png';
@@ -12,8 +13,8 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ result, onClose, onReview }
   const percentage = Math.round((result.score / result.maxScore) * 100);
   
   const getFeedback = () => {
-    if (result.status === 'abandoned') return { text: "TEST CANCELLED", color: "text-red-600", bg: "bg-red-50" };
-    if (percentage >= 70) return { text: "EXCELLENT WORK!", color: "text-amber-600", bg: "bg-amber-50" };
+    if (result.status === 'abandoned') return { text: "SESSION ENDED", color: "text-red-600", bg: "bg-red-50" };
+    if (percentage >= 70) return { text: "EXCELLENT!", color: "text-amber-600", bg: "bg-amber-50" };
     if (percentage >= 50) return { text: "WELL DONE", color: "text-slate-800", bg: "bg-slate-50" };
     return { text: "KEEP PRACTICING", color: "text-rose-600", bg: "bg-rose-50" };
   };
@@ -21,27 +22,27 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ result, onClose, onReview }
   const feedback = getFeedback();
 
   return (
-    <div className="min-h-screen bg-slate-100 flex items-center justify-center p-6 pb-20">
+    <div className="min-h-screen bg-slate-100 flex items-center justify-center p-6 pb-20 safe-top safe-bottom">
        <div className="max-w-3xl w-full bg-white rounded-[2.5rem] shadow-2xl overflow-hidden border border-gray-200">
           <div className="bg-slate-950 p-12 text-center relative border-b-8 border-amber-500">
              <div className="flex justify-center mb-6">
-                <img src={logo} alt="Crest" className="w-24 h-24 drop-shadow-lg" />
+                <img src={logo} alt="Aureus Logo" className="w-24 h-24 drop-shadow-lg" />
              </div>
-             <p className="text-amber-500 text-[10px] font-black uppercase tracking-[0.3em] mb-2">Practice Test Results</p>
-             <h1 className="text-3xl font-black text-white uppercase tracking-tight">{result.testName}</h1>
+             <p className="text-amber-500 text-[10px] font-black uppercase tracking-[0.3em] mb-2">Aureus Medicos Result Card</p>
+             <h1 className="text-3xl font-black text-white uppercase tracking-tight leading-tight">{result.testName}</h1>
           </div>
 
           <div className="p-12">
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center mb-16">
-                <div className="text-center md:text-left">
-                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Result Summary</p>
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center mb-16 text-center md:text-left">
+                <div>
+                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Aureus Medicos Performance</p>
                    <h2 className={`text-3xl font-black mb-6 ${feedback.color} uppercase tracking-tighter`}>{feedback.text}</h2>
                    <div className="flex gap-4 items-center justify-center md:justify-start">
                       <div className={`px-6 py-3 rounded-2xl font-black text-3xl ${feedback.bg} ${feedback.color} shadow-sm border border-current/10`}>
                          {percentage}%
                       </div>
-                      <div className="text-slate-400 text-xs font-bold uppercase tracking-wider">
-                        {result.score} / {result.maxScore}<br/>TOTAL POINTS
+                      <div className="text-slate-400 text-xs font-bold uppercase tracking-wider leading-relaxed">
+                        {result.score} / {result.maxScore}<br/>Final Score
                       </div>
                    </div>
                 </div>
@@ -52,22 +53,23 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ result, onClose, onReview }
                          <circle cx="88" cy="88" r="76" stroke="currentColor" strokeWidth="16" fill="transparent" className="text-gray-100" />
                          <circle cx="88" cy="88" r="76" stroke="currentColor" strokeWidth="16" fill="transparent" strokeDasharray={477} strokeDashoffset={477 - (477 * percentage) / 100} strokeLinecap="round" className={feedback.color} />
                       </svg>
-                      <div className="absolute inset-0 flex items-center justify-center">
-                         <span className="text-4xl font-black text-slate-950">{percentage}%</span>
+                      <div className="absolute inset-0 flex items-center justify-center flex-col">
+                         <span className="text-4xl font-black text-slate-950 leading-none">{percentage}%</span>
+                         <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest mt-1">Aureus Medicos</span>
                       </div>
                    </div>
                 </div>
              </div>
 
              <div className="space-y-6 mb-12">
-                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-6">Scores by Subject</h3>
+                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-6">Subject Breakdown</h3>
                 {result.sectionBreakdown.map((sec, i) => {
                   const secPerc = Math.round((sec.score / sec.total) * 100);
                   return (
                     <div key={i} className="flex flex-col gap-2">
                        <div className="flex justify-between items-center text-xs px-1">
                           <span className="font-black text-slate-800 uppercase tracking-tight">{sec.sectionName}</span>
-                          <span className="font-black text-slate-400">{sec.score}/{sec.total} Points</span>
+                          <span className="font-black text-slate-400">{sec.score}/{sec.total}</span>
                        </div>
                        <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden">
                           <div className={`h-full transition-all duration-1000 rounded-full ${secPerc >= 70 ? 'bg-amber-500' : 'bg-slate-900'}`} style={{ width: `${secPerc}%` }}></div>
@@ -88,8 +90,12 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ result, onClose, onReview }
                    onClick={onClose}
                    className="w-full py-5 bg-slate-950 text-amber-500 rounded-2xl font-black uppercase tracking-[0.3em] text-xs hover:bg-slate-800 shadow-xl transition-all"
                 >
-                   Back to Dashboard
+                   Return to Dashboard
                 </button>
+             </div>
+
+             <div className="mt-12 pt-6 border-t border-gray-50 text-center">
+                <p className="text-[8px] font-black text-slate-300 uppercase tracking-widest">Aureus Medicos CBT Practice App • Official Report</p>
              </div>
           </div>
        </div>
