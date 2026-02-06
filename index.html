@@ -77,6 +77,14 @@
             -ms-overflow-style: none;
             scrollbar-width: none;
         }
+
+        @keyframes shimmer {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+        .animate-shimmer {
+            animation: shimmer 2s infinite;
+        }
     </style>
 <script type="importmap">
 {
@@ -88,7 +96,7 @@
     "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.3",
     "path": "https://esm.sh/path@^0.12.7",
     "url": "https://esm.sh/url@^0.11.4",
-    "@google/genai": "https://esm.sh/@google/genai@^0.21.0"
+    "@google/genai": "https://esm.sh/@google/genai@latest"
   }
 }
 </script>
