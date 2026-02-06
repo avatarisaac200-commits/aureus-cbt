@@ -12,7 +12,7 @@ import ExamInterface from './components/ExamInterface';
 import ResultScreen from './components/ResultScreen';
 import ReviewInterface from './components/ReviewInterface';
 
-const logo = '/assets/logo.png';
+const logo = '/assets/logo.png?v=2';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
