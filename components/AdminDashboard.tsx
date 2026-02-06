@@ -1,8 +1,8 @@
-
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { User, Question, MockTest, TestSection, ExamResult } from '../types';
 import { db } from '../firebase';
 import { collection, addDoc, getDocs, deleteDoc, doc, query, orderBy, updateDoc, where, limit } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+import { GoogleGenAI, Type } from '@google/genai';
 import ScientificText from './ScientificText';
 import logo from '../assets/logo.png';
 
@@ -12,7 +12,7 @@ interface AdminDashboardProps {
   onSwitchToStudent: () => void;
 }
 
-type AdminTab = 'questions' | 'tests' | 'approvals';
+type AdminTab = 'questions' | 'tests' | 'approvals' | 'import';
 
 const LeaderboardModal: React.FC<{ test: MockTest, onClose: () => void }> = ({ test, onClose }) => {
   const [topScores, setTopScores] = useState<ExamResult[]>([]);
@@ -85,6 +85,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onSwitc
   const [expandedSubjects, setExpandedSubjects] = useState<Record<string, boolean>>({});
   const [showLeaderboard, setShowLeaderboard] = useState<MockTest | null>(null);
   
+  // Staging for PDF Parser
+  const [importStatus, setImportStatus] = useState<'idle' | 'parsing' | 'review'>('idle');
+  const [stagedQuestions, setStagedQuestions] = useState<Omit<Question, 'id' | 'createdAt' | 'createdBy'>[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const [editingId, setEditingId] = useState<string | null>(null);
   const [qSubject, setQSubject] = useState('');
   const [qTopic, setQTopic] = useState('');
@@ -176,7 +181,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onSwitc
 
   const handleAddOrUpdateQuestion = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !user.id) {
+    if (!user?.id) {
       alert("Error: User session expired. Please re-login.");
       return;
     }
@@ -237,7 +242,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onSwitc
   };
 
   const handleCreateOfficialTest = async () => {
-    if (!user || !user.id) {
+    if (!user?.id) {
       alert("Critical Error: Administrative ID not found. Action blocked.");
       return;
     }
@@ -269,6 +274,90 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onSwitc
     }
   };
 
+  const processDocument = async (file: File) => {
+    setImportStatus('parsing');
+    try {
+      const reader = new FileReader();
+      const base64Promise = new Promise<string>((resolve) => {
+        reader.onload = () => resolve((reader.result as string).split(',')[1]);
+        reader.readAsDataURL(file);
+      });
+      const base64Data = await base64Promise;
+
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: [
+          {
+            parts: [
+              {
+                inlineData: {
+                  mimeType: 'application/pdf',
+                  data: base64Data,
+                },
+              },
+              {
+                text: "Analyze this document and extract all medical questions. Return an array of objects. Each object must strictly follow this structure: { \"subject\": string, \"topic\": string, \"text\": string, \"options\": [string, string, string, string], \"correctAnswerIndex\": integer 0-3, \"explanation\": string }. Use LaTeX for scientific notation if present (e.g. $H_2O$, $Ca^{2+}$). Output ONLY the raw JSON array.",
+              },
+            ],
+          },
+        ],
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                subject: { type: Type.STRING },
+                topic: { type: Type.STRING },
+                text: { type: Type.STRING },
+                options: { type: Type.ARRAY, items: { type: Type.STRING }, minItems: 4, maxItems: 4 },
+                correctAnswerIndex: { type: Type.INTEGER },
+                explanation: { type: Type.STRING },
+              },
+              required: ['subject', 'topic', 'text', 'options', 'correctAnswerIndex', 'explanation'],
+            },
+          },
+        },
+      });
+
+      const data = JSON.parse(response.text || '[]');
+      setStagedQuestions(data);
+      setImportStatus('review');
+    } catch (err) {
+      console.error(err);
+      alert("Structural analysis failed. Ensure the PDF contains clear multiple-choice questions.");
+      setImportStatus('idle');
+    }
+  };
+
+  const commitImport = async () => {
+    if (!user?.id) {
+      alert("Error: Admin session required.");
+      return;
+    }
+    setLoading(true);
+    try {
+      const timestamp = new Date().toISOString();
+      for (const q of stagedQuestions) {
+        await addDoc(collection(db, 'questions'), {
+          ...q,
+          createdBy: user.id,
+          createdAt: timestamp
+        });
+      }
+      alert(`${stagedQuestions.length} medical items successfully integrated.`);
+      setStagedQuestions([]);
+      setImportStatus('idle');
+      fetchData();
+    } catch (err) {
+      alert("Integration error: " + err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="flex-1 w-full bg-slate-50 flex flex-col overflow-hidden">
       {showLeaderboard && <LeaderboardModal test={showLeaderboard} onClose={() => setShowLeaderboard(null)} />}
@@ -289,6 +378,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onSwitc
 
       <nav className="flex bg-white px-6 border-b border-gray-100 overflow-x-auto no-scrollbar">
         <button onClick={() => setActiveTab('questions')} className={`px-6 py-4 text-[9px] font-black uppercase tracking-widest whitespace-nowrap ${activeTab === 'questions' ? 'border-b-4 border-amber-500 text-slate-950' : 'text-slate-400'}`}>Questions</button>
+        <button onClick={() => setActiveTab('import')} className={`px-6 py-4 text-[9px] font-black uppercase tracking-widest whitespace-nowrap ${activeTab === 'import' ? 'border-b-4 border-amber-500 text-slate-950' : 'text-slate-400'}`}>Integrator</button>
         <button onClick={() => setActiveTab('tests')} className={`px-6 py-4 text-[9px] font-black uppercase tracking-widest whitespace-nowrap ${activeTab === 'tests' ? 'border-b-4 border-amber-500 text-slate-950' : 'text-slate-400'}`}>Tests</button>
         <button onClick={() => setActiveTab('approvals')} className={`px-6 py-4 text-[9px] font-black uppercase tracking-widest whitespace-nowrap flex items-center gap-2 ${activeTab === 'approvals' ? 'border-b-4 border-amber-500 text-slate-950' : 'text-slate-400'}`}>
           Pending
@@ -299,6 +389,71 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onSwitc
       <div className="flex-1 overflow-y-auto p-6 md:p-10 no-scrollbar safe-bottom">
         <div className="max-w-7xl mx-auto">
           
+          {activeTab === 'import' && (
+            <div className="space-y-10">
+              {importStatus === 'idle' && (
+                <div className="max-w-3xl mx-auto bg-white p-12 rounded-[3rem] border-4 border-dashed border-slate-100 flex flex-col items-center justify-center text-center transition-all hover:border-amber-500 group">
+                   <div className="w-20 h-20 bg-slate-50 rounded-3xl flex items-center justify-center mb-8 group-hover:bg-amber-50 transition-colors">
+                     <svg className="w-10 h-10 text-slate-300 group-hover:text-amber-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+                   </div>
+                   <h3 className="text-xl font-black text-slate-950 mb-4 uppercase tracking-tight">Contextual Document Parser</h3>
+                   <p className="text-xs text-slate-400 max-w-sm mb-10 leading-relaxed font-medium italic">Instantly integrate high-fidelity medical content from source documents. Layout and notation patterns are automatically preserved.</p>
+                   <input type="file" ref={fileInputRef} className="hidden" accept=".pdf" onChange={(e) => e.target.files?.[0] && processDocument(e.target.files[0])} />
+                   <button onClick={() => fileInputRef.current?.click()} className="px-12 py-5 bg-slate-950 text-amber-500 rounded-2xl text-[10px] font-black uppercase tracking-[0.3em] shadow-2xl active:scale-95 transition-all">Analyze PDF</button>
+                </div>
+              )}
+
+              {importStatus === 'parsing' && (
+                <div className="max-w-lg mx-auto bg-white p-12 rounded-[3rem] shadow-2xl border border-gray-100 flex flex-col items-center">
+                  <div className="relative w-24 h-24 mb-10">
+                    <div className="absolute inset-0 border-4 border-slate-50 rounded-full"></div>
+                    <div className="absolute inset-0 border-4 border-amber-500 rounded-full border-t-transparent animate-spin"></div>
+                  </div>
+                  <h3 className="text-lg font-black text-slate-950 mb-2 uppercase tracking-tight">Pattern Recognition</h3>
+                  <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest animate-pulse">Mapping Medical Content Structures...</p>
+                </div>
+              )}
+
+              {importStatus === 'review' && (
+                <div className="space-y-8 animate-in slide-in-from-bottom-10">
+                   <div className="flex justify-between items-center bg-white p-6 rounded-2xl border border-gray-100 shadow-sm sticky top-0 z-10">
+                      <div>
+                        <h3 className="text-lg font-black text-slate-950 uppercase tracking-tight">Integration Staging</h3>
+                        <p className="text-[9px] font-black text-amber-600 uppercase tracking-widest">{stagedQuestions.length} items mapped from source</p>
+                      </div>
+                      <div className="flex gap-3">
+                         <button onClick={() => setImportStatus('idle')} className="px-6 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">Discard</button>
+                         <button onClick={commitImport} className="px-10 py-3 bg-slate-950 text-amber-500 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-xl active:scale-95">Bulk Integrate</button>
+                      </div>
+                   </div>
+                   
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-20">
+                     {stagedQuestions.map((q, i) => (
+                       <div key={i} className="bg-white p-8 rounded-[2rem] border border-gray-100 shadow-sm relative group">
+                          <button onClick={() => setStagedQuestions(prev => prev.filter((_, idx) => idx !== i))} className="absolute top-6 right-6 text-slate-200 hover:text-red-500 transition-all opacity-0 group-hover:opacity-100"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>
+                          <div className="flex gap-2 mb-4">
+                            <span className="text-[8px] font-black bg-slate-50 border border-slate-100 px-3 py-1 rounded-full text-slate-400 uppercase">{q.subject}</span>
+                            <span className="text-[8px] font-black bg-amber-50 border border-amber-200 px-3 py-1 rounded-full text-amber-600 uppercase">{q.topic}</span>
+                          </div>
+                          <p className="text-sm font-black text-slate-900 mb-6 leading-relaxed"><ScientificText text={q.text} /></p>
+                          <div className="space-y-2 mb-6">
+                            {q.options.map((opt, idx) => (
+                              <div key={idx} className={`p-3 rounded-xl border text-[10px] font-bold ${idx === q.correctAnswerIndex ? 'bg-emerald-50 border-emerald-500/20 text-emerald-900' : 'bg-slate-50 border-slate-100 text-slate-600'}`}>
+                                <ScientificText text={opt} />
+                              </div>
+                            ))}
+                          </div>
+                          <div className="p-4 bg-slate-900 rounded-2xl text-[10px] text-slate-300 leading-relaxed italic">
+                            <ScientificText text={q.explanation || ''} />
+                          </div>
+                       </div>
+                     ))}
+                   </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {activeTab === 'questions' && (
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-10">
               <div className="xl:col-span-1">
