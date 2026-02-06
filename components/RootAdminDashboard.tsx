@@ -21,7 +21,7 @@ const RootAdminDashboard: React.FC<RootAdminDashboardProps> = ({ user, onLogout,
   const [newEmail, setNewEmail] = useState('');
   const [newPass, setNewPass] = useState('');
   const [newName, setNewName] = useState('');
-  const [newTitle, setNewTitle] = useState('Content Manager');
+  const [newTitle, setNewTitle] = useState('Faculty Lead');
 
   const fetchAdmins = async () => {
     setLoading(true);
@@ -57,8 +57,8 @@ const RootAdminDashboard: React.FC<RootAdminDashboardProps> = ({ user, onLogout,
         </div>
         <div className="flex gap-2">
           <button onClick={onSwitchToAdmin} className="px-5 py-2.5 text-[10px] font-black text-slate-600 border border-slate-200 rounded-xl uppercase tracking-widest">Faculty Hub</button>
-          <button onClick={onSwitchToStudent} className="px-5 py-2.5 text-[10px] font-black text-slate-600 border border-slate-200 rounded-xl uppercase tracking-widest">Student View</button>
-          <button onClick={onLogout} className="px-5 py-2.5 text-[10px] font-black text-red-600 border border-red-50 rounded-xl uppercase tracking-widest">Log Out</button>
+          <button onClick={onSwitchToStudent} className="px-5 py-2.5 text-[10px] font-black text-slate-600 border border-slate-200 rounded-xl uppercase tracking-widest">Candidate View</button>
+          <button onClick={onLogout} className="px-5 py-2.5 text-[10px] font-black text-red-600 border border-red-50 rounded-xl uppercase tracking-widest">Logout</button>
         </div>
       </div>
 
@@ -75,15 +75,15 @@ const RootAdminDashboard: React.FC<RootAdminDashboardProps> = ({ user, onLogout,
                    <svg className="w-8 h-8 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
                 </div>
                 <h3 className="text-xl font-black text-slate-950 mb-3 uppercase tracking-tight">Import questions from PDF</h3>
-                <p className="text-xs text-slate-400 mb-10 italic flex-1 leading-relaxed">High-fidelity extraction module for bulk item processing. Automated structuring for medical datasets.</p>
-                <button className="w-full py-5 bg-slate-950 text-amber-500 rounded-2xl font-black uppercase text-[10px] tracking-[0.3em] shadow-2xl hover:bg-slate-900 transition-all">Launch Registry Module</button>
+                <p className="text-xs text-slate-400 mb-10 italic flex-1 leading-relaxed">Dedicated extraction module for bulk processing of assessment materials. Automated formatting for standardized clinical content.</p>
+                <button className="w-full py-5 bg-slate-950 text-amber-500 rounded-2xl font-black uppercase text-[10px] tracking-[0.3em] shadow-2xl hover:bg-slate-900 transition-all">Launch Module</button>
              </div>
              <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm flex flex-col group opacity-40">
                 <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center mb-8">
                    <svg className="w-8 h-8 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
                 </div>
-                <h3 className="text-xl font-black text-slate-950 mb-3 uppercase tracking-tight">Global Metrics</h3>
-                <p className="text-xs text-slate-400 mb-10 italic flex-1 leading-relaxed">Cross-platform performance analytics and system integrity logs. (Module Offline)</p>
+                <h3 className="text-xl font-black text-slate-950 mb-3 uppercase tracking-tight">Performance Metrics</h3>
+                <p className="text-xs text-slate-400 mb-10 italic flex-1 leading-relaxed">Cross-platform analytics and system integrity logs. (Module Offline)</p>
                 <button disabled className="w-full py-5 bg-slate-50 text-slate-300 rounded-2xl font-black uppercase text-[10px] tracking-[0.3em] cursor-not-allowed">Restricted</button>
              </div>
           </div>
@@ -93,10 +93,10 @@ const RootAdminDashboard: React.FC<RootAdminDashboardProps> = ({ user, onLogout,
               <div className="bg-white p-10 rounded-[2.5rem] border border-slate-100 shadow-2xl sticky top-0">
                 <h2 className="text-xl font-black text-slate-950 mb-8 uppercase tracking-tight">Authorize Personnel</h2>
                 <form onSubmit={handleCreateAdmin} className="space-y-4">
-                  <input value={newName} onChange={e => setNewName(e.target.value)} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl text-[10px] font-black uppercase focus:ring-2 focus:ring-amber-500 outline-none" placeholder="Official Name" required />
+                  <input value={newName} onChange={e => setNewName(e.target.value)} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl text-[10px] font-black uppercase focus:ring-2 focus:ring-amber-500 outline-none" placeholder="Legal Name" required />
                   <input type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl text-[10px] font-black uppercase focus:ring-2 focus:ring-amber-500 outline-none" placeholder="University Email" required />
-                  <input type="password" value={newPass} onChange={e => setNewPass(e.target.value)} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl text-[10px] font-black uppercase focus:ring-2 focus:ring-amber-500 outline-none" placeholder="System Access Key" required />
-                  <button disabled={loading} className="w-full py-5 bg-slate-950 text-amber-500 rounded-2xl font-black uppercase text-[10px] tracking-[0.3em] shadow-xl hover:bg-slate-900 transition-all active:scale-95">Register System Admin</button>
+                  <input type="password" value={newPass} onChange={e => setNewPass(e.target.value)} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl text-[10px] font-black uppercase focus:ring-2 focus:ring-amber-500 outline-none" placeholder="Security Key" required />
+                  <button disabled={loading} className="w-full py-5 bg-slate-950 text-amber-500 rounded-2xl font-black uppercase text-[10px] tracking-[0.3em] shadow-xl hover:bg-slate-900 transition-all active:scale-95">Register Faculty</button>
                 </form>
               </div>
             </div>
@@ -107,10 +107,10 @@ const RootAdminDashboard: React.FC<RootAdminDashboardProps> = ({ user, onLogout,
                     <h3 className="text-base font-black text-slate-950 uppercase tracking-tight leading-none">{admin.name}</h3>
                     <p className="text-[10px] text-amber-600 font-black uppercase mt-2 tracking-widest">{admin.email}</p>
                     <div className="mt-6 pt-6 border-t border-slate-50">
-                       <span className="text-[8px] font-bold text-slate-400 uppercase tracking-[0.2em]">Credential Level: Administrator</span>
+                       <span className="text-[8px] font-bold text-slate-400 uppercase tracking-[0.2em]">Clearance: Administrative</span>
                     </div>
                   </div>
-                  <button onClick={() => deleteDoc(doc(db, 'users', admin.id)).then(fetchAdmins)} className="mt-8 w-full py-3 text-[9px] font-black text-red-600 uppercase tracking-widest border border-red-50 rounded-xl hover:bg-red-50 transition-colors">Revoke Clearance</button>
+                  <button onClick={() => deleteDoc(doc(db, 'users', admin.id)).then(fetchAdmins)} className="mt-8 w-full py-3 text-[9px] font-black text-red-600 uppercase tracking-widest border border-red-50 rounded-xl hover:bg-red-50 transition-colors">Revoke Access</button>
                 </div>
               ))}
               {admins.length === 0 && (

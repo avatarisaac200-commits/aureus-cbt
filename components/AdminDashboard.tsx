@@ -68,13 +68,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
       const base64Data = await base64Promise;
 
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      // Fix: Use gemini-3-pro-preview for complex extraction tasks and ensure contents follows the correct { parts: [...] } structure.
       const response = await ai.models.generateContent({
         model: 'gemini-3-pro-preview',
         contents: {
           parts: [
             { inlineData: { mimeType: 'application/pdf', data: base64Data } },
-            { text: "Extract medical multiple choice questions. Return JSON array of objects with fields: subject, topic, text, options (array of 4 strings), correctAnswerIndex, explanation." }
+            { text: "Extract medical multiple choice questions. Return JSON array of objects with fields: subject, topic, text, options (array of 4 strings), correctAnswerIndex, explanation. Ensure all scientific notation is formatted for MathJax." }
           ]
         },
         config: {
@@ -97,7 +96,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
         },
       });
 
-      // Fix: Use the .text property as per @google/genai guidelines.
       const data = JSON.parse(response.text || '[]');
       clearInterval(progressInterval);
       setImportProgress(100);
@@ -105,7 +103,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
       setTimeout(() => { setImportStatus('review'); setImportProgress(0); }, 800);
     } catch (err) {
       clearInterval(progressInterval);
-      alert("Document analysis failed.");
+      alert("Document processing failed. Please ensure the PDF is readable.");
       setImportStatus('idle');
       setImportProgress(0);
     }
@@ -139,7 +137,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
     if (progress < 25) return "Initializing extraction engine...";
     if (progress < 50) return "Scanning document layers...";
     if (progress < 75) return "Structuring clinical data...";
-    return "Syncing knowledge base...";
+    return "Finalizing item repository...";
   };
 
   return (
@@ -149,20 +147,20 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
           <img src="/assets/logo.png" className="w-12 h-12" alt="Aureus Logo" />
           <div>
             <h1 className="text-xl font-black text-slate-900 uppercase tracking-tighter leading-none">Aureus Admin</h1>
-            <p className="text-[9px] font-black text-amber-600 uppercase tracking-[0.3em] mt-1">Faculty Dashboard</p>
+            <p className="text-[9px] font-black text-amber-600 uppercase tracking-[0.3em] mt-1">Registry Control</p>
           </div>
         </div>
         <div className="flex gap-2">
-          <button onClick={onSwitchToStudent} className="px-5 py-2.5 text-[10px] font-black text-slate-600 border border-slate-200 rounded-xl uppercase tracking-widest hover:bg-slate-50">Student Portal</button>
-          <button onClick={onLogout} className="px-5 py-2.5 text-[10px] font-black text-red-600 border border-red-50 rounded-xl uppercase tracking-widest hover:bg-red-50">Log Out</button>
+          <button onClick={onSwitchToStudent} className="px-5 py-2.5 text-[10px] font-black text-slate-600 border border-slate-200 rounded-xl uppercase tracking-widest hover:bg-slate-50">Candidate View</button>
+          <button onClick={onLogout} className="px-5 py-2.5 text-[10px] font-black text-red-600 border border-red-50 rounded-xl uppercase tracking-widest hover:bg-red-50">Logout</button>
         </div>
       </div>
 
       <nav className="flex bg-white px-6 border-b border-slate-100 overflow-x-auto no-scrollbar">
         {[
           { id: 'questions', label: 'Item Bank' },
-          { id: 'import', label: 'PDF Import', badge: 'PRO' },
-          { id: 'tests', label: 'Exams' },
+          { id: 'import', label: 'PDF Import', badge: 'NEW' },
+          { id: 'tests', label: 'Assessments' },
           { id: 'approvals', label: 'Queue' }
         ].map((tab) => (
           <button 
@@ -178,7 +176,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
 
       <div className="flex-1 overflow-y-auto p-6 no-scrollbar">
         {activeTab === 'import' && (
-          <div className="max-w-3xl mx-auto py-10">
+          <div className="max-w-3xl mx-auto py-10 px-4">
             {importStatus === 'idle' && (
               <div className="bg-white p-12 rounded-[3rem] border-4 border-dashed border-slate-100 text-center hover:border-amber-500 transition-all cursor-pointer group" onClick={() => fileInputRef.current?.click()}>
                  <input type="file" ref={fileInputRef} className="hidden" accept=".pdf" onChange={(e) => e.target.files?.[0] && processDocument(e.target.files[0])} />
@@ -186,8 +184,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
                     <svg className="w-10 h-10 text-slate-300 group-hover:text-amber-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
                  </div>
                  <h3 className="text-xl font-black text-slate-950 mb-4 uppercase tracking-tight leading-tight">Import questions from PDF</h3>
-                 <p className="text-xs text-slate-400 mb-10 italic px-10 leading-relaxed">Select a PDF file containing your medical examination items. The system will scan and structure the content for review.</p>
-                 <button className="px-12 py-5 bg-slate-950 text-amber-500 rounded-2xl text-[10px] font-black uppercase tracking-[0.3em] shadow-xl hover:bg-slate-900 transition-all">Select Document</button>
+                 <p className="text-xs text-slate-400 mb-10 italic px-4 md:px-10 leading-relaxed">Select a PDF file containing multiple choice items. The system will automate the extraction and formatting of content for your review.</p>
+                 <button className="px-12 py-5 bg-slate-950 text-amber-500 rounded-2xl text-[10px] font-black uppercase tracking-[0.3em] shadow-xl hover:bg-slate-900 transition-all">Select PDF File</button>
               </div>
             )}
             
@@ -214,10 +212,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
               <div className="space-y-6 animate-in slide-in-from-bottom-6 duration-500">
                 <div className="flex flex-col md:flex-row justify-between items-center bg-slate-950 p-8 rounded-[2rem] shadow-2xl sticky top-4 z-10 gap-4 border-b-4 border-amber-500">
                   <div className="text-center md:text-left">
-                    <h3 className="text-lg font-black text-white uppercase tracking-tight">Extraction Complete</h3>
-                    <p className="text-[9px] font-black text-amber-400 uppercase tracking-widest">{stagedQuestions.length} Items ready for integration</p>
+                    <h3 className="text-lg font-black text-white uppercase tracking-tight">Processing Complete</h3>
+                    <p className="text-[9px] font-black text-amber-400 uppercase tracking-widest">{stagedQuestions.length} Items successfully extracted</p>
                   </div>
-                  <button onClick={commitImport} className="w-full md:w-auto px-10 py-4 bg-amber-500 text-slate-950 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] shadow-lg hover:bg-amber-400 transition-all active:scale-95">Verify & Sync All</button>
+                  <button onClick={commitImport} className="w-full md:w-auto px-10 py-4 bg-amber-500 text-slate-950 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] shadow-lg hover:bg-amber-400 transition-all active:scale-95">Verify & Integrate All</button>
                 </div>
                 <div className="grid grid-cols-1 gap-6">
                   {stagedQuestions.map((q, i) => (
@@ -247,13 +245,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-10">
             <div className="xl:col-span-1">
               <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 sticky top-4">
-                <h3 className="text-lg font-black text-slate-950 mb-6 uppercase tracking-tight leading-tight">Manual Question Registry</h3>
+                <h3 className="text-lg font-black text-slate-950 mb-6 uppercase tracking-tight leading-tight">Manual Entry</h3>
                 <form onSubmit={handleAddOrUpdateQuestion} className="space-y-4">
                   <div className="grid grid-cols-2 gap-3">
                     <input placeholder="Subject" className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl text-[10px] font-black uppercase outline-none focus:ring-2 focus:ring-amber-500" value={qSubject} onChange={e => setQSubject(e.target.value)} required />
                     <input placeholder="Topic" className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl text-[10px] font-black uppercase outline-none focus:ring-2 focus:ring-amber-500" value={qTopic} onChange={e => setQTopic(e.target.value)} required />
                   </div>
-                  <textarea placeholder="Clinical Stem / Question Text" className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-bold h-32 outline-none focus:ring-2 focus:ring-amber-500" value={qText} onChange={e => setQText(e.target.value)} required />
+                  <textarea placeholder="Clinical stem or question text..." className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-bold h-32 outline-none focus:ring-2 focus:ring-amber-500" value={qText} onChange={e => setQText(e.target.value)} required />
                   {qOptions.map((o, i) => (
                     <div key={i} className="flex gap-2 group">
                        <input type="radio" checked={qCorrect === i} onChange={() => setQCorrect(i)} className="accent-amber-500" />
@@ -263,7 +261,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
                   <button className="w-full py-5 bg-slate-950 text-amber-500 rounded-2xl font-black uppercase tracking-[0.2em] text-[10px] shadow-xl hover:bg-slate-900 transition-all active:scale-95">Register Item</button>
                 </form>
                 <div className="mt-8 pt-8 border-t border-slate-50">
-                   <p className="text-[9px] text-slate-300 font-black uppercase mb-4 tracking-[0.3em] text-center">Batch Operations</p>
+                   <p className="text-[9px] text-slate-300 font-black uppercase mb-4 tracking-[0.3em] text-center">Batch Processing</p>
                    <button onClick={() => setActiveTab('import')} className="w-full p-5 bg-amber-50 border border-amber-200 rounded-2xl text-[10px] font-black text-amber-600 uppercase flex items-center justify-center gap-3 hover:bg-amber-100 transition-all shadow-sm">
                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
                      Import from PDF
