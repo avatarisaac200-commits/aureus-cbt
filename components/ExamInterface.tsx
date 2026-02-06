@@ -55,8 +55,16 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, onFinish, onE
     const maxScore = sectionBreakdown.reduce((acc, curr) => acc + curr.total, 0);
 
     const result: Omit<ExamResult, 'id'> = {
-      userId: user.id, testId: test.id, testName: test.name, score: totalScore, maxScore: maxScore,
-      completedAt: new Date().toISOString(), status: status, userAnswers: answers, sectionBreakdown
+      userId: user.id,
+      userName: user.name, // Saved name for leaderboard
+      testId: test.id,
+      testName: test.name,
+      score: totalScore,
+      maxScore: maxScore,
+      completedAt: new Date().toISOString(),
+      status: status,
+      userAnswers: answers,
+      sectionBreakdown
     };
 
     try {
@@ -65,7 +73,7 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, onFinish, onE
     } catch (e) {
       onFinish({ ...result, id: 'temp-' + Date.now() } as ExamResult);
     }
-  }, [allQuestions, answers, onFinish, test, user.id]);
+  }, [allQuestions, answers, onFinish, test, user.id, user.name]);
 
   useEffect(() => {
     if (!hasStarted) return;

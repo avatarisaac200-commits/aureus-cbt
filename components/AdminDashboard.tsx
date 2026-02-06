@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { User, Question, MockTest, TestSection } from '../types';
+import { User, Question, MockTest, TestSection, ExamResult } from '../types';
 import { db } from '../firebase';
-import { collection, addDoc, getDocs, deleteDoc, doc, query, orderBy, updateDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+import { collection, addDoc, getDocs, deleteDoc, doc, query, orderBy, updateDoc, where, limit } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import ScientificText from './ScientificText';
 import logo from '../assets/logo.png';
 
@@ -14,12 +14,76 @@ interface AdminDashboardProps {
 
 type AdminTab = 'questions' | 'tests' | 'approvals';
 
+const LeaderboardModal: React.FC<{ test: MockTest, onClose: () => void }> = ({ test, onClose }) => {
+  const [topScores, setTopScores] = useState<ExamResult[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchTop = async () => {
+      const q = query(
+        collection(db, 'results'), 
+        where('testId', '==', test.id),
+        orderBy('score', 'desc'),
+        limit(10)
+      );
+      const snap = await getDocs(q);
+      setTopScores(snap.docs.map(d => ({ ...d.data(), id: d.id } as ExamResult)));
+      setLoading(false);
+    };
+    fetchTop();
+  }, [test.id]);
+
+  return (
+    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+      <div className="w-full max-w-lg bg-white rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+        <div className="bg-slate-900 p-8 text-center relative border-b-4 border-amber-500">
+          <button onClick={onClose} className="absolute top-6 right-6 text-slate-500 hover:text-white transition-colors">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+          </button>
+          <p className="text-amber-500 text-[9px] font-black uppercase tracking-[0.3em] mb-2">Aureus Hall of Fame</p>
+          <h2 className="text-xl font-black text-white uppercase tracking-tight">{test.name}</h2>
+        </div>
+        <div className="p-8 max-h-[60vh] overflow-y-auto no-scrollbar">
+          {loading ? (
+            <div className="flex justify-center py-10"><div className="w-6 h-6 border-b-2 border-amber-500 rounded-full animate-spin"></div></div>
+          ) : topScores.length === 0 ? (
+            <p className="text-center py-10 text-slate-400 font-black text-[10px] uppercase tracking-widest">No rankings yet</p>
+          ) : (
+            <div className="space-y-3">
+              {topScores.map((res, i) => (
+                <div key={res.id} className="flex items-center gap-4 p-4 rounded-2xl bg-slate-50 border border-gray-100">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm ${i === 0 ? 'bg-amber-500 text-slate-950' : i === 1 ? 'bg-slate-300 text-slate-700' : i === 2 ? 'bg-amber-700 text-white' : 'bg-slate-200 text-slate-400'}`}>
+                    {i + 1}
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-[10px] font-black text-slate-900 uppercase truncate">{res.userName || 'Student'}</p>
+                    <p className="text-[8px] text-slate-400 font-bold uppercase">{new Date(res.completedAt).toLocaleDateString()}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-black text-slate-950">{Math.round((res.score / (res.maxScore || 1)) * 100)}%</p>
+                    <p className="text-[8px] font-black text-slate-400 uppercase">{res.score}/{res.maxScore}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="p-6 bg-slate-50 border-t border-gray-100 text-center">
+          <p className="text-[8px] font-black text-slate-300 uppercase tracking-widest">Admin View • Top 10 Leaders</p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onSwitchToStudent }) => {
   const [activeTab, setActiveTab] = useState<AdminTab>('questions');
   const [questions, setQuestions] = useState<Question[]>([]);
   const [testList, setTestList] = useState<MockTest[]>([]);
+  const [allResults, setAllResults] = useState<ExamResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [expandedSubjects, setExpandedSubjects] = useState<Record<string, boolean>>({});
+  const [showLeaderboard, setShowLeaderboard] = useState<MockTest | null>(null);
   
   const [editingId, setEditingId] = useState<string | null>(null);
   const [qSubject, setQSubject] = useState('');
@@ -47,6 +111,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onSwitc
       
       const tSnap = await getDocs(query(collection(db, 'tests'), orderBy('createdAt', 'desc')));
       setTestList(tSnap.docs.map(d => ({ ...d.data(), id: d.id } as MockTest)));
+
+      const rSnap = await getDocs(collection(db, 'results'));
+      setAllResults(rSnap.docs.map(d => ({ ...d.data(), id: d.id } as ExamResult)));
     } catch (err) {
       console.error("Fetch error:", err);
     } finally {
@@ -68,13 +135,22 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onSwitc
     return groups;
   }, [questions]);
 
+  const participantCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    testList.forEach(test => {
+      const uniqueUsers = new Set(allResults.filter(r => r.testId === test.id).map(r => r.userId));
+      counts[test.id] = uniqueUsers.size;
+    });
+    return counts;
+  }, [allResults, testList]);
+
   const filteredQuestionsForArchitect = useMemo(() => {
     if (!qSearchQuery.trim()) return [];
     const queryLower = qSearchQuery.toLowerCase();
     return questions.filter(q => 
-      q.subject.toLowerCase().includes(queryLower) || 
-      q.topic.toLowerCase().includes(queryLower) || 
-      q.text.toLowerCase().includes(queryLower)
+      (q.subject || '').toLowerCase().includes(queryLower) || 
+      (q.topic || '').toLowerCase().includes(queryLower) || 
+      (q.text || '').toLowerCase().includes(queryLower)
     );
   }, [questions, qSearchQuery]);
 
@@ -100,21 +176,29 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onSwitc
 
   const handleAddOrUpdateQuestion = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!user || !user.id) {
+      alert("Error: User session expired. Please re-login.");
+      return;
+    }
     setLoading(true);
     const qData = {
-      subject: qSubject,
-      topic: qTopic,
-      text: qText,
-      options: qOptions,
-      correctAnswerIndex: qCorrect,
-      explanation: qExplanation,
+      subject: qSubject || 'Uncategorized',
+      topic: qTopic || 'General',
+      text: qText || '',
+      options: qOptions || ['', '', '', ''],
+      correctAnswerIndex: qCorrect || 0,
+      explanation: qExplanation || '',
       updatedAt: new Date().toISOString()
     };
     try {
       if (editingId) {
         await updateDoc(doc(db, 'questions', editingId), qData);
       } else {
-        await addDoc(collection(db, 'questions'), { ...qData, createdBy: user.id, createdAt: new Date().toISOString() });
+        await addDoc(collection(db, 'questions'), { 
+          ...qData, 
+          createdBy: user.id, 
+          createdAt: new Date().toISOString() 
+        });
       }
       resetForm();
       fetchData();
@@ -144,7 +228,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onSwitc
       id: `sec_${Date.now()}`,
       name: newSecName,
       questionIds: selectedQuestionIds,
-      marksPerQuestion: newSecPoints
+      marksPerQuestion: newSecPoints || 1
     };
     setTSections([...tSections, newSection]);
     setNewSecName('');
@@ -153,28 +237,33 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onSwitc
   };
 
   const handleCreateOfficialTest = async () => {
+    if (!user || !user.id) {
+      alert("Critical Error: Administrative ID not found. Action blocked.");
+      return;
+    }
     if (tSections.length === 0) return alert("Add at least one section first.");
     if (!tName.trim()) return alert("Test name is required.");
     
     setLoading(true);
     try {
-      const newTest: Omit<MockTest, 'id'> = {
-        name: tName,
-        description: tDesc,
+      const newTest = {
+        name: tName || 'Unnamed Test',
+        description: tDesc || '',
         sections: tSections,
-        totalDurationSeconds: tDuration * 60,
-        allowRetake: tRetake,
+        totalDurationSeconds: (tDuration || 60) * 60,
+        allowRetake: tRetake ?? true,
         createdBy: user.id,
-        creatorName: user.name,
+        creatorName: user.name || 'Admin',
         isApproved: true,
         createdAt: new Date().toISOString()
       };
       await addDoc(collection(db, 'tests'), newTest);
       setTName(''); setTDesc(''); setTSections([]); setTDuration(60);
       fetchData();
-      alert("Test created.");
+      alert("Test created and published.");
     } catch (err) {
-      alert("Error: " + err);
+      console.error(err);
+      alert("Database error: " + (err instanceof Error ? err.message : String(err)));
     } finally {
       setLoading(false);
     }
@@ -182,6 +271,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onSwitc
 
   return (
     <div className="flex-1 w-full bg-slate-50 flex flex-col overflow-hidden">
+      {showLeaderboard && <LeaderboardModal test={showLeaderboard} onClose={() => setShowLeaderboard(null)} />}
+
       <div className="bg-white border-b border-gray-100 p-6 flex flex-col md:flex-row justify-between items-center gap-4 safe-top">
         <div className="flex items-center gap-4">
           <img src={logo} className="w-12 h-12" alt="Logo" />
@@ -201,7 +292,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onSwitc
         <button onClick={() => setActiveTab('tests')} className={`px-6 py-4 text-[9px] font-black uppercase tracking-widest whitespace-nowrap ${activeTab === 'tests' ? 'border-b-4 border-amber-500 text-slate-950' : 'text-slate-400'}`}>Tests</button>
         <button onClick={() => setActiveTab('approvals')} className={`px-6 py-4 text-[9px] font-black uppercase tracking-widest whitespace-nowrap flex items-center gap-2 ${activeTab === 'approvals' ? 'border-b-4 border-amber-500 text-slate-950' : 'text-slate-400'}`}>
           Pending
-          {/* Fix: Explicitly type MockTest in filter for length access */}
           {testList.filter((t: MockTest) => !t.isApproved).length > 0 && <span className="bg-amber-500 text-slate-950 text-[8px] px-2 py-0.5 rounded-full">{testList.filter((t: MockTest) => !t.isApproved).length}</span>}
         </button>
       </nav>
@@ -297,7 +387,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onSwitc
                         <button onClick={addSectionToTest} className="w-full py-4 bg-amber-500 text-slate-950 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-400 active:scale-95 transition-all">Add to Test ({selectedQuestionIds.length})</button>
                       </div>
 
-                      {/* Fix: Explicitly type TestSection in map */}
                       {tSections.map((s: TestSection, idx: number) => (
                         <div key={idx} className="p-4 bg-slate-50 border border-slate-100 rounded-2xl flex justify-between items-center">
                           <span className="text-[10px] font-black uppercase text-slate-900">{s.name}</span>
@@ -310,17 +399,26 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onSwitc
                 </div>
               </div>
               <div className="xl:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
-                 {/* Fix: Explicitly type MockTest in map */}
                  {testList.filter((t: MockTest) => t.isApproved).map((test: MockTest) => (
-                   <div key={test.id} className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm relative group h-fit">
+                   <div key={test.id} className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm relative group h-fit flex flex-col">
                      <button onClick={() => deleteTest(test.id!)} className="absolute top-8 right-8 text-slate-200 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>
                      <h4 className="text-lg font-black text-slate-950 mb-3 uppercase tracking-tight leading-tight">{test.name}</h4>
-                     <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-6">{new Date(test.createdAt).toLocaleDateString()}</p>
-                     <div className="flex flex-wrap gap-2 mb-8">
-                        {/* Fix: Explicitly type TestSection in map */}
+                     <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-4">{new Date(test.createdAt).toLocaleDateString()}</p>
+                     
+                     <div className="flex gap-2 mb-6">
+                        <button 
+                          onClick={() => setShowLeaderboard(test)}
+                          className="text-[8px] font-black bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-full text-amber-600 hover:bg-amber-500 hover:text-white transition-all active:scale-95 uppercase tracking-widest"
+                        >
+                          {participantCounts[test.id] || 0} Participants
+                        </button>
+                     </div>
+
+                     <div className="flex flex-wrap gap-2 mb-8 flex-1">
                         {test.sections.map((s: TestSection, i: number) => <span key={i} className="text-[8px] font-black bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-full text-slate-400 uppercase">{s.name}</span>)}
                      </div>
-                     <button onClick={() => handleToggleApproval(test.id!, true)} className="w-full py-3 bg-slate-900 text-amber-500 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-slate-800 transition-all">Disable</button>
+                     
+                     <button onClick={() => handleToggleApproval(test.id!, true)} className="w-full py-3 bg-slate-900 text-amber-500 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-slate-800 transition-all mt-auto">Disable</button>
                    </div>
                  ))}
               </div>
@@ -329,14 +427,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onSwitc
 
           {activeTab === 'approvals' && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {/* Fix: Explicitly type MockTest in map */}
               {testList.filter((t: MockTest) => !t.isApproved).map((test: MockTest) => (
                 <div key={test.id} className="bg-white p-8 rounded-[2.5rem] border-2 border-amber-200 shadow-xl flex flex-col">
                   <h3 className="text-lg font-black text-slate-950 mb-4 uppercase tracking-tight leading-tight">{test.name}</h3>
                   <p className="text-[10px] text-slate-500 mb-6 italic flex-1 truncate">{test.description}</p>
                   <div className="flex gap-2 mb-8">
-                     {/* Fix: Explicit cast to TestSection for length access */}
-                     <span className="bg-slate-50 text-slate-400 text-[8px] font-black uppercase px-3 py-1.5 rounded-full border border-slate-100">{(test.sections[0] as TestSection).questionIds.length} Qs</span>
+                     <span className="bg-slate-50 text-slate-400 text-[8px] font-black uppercase px-3 py-1.5 rounded-full border border-slate-100">{(test.sections[0]?.questionIds?.length || 0)} Qs</span>
                      <span className="bg-slate-50 text-slate-400 text-[8px] font-black uppercase px-3 py-1.5 rounded-full border border-slate-100">{test.totalDurationSeconds / 60} Mins</span>
                   </div>
                   <div className="grid grid-cols-2 gap-3">

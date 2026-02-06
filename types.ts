@@ -1,3 +1,4 @@
+
 export type UserRole = 'student' | 'admin' | 'root-admin';
 
 export interface User {
@@ -44,6 +45,7 @@ export interface MockTest {
 export interface ExamResult {
   id: string;
   userId: string;
+  userName: string; // Added for leaderboard
   testId: string;
   testName: string;
   score: number;

@@ -49,8 +49,8 @@ const RootAdminDashboard: React.FC<RootAdminDashboardProps> = ({ user, onLogout,
 
   const handleCreateAdmin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (admins.length >= 5) {
-      alert("Max staff reached.");
+    if (admins.length >= 6) {
+      alert("Maximum administrative staff limit (6) reached.");
       return;
     }
     setLoading(true);
@@ -64,7 +64,7 @@ const RootAdminDashboard: React.FC<RootAdminDashboardProps> = ({ user, onLogout,
         title: newTitle
       };
       await setDoc(doc(db, 'users', res.user.uid), adminData);
-      alert("Staff added.");
+      alert("Staff added successfully.");
       setNewEmail(''); setNewPass(''); setNewName('');
       fetchAdmins();
     } catch (err: any) {
@@ -75,7 +75,7 @@ const RootAdminDashboard: React.FC<RootAdminDashboardProps> = ({ user, onLogout,
   };
 
   const dismissAdmin = async (id: string) => {
-    if (!window.confirm("Remove this staff member?")) return;
+    if (!window.confirm("Remove this staff member? This will delete their database profile.")) return;
     setLoading(true);
     try {
       await deleteDoc(doc(db, 'users', id));
@@ -120,6 +120,7 @@ const RootAdminDashboard: React.FC<RootAdminDashboardProps> = ({ user, onLogout,
           <div className="lg:col-span-1">
             <div className="bg-white p-8 rounded-[2rem] border border-gray-100 shadow-sm sticky top-0">
               <h2 className="text-lg font-black text-slate-900 mb-6 uppercase tracking-tight">Add Staff</h2>
+              <p className="text-[9px] text-slate-400 font-bold uppercase mb-4">Capacity: {admins.length}/6</p>
               <form onSubmit={handleCreateAdmin} className="space-y-4">
                 <div>
                   <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Name</label>
@@ -139,7 +140,7 @@ const RootAdminDashboard: React.FC<RootAdminDashboardProps> = ({ user, onLogout,
                     {adminRoles.map(role => <option key={role} value={role}>{role}</option>)}
                   </select>
                 </div>
-                <button disabled={loading || admins.length >= 5} className="w-full py-4 bg-slate-950 text-amber-500 rounded-xl font-black uppercase text-[10px] tracking-widest disabled:opacity-20 shadow-lg active:scale-95 transition-all">
+                <button disabled={loading || admins.length >= 6} className="w-full py-4 bg-slate-950 text-amber-500 rounded-xl font-black uppercase text-[10px] tracking-widest disabled:opacity-20 shadow-lg active:scale-95 transition-all">
                   Authorize
                 </button>
               </form>
@@ -147,7 +148,7 @@ const RootAdminDashboard: React.FC<RootAdminDashboardProps> = ({ user, onLogout,
           </div>
 
           <div className="lg:col-span-2">
-            <h2 className="text-lg font-black text-slate-900 mb-6 uppercase tracking-tight px-2">Staff List</h2>
+            <h2 className="text-lg font-black text-slate-900 mb-6 uppercase tracking-tight px-2">Staff Directory</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {admins.length === 0 ? (
                 <div className="col-span-full py-20 text-center bg-white rounded-[2rem] border-2 border-dashed border-slate-100">
@@ -167,7 +168,7 @@ const RootAdminDashboard: React.FC<RootAdminDashboardProps> = ({ user, onLogout,
                     
                     <div className="mt-auto pt-4 border-t border-gray-50 flex gap-2">
                       <button onClick={() => resetAdminPassword(admin.email)} className="flex-1 py-2 text-[8px] font-black text-slate-400 uppercase border border-gray-100 rounded-lg hover:bg-slate-50 transition-all">Reset Password</button>
-                      <button onClick={() => dismissAdmin(admin.id)} className="flex-1 py-2 text-[8px] font-black text-red-600 uppercase border border-red-50 rounded-lg hover:bg-red-50 transition-all">Dismiss</button>
+                      <button onClick={() => dismissAdmin(admin.id)} className="flex-1 py-2 text-[8px] font-black text-red-600 uppercase border border-red-50 rounded-lg hover:bg-red-50 transition-all">Dismiss Staff</button>
                     </div>
                   </div>
                 ))
