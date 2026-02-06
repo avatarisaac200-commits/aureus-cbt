@@ -12,12 +12,12 @@ import ExamInterface from './components/ExamInterface';
 import ResultScreen from './components/ResultScreen';
 import ReviewInterface from './components/ReviewInterface';
 
-// High-fidelity Base64 SVG Logo for guaranteed cross-environment display
 export const LOGO_URL = `data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj4KICA8ZGVmcz4KICAgIDxsaW5lYXJHcmFkaWVudCBpZD0iZ29sZEdyYWQiIHgxPSIwJSIgeTE9IjAlIiB4Mj0iMTAwJSIgeTI9IjEwMCUiPgogICAgICA8c3RvcCBvZmZzZXQ9IjAlIiBzdHlsZT0ic3RvcC1jb2xvcjojZmJiZjI0O3N0b3Atb3BhY2l0eToxIiAvPgogICAgICA8c3RvcCBvZmZzZXQ9IjEwMCUiIHN0eWxlPSJzdG9wLWNvbG9yOiNkOTc3MDY7c3RvcC1vcGFjaXR5OjEiIC8+CiAgICA8L2xpbmVhckdyYWRpZW50PgogIDwvZGVmcz4KICA8Y2lyY2xlIGN4PSI1MCIgY3k9IjUwIiByPSI0OCIgZmlsbD0iIzBmMTcyYSIgLz4KICA8cGF0aCBkPSJNNTAgMjAgTDI1IDM1IEwyNSA2NSBMNTAgODAgTDc1IDY1IEw3NSAzNSBaIiBmaWxsPSJ1cmwoI2dvbGRHcmFkKSIgLz4KICA8dGV4dCB4PSI1MCIgeT0iNTgiIGZvbnQtZmFtaWx5PSJzeXN0ZW0tdWksIC1hcHBsZS1zeXN0ZW0sIHNhbnMtc2VyaWYiIGZvbnQtd2VpZ2h0PSI5MDAiIGZvbnQtc2l6ZT0iMjgiIGZpbGw9IiMwZjE3MmEiIHRleHQtYW5jaG9yPSJtaWRkbGUiPkE8L3RleHQ+Cjwvc3ZnPg==`;
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentView, setCurrentView] = useState<ViewState>('auth');
+  const [adminDefaultTab, setAdminDefaultTab] = useState<string>('questions');
   const [activeTest, setActiveTest] = useState<MockTest | null>(null);
   const [reviewResult, setReviewResult] = useState<ExamResult | null>(null);
   const [recentResult, setRecentResult] = useState<ExamResult | null>(null);
@@ -33,21 +33,6 @@ const App: React.FC = () => {
           const userObj = { ...userData, id: firebaseUser.uid };
           setCurrentUser(userObj);
           
-          const params = new URLSearchParams(window.location.search);
-          const sharedTestId = params.get('testId');
-          if (sharedTestId) {
-            const testDoc = await getDoc(doc(db, 'tests', sharedTestId));
-            if (testDoc.exists()) {
-              const testData = { ...testDoc.data(), id: testDoc.id } as MockTest;
-              if (testData.isApproved || userObj.role === 'admin' || userObj.role === 'root-admin' || testData.createdBy === userObj.id) {
-                setActiveTest(testData);
-                setCurrentView('exam');
-                setIsLoading(false);
-                return;
-              }
-            }
-          }
-
           if (userData.role === 'root-admin') {
             setCurrentView('root-admin');
           } else if (userData.role === 'admin') {
@@ -76,39 +61,10 @@ const App: React.FC = () => {
     }
   };
 
-  const handleLogout = async () => {
-    await auth.signOut();
-    setCurrentUser(null);
-    setCurrentView('auth');
-    window.history.replaceState({}, '', '/');
+  const navigateToAdminTab = (tab: string) => {
+    setAdminDefaultTab(tab);
+    setCurrentView('admin');
   };
-
-  const startExam = (test: MockTest) => {
-    setActiveTest(test);
-    setCurrentView('exam');
-  };
-
-  const startReview = (result: ExamResult) => {
-    setReviewResult(result);
-    setCurrentView('review');
-  };
-
-  const completeExam = (result: ExamResult) => {
-    setRecentResult(result);
-    setCurrentView('results');
-    setActiveTest(null);
-    window.history.replaceState({}, '', '/');
-  };
-
-  if (isLoading) {
-    return (
-      <div className="fixed inset-0 flex flex-col items-center justify-center bg-slate-50">
-        <img src={LOGO_URL} className="w-20 h-20 mb-4 animate-pulse" alt="Loading" />
-        <h1 className="text-[12px] font-black uppercase tracking-[0.2em] text-slate-900 mb-1">Aureus Medicos</h1>
-        <p className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-400">Authenticating...</p>
-      </div>
-    );
-  }
 
   return (
     <div className="h-full w-full overflow-hidden flex flex-col">
@@ -117,9 +73,9 @@ const App: React.FC = () => {
       {currentView === 'dashboard' && currentUser && (
         <Dashboard 
           user={currentUser} 
-          onLogout={handleLogout} 
-          onStartTest={startExam}
-          onReviewResult={startReview}
+          onLogout={() => auth.signOut()} 
+          onStartTest={(test) => { setActiveTest(test); setCurrentView('exam'); }}
+          onReviewResult={(result) => { setReviewResult(result); setCurrentView('review'); }}
           onReturnToAdmin={() => setCurrentView(currentUser.role === 'root-admin' ? 'root-admin' : 'admin')}
         />
       )}
@@ -127,7 +83,8 @@ const App: React.FC = () => {
       {currentView === 'admin' && currentUser && (
         <AdminDashboard 
           user={currentUser} 
-          onLogout={handleLogout} 
+          initialTab={adminDefaultTab as any}
+          onLogout={() => auth.signOut()} 
           onSwitchToStudent={() => setCurrentView('dashboard')}
         />
       )}
@@ -135,9 +92,10 @@ const App: React.FC = () => {
       {currentView === 'root-admin' && currentUser && (
         <RootAdminDashboard 
           user={currentUser} 
-          onLogout={handleLogout} 
+          onLogout={() => auth.signOut()} 
           onSwitchToStudent={() => setCurrentView('dashboard')}
-          onSwitchToAdmin={() => setCurrentView('admin')}
+          onSwitchToAdmin={() => navigateToAdminTab('questions')}
+          onGoToImport={() => navigateToAdminTab('import')}
         />
       )}
 
@@ -145,28 +103,17 @@ const App: React.FC = () => {
         <ExamInterface 
           test={activeTest} 
           user={currentUser}
-          onFinish={completeExam}
-          onExit={() => {
-            const dest = currentUser.role === 'root-admin' ? 'root-admin' : (currentUser.role === 'admin' ? 'admin' : 'dashboard');
-            setCurrentView(dest);
-            window.history.replaceState({}, '', '/');
-          }}
+          onFinish={(res) => { setRecentResult(res); setCurrentView('results'); }}
+          onExit={() => setCurrentView('dashboard')}
         />
       )}
 
       {currentView === 'results' && recentResult && (
-        <ResultScreen 
-          result={recentResult} 
-          onClose={() => setCurrentView('dashboard')}
-          onReview={() => startReview(recentResult)}
-        />
+        <ResultScreen result={recentResult} onClose={() => setCurrentView('dashboard')} onReview={() => { setReviewResult(recentResult); setCurrentView('review'); }} />
       )}
 
       {currentView === 'review' && reviewResult && (
-        <ReviewInterface 
-          result={reviewResult} 
-          onExit={() => setCurrentView('dashboard')} 
-        />
+        <ReviewInterface result={reviewResult} onExit={() => setCurrentView('dashboard')} />
       )}
     </div>
   );
