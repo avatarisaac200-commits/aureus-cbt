@@ -1,8 +1,8 @@
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { User, Question, MockTest, TestSection, ExamResult } from '../types';
+import React, { useState, useEffect, useRef } from 'react';
+import { User, Question } from '../types';
 import { db } from '../firebase';
-import { collection, addDoc, getDocs, deleteDoc, doc, query, orderBy, updateDoc, where, limit } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+import { collection, addDoc, getDocs, deleteDoc, doc, query, orderBy, updateDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import { GoogleGenAI, Type } from '@google/genai';
 import ScientificText from './ScientificText';
 import logo from '../assets/logo.png';
@@ -40,7 +40,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
       const qSnap = await getDocs(query(collection(db, 'questions'), orderBy('createdAt', 'desc')));
       setQuestions(qSnap.docs.map(d => ({ ...d.data(), id: d.id } as Question)));
     } catch (err) {
-      console.error(err);
+      console.error("Database fetch error:", err);
     } finally {
       setLoading(false);
     }
@@ -55,20 +55,25 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
     try {
       const reader = new FileReader();
       const base64Promise = new Promise<string>((resolve, reject) => {
-        reader.onload = () => resolve((reader.result as string).split(',')[1]);
+        reader.onload = () => {
+          const result = reader.result as string;
+          resolve(result.split(',')[1]);
+        };
         reader.onerror = reject;
         reader.readAsDataURL(file);
       });
+      
       const base64Data = await base64Promise;
       setImportProgress(30);
 
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      // Using gemini-3-flash-preview for faster and more reliable extraction
       const response = await ai.models.generateContent({
-        model: 'gemini-3-pro-preview',
+        model: 'gemini-3-flash-preview',
         contents: {
           parts: [
             { inlineData: { mimeType: 'application/pdf', data: base64Data } },
-            { text: "Extract medical multiple choice questions from this PDF. Return a JSON array of objects with these fields: subject, topic, text, options (array of 4 strings), correctAnswerIndex (0-3), and explanation." }
+            { text: "Extract all medical multiple choice questions from this document. Return a JSON array of objects with these exact fields: 'subject', 'topic', 'text', 'options' (array of 4 strings), 'correctAnswerIndex' (number 0-3), and 'explanation'. If you cannot find any questions, return an empty array []." }
           ]
         },
         config: {
@@ -91,16 +96,16 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
         },
       });
 
-      const text = response.text;
-      if (!text) throw new Error("Empty response");
+      const textOutput = response.text;
+      if (!textOutput) throw new Error("No data returned from AI");
       
-      const data = JSON.parse(text);
+      const data = JSON.parse(textOutput);
       setImportProgress(100);
       setStagedQuestions(data);
       setTimeout(() => setImportStatus('review'), 500);
     } catch (err) {
-      console.error(err);
-      alert("Error processing PDF. Please make sure the file is not too large and is readable.");
+      console.error("PDF Processing Detailed Error:", err);
+      alert("We couldn't read the questions from this PDF. This usually happens if the file is protected or too large. Try a different PDF or check the browser console for details.");
       setImportStatus('idle');
       setImportProgress(0);
     }
@@ -110,48 +115,77 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
     setLoading(true);
     try {
       for (const q of stagedQuestions) {
-        await addDoc(collection(db, 'questions'), { ...q, createdBy: user.id, createdAt: new Date().toISOString() });
+        await addDoc(collection(db, 'questions'), { 
+          ...q, 
+          createdBy: user.id, 
+          createdAt: new Date().toISOString() 
+        });
       }
-      setStagedQuestions([]); setImportStatus('idle'); fetchData();
-    } catch (err) { alert(err); } finally { setLoading(false); }
+      setStagedQuestions([]); 
+      setImportStatus('idle'); 
+      fetchData();
+    } catch (err) { 
+      alert("Error saving questions to database."); 
+    } finally { 
+      setLoading(false); 
+    }
   };
 
   const handleAddOrUpdateQuestion = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     const qData = {
-      subject: qSubject || 'General', topic: qTopic || 'Clinical', text: qText, options: qOptions,
-      correctAnswerIndex: qCorrect, explanation: qExplanation, updatedAt: new Date().toISOString()
+      subject: qSubject || 'General', 
+      topic: qTopic || 'General', 
+      text: qText, 
+      options: qOptions,
+      correctAnswerIndex: qCorrect, 
+      explanation: qExplanation, 
+      updatedAt: new Date().toISOString()
     };
     try {
-      if (editingId) { await updateDoc(doc(db, 'questions', editingId), qData); }
-      else { await addDoc(collection(db, 'questions'), { ...qData, createdBy: user.id, createdAt: new Date().toISOString() }); }
-      setEditingId(null); setQText(''); setQOptions(['','','','']); fetchData();
-    } catch (err) { alert(err); } finally { setLoading(false); }
+      if (editingId) { 
+        await updateDoc(doc(db, 'questions', editingId), qData); 
+      } else { 
+        await addDoc(collection(db, 'questions'), { 
+          ...qData, 
+          createdBy: user.id, 
+          createdAt: new Date().toISOString() 
+        }); 
+      }
+      setEditingId(null); 
+      setQText(''); 
+      setQOptions(['','','','']); 
+      fetchData();
+    } catch (err) { 
+      alert("Error saving question."); 
+    } finally { 
+      setLoading(false); 
+    }
   };
 
   return (
     <div className="flex-1 w-full bg-slate-50 flex flex-col overflow-hidden">
       <div className="bg-white border-b border-slate-100 p-6 flex flex-col md:flex-row justify-between items-center gap-4 safe-top">
         <div className="flex items-center gap-4">
-          <img src={logo} className="w-12 h-12" alt="Logo" />
+          <img src={logo} className="w-12 h-12" alt="Aureus Logo" />
           <div>
             <h1 className="text-xl font-bold text-slate-900 uppercase tracking-tight leading-none">Admin Panel</h1>
-            <p className="text-[9px] font-bold text-amber-600 uppercase tracking-widest mt-1">Aureus Medicos</p>
+            <p className="text-[9px] font-bold text-amber-600 uppercase tracking-widest mt-1">Dashboard Management</p>
           </div>
         </div>
         <div className="flex gap-2">
-          <button onClick={onSwitchToStudent} className="px-5 py-2.5 text-[10px] font-bold text-slate-600 border border-slate-200 rounded-xl uppercase tracking-widest hover:bg-slate-50 transition-all">Student View</button>
+          <button onClick={onSwitchToStudent} className="px-5 py-2.5 text-[10px] font-bold text-slate-600 border border-slate-200 rounded-xl uppercase tracking-widest hover:bg-slate-50 transition-all">Go to Student View</button>
           <button onClick={onLogout} className="px-5 py-2.5 text-[10px] font-bold text-red-600 border border-red-50 rounded-xl uppercase tracking-widest hover:bg-red-50 transition-all">Logout</button>
         </div>
       </div>
 
       <nav className="flex bg-white px-6 border-b border-slate-100 overflow-x-auto no-scrollbar">
         {[
-          { id: 'questions', label: 'Questions' },
-          { id: 'import', label: 'Import PDF' },
-          { id: 'tests', label: 'Tests' },
-          { id: 'approvals', label: 'Queue' }
+          { id: 'questions', label: 'All Questions' },
+          { id: 'import', label: 'Import from PDF' },
+          { id: 'tests', label: 'Manage Tests' },
+          { id: 'approvals', label: 'Approval Queue' }
         ].map((tab) => (
           <button 
             key={tab.id} 
@@ -172,8 +206,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
                  <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-8 group-hover:bg-amber-50 transition-colors">
                     <svg className="w-10 h-10 text-slate-300 group-hover:text-amber-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
                  </div>
-                 <h3 className="text-xl font-bold text-slate-950 mb-4 uppercase tracking-tight">Import Questions from PDF</h3>
-                 <p className="text-xs text-slate-400 mb-10 italic leading-relaxed">Upload a PDF file with multiple choice questions. The tool will automatically extract and format them for you.</p>
+                 <h3 className="text-xl font-bold text-slate-950 mb-4 uppercase tracking-tight">Upload PDF Questions</h3>
+                 <p className="text-xs text-slate-400 mb-10 italic leading-relaxed">Select a PDF file with questions. The tool will automatically read them and show them here for review.</p>
                  <button className="px-12 py-4 bg-slate-950 text-amber-500 rounded-2xl text-[10px] font-bold uppercase tracking-widest shadow-xl hover:bg-slate-900 transition-all">Select PDF File</button>
               </div>
             )}
@@ -186,7 +220,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
                   </div>
                   <div className="absolute bottom-0 left-0 w-full bg-amber-500 transition-all duration-700 ease-out" style={{ height: `${importProgress}%` }}></div>
                 </div>
-                <h3 className="text-lg font-bold text-slate-950 mb-3 uppercase tracking-tight">Reading PDF...</h3>
+                <h3 className="text-lg font-bold text-slate-950 mb-3 uppercase tracking-tight">Reading Document...</h3>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest animate-pulse h-4">Extracting question data</p>
               </div>
             )}
@@ -196,9 +230,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
                 <div className="flex flex-col md:flex-row justify-between items-center bg-slate-950 p-8 rounded-[2rem] shadow-2xl sticky top-4 z-10 gap-4 border-b-4 border-amber-500">
                   <div className="text-center md:text-left">
                     <h3 className="text-lg font-bold text-white uppercase tracking-tight">Review Results</h3>
-                    <p className="text-[9px] font-bold text-amber-400 uppercase tracking-widest">{stagedQuestions.length} Questions found</p>
+                    <p className="text-[9px] font-bold text-amber-400 uppercase tracking-widest">{stagedQuestions.length} Questions found in file</p>
                   </div>
-                  <button onClick={commitImport} className="w-full md:w-auto px-10 py-4 bg-amber-500 text-slate-950 rounded-xl text-[10px] font-bold uppercase tracking-widest shadow-lg hover:bg-amber-400 transition-all">Add to Database</button>
+                  <button onClick={commitImport} className="w-full md:w-auto px-10 py-4 bg-amber-500 text-slate-950 rounded-xl text-[10px] font-bold uppercase tracking-widest shadow-lg hover:bg-amber-400 transition-all">Save All to List</button>
                 </div>
                 <div className="grid grid-cols-1 gap-6">
                   {stagedQuestions.map((q, i) => (
@@ -208,6 +242,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
                          <span className="text-[8px] font-bold text-amber-600 uppercase tracking-widest">{q.topic}</span>
                       </div>
                       <p className="text-sm font-bold text-slate-800 mb-8 leading-relaxed"><ScientificText text={q.text} /></p>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {q.options.map((opt, oIdx) => (
+                          <div key={oIdx} className={`p-4 rounded-xl border text-[10px] ${oIdx === q.correctAnswerIndex ? 'bg-emerald-50 border-emerald-500 text-emerald-900 font-bold' : 'bg-slate-50 border-slate-100 text-slate-600'}`}>
+                            {String.fromCharCode(65 + oIdx)}. <ScientificText text={opt} />
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -226,10 +267,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
                     <input placeholder="Subject" className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl text-[10px] font-bold uppercase outline-none focus:ring-2 focus:ring-amber-500" value={qSubject} onChange={e => setQSubject(e.target.value)} required />
                     <input placeholder="Topic" className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl text-[10px] font-bold uppercase outline-none focus:ring-2 focus:ring-amber-500" value={qTopic} onChange={e => setQTopic(e.target.value)} required />
                   </div>
-                  <textarea placeholder="Question text..." className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-bold h-32 outline-none focus:ring-2 focus:ring-amber-500" value={qText} onChange={e => setQText(e.target.value)} required />
+                  <textarea placeholder="Type your question here..." className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-bold h-32 outline-none focus:ring-2 focus:ring-amber-500" value={qText} onChange={e => setQText(e.target.value)} required />
                   {qOptions.map((o, i) => (
                     <div key={i} className="flex gap-2 group">
-                       <input type="radio" checked={qCorrect === i} onChange={() => setQCorrect(i)} className="accent-amber-500" />
+                       <input type="radio" checked={qCorrect === i} onChange={() => setQCorrect(i)} className="accent-amber-500" title="Mark as correct" />
                        <input className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-medium outline-none focus:border-amber-500" value={o} placeholder={`Option ${String.fromCharCode(65+i)}`} onChange={e => { const n = [...qOptions]; n[i] = e.target.value; setQOptions(n); }} required />
                     </div>
                   ))}
@@ -247,9 +288,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
                      </div>
                      <p className="text-sm font-bold text-slate-800 leading-relaxed"><ScientificText text={q.text} /></p>
                    </div>
-                   <button onClick={() => deleteDoc(doc(db, 'questions', q.id!)).then(fetchData)} className="text-slate-200 hover:text-red-500 transition-colors p-2 bg-slate-50 rounded-xl group-hover:bg-red-50"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>
+                   <button onClick={() => { if(window.confirm("Delete question?")) deleteDoc(doc(db, 'questions', q.id!)).then(fetchData); }} className="text-slate-200 hover:text-red-500 transition-colors p-2 bg-slate-50 rounded-xl group-hover:bg-red-50"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>
                  </div>
                ))}
+               {questions.length === 0 && !loading && (
+                 <div className="py-20 text-center bg-white rounded-2xl border border-slate-100">
+                   <p className="text-slate-400 font-bold uppercase text-[10px] tracking-widest">No questions found. Add one or import from PDF.</p>
+                 </div>
+               )}
             </div>
           </div>
         )}
