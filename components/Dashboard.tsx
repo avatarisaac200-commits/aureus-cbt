@@ -22,6 +22,7 @@ const LeaderboardModal: React.FC<{ test: MockTest, onClose: () => void }> = ({ t
     const fetchTop = async () => {
       setLoading(true);
       try {
+        // Fetch all results for this test. Filtering on client prevents index errors.
         const q = query(
           collection(db, 'results'), 
           where('testId', '==', test.id)
@@ -29,13 +30,14 @@ const LeaderboardModal: React.FC<{ test: MockTest, onClose: () => void }> = ({ t
         const snap = await getDocs(q);
         const results = snap.docs.map(d => ({ ...d.data(), id: d.id } as ExamResult));
         
+        // Sort results by score locally
         const sorted = results
           .sort((a, b) => b.score - a.score)
           .slice(0, 10);
           
         setTopScores(sorted);
       } catch (err) {
-        console.error("Leaderboard fetch failed:", err);
+        console.error("Leaderboard failed:", err);
       } finally {
         setLoading(false);
       }
@@ -50,17 +52,17 @@ const LeaderboardModal: React.FC<{ test: MockTest, onClose: () => void }> = ({ t
           <button onClick={onClose} className="absolute top-6 right-6 text-slate-500 hover:text-white transition-colors">
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
           </button>
-          <p className="text-amber-500 text-[9px] font-bold uppercase tracking-[0.3em] mb-2">High Scores</p>
+          <p className="text-amber-500 text-[9px] font-bold uppercase tracking-[0.3em] mb-2">Leaderboard</p>
           <h2 className="text-xl font-bold text-white uppercase tracking-tight">{test.name}</h2>
         </div>
         <div className="p-8 max-h-[60vh] overflow-y-auto no-scrollbar">
           {loading ? (
             <div className="flex flex-col items-center justify-center py-10">
               <div className="w-8 h-8 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Loading...</p>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Loading List...</p>
             </div>
           ) : topScores.length === 0 ? (
-            <p className="text-center py-10 text-slate-400 font-bold text-[10px] uppercase tracking-widest">No scores yet</p>
+            <p className="text-center py-10 text-slate-400 font-bold text-[10px] uppercase tracking-widest">No results yet</p>
           ) : (
             <div className="space-y-3">
               {topScores.map((res, i) => (
@@ -122,7 +124,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onStartTest, onRe
     return (
       <div className="h-full w-full flex flex-col items-center justify-center bg-slate-50 safe-top safe-bottom">
         <img src={logo} className="w-16 h-16 animate-pulse mb-4" alt="Loading" />
-        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.4em]">Connecting to portal...</p>
+        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.4em]">Loading Dashboard...</p>
       </div>
     );
   }
@@ -139,7 +141,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onStartTest, onRe
               <h1 className="text-xl font-bold text-slate-950 uppercase tracking-tight leading-none">
                 Aureus Medicos
               </h1>
-              <p className="text-amber-600 text-[9px] tracking-widest font-bold uppercase mt-1">Student Portal</p>
+              <p className="text-amber-600 text-[9px] tracking-widest font-bold uppercase mt-1">Student Area</p>
             </div>
           </div>
           <div className="flex gap-2 w-full md:w-auto">
@@ -152,15 +154,15 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onStartTest, onRe
 
         <div className="grid grid-cols-3 gap-3 md:gap-6 mb-12">
           <div className="bg-white p-6 rounded-[1.5rem] shadow-sm border border-slate-100 flex flex-col items-center">
-            <span className="text-slate-400 text-[8px] md:text-[9px] font-bold uppercase tracking-widest mb-2">Average Score</span>
+            <span className="text-slate-400 text-[8px] md:text-[9px] font-bold uppercase tracking-widest mb-2">Average</span>
             <span className="text-xl md:text-3xl font-bold text-slate-900">{stats.avgScore}%</span>
           </div>
           <div className="bg-white p-6 rounded-[1.5rem] shadow-sm border border-slate-100 flex flex-col items-center">
-            <span className="text-amber-600 text-[8px] md:text-[9px] font-bold uppercase tracking-widest mb-2">Highest Score</span>
+            <span className="text-amber-600 text-[8px] md:text-[9px] font-bold uppercase tracking-widest mb-2">Best</span>
             <span className="text-xl md:text-3xl font-bold text-amber-500">{stats.highestScore}%</span>
           </div>
           <div className="bg-white p-6 rounded-[1.5rem] shadow-sm border border-slate-100 flex flex-col items-center">
-            <span className="text-slate-400 text-[8px] md:text-[9px] font-bold uppercase tracking-widest mb-2">Tests Taken</span>
+            <span className="text-slate-400 text-[8px] md:text-[9px] font-bold uppercase tracking-widest mb-2">Tests</span>
             <span className="text-xl md:text-3xl font-bold text-slate-900">{stats.totalTaken}</span>
           </div>
         </div>
@@ -169,8 +171,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onStartTest, onRe
           <div className="lg:col-span-2 space-y-10">
             <section>
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-bold text-slate-900 uppercase tracking-tight">Active Tests</h2>
-                <span className="bg-amber-100 text-amber-700 text-[10px] font-bold px-3 py-1 rounded-full">{tests.length} available</span>
+                <h2 className="text-xl font-bold text-slate-900 uppercase tracking-tight">Available Tests</h2>
+                <span className="bg-amber-100 text-amber-700 text-[10px] font-bold px-3 py-1 rounded-full">{tests.length} Active</span>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {tests.map(test => (
@@ -178,24 +180,19 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onStartTest, onRe
                     <h3 className="font-bold text-lg text-slate-900 mb-2 group-hover:text-amber-600 transition-colors uppercase tracking-tight">{test.name}</h3>
                     <p className="text-[10px] text-slate-400 mb-6 line-clamp-3 font-medium flex-1 italic">{test.description}</p>
                     <div className="flex flex-wrap gap-2 text-[8px] font-bold uppercase tracking-widest mb-8">
-                       <span className="bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-full text-slate-500">{test.totalDurationSeconds / 60} Minutes</span>
+                       <span className="bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-full text-slate-500">{test.totalDurationSeconds / 60} min</span>
                        <button onClick={(e) => { e.stopPropagation(); setShowLeaderboard(test); }} className="bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-full text-amber-600 hover:bg-amber-500 hover:text-white transition-all">
-                         Rankings
+                         Ranking
                        </button>
                     </div>
-                    <button onClick={() => onStartTest(test)} className="w-full py-4 bg-slate-950 text-amber-500 rounded-2xl font-bold uppercase tracking-widest text-[10px] transition-all active:scale-95 shadow-lg">Start Test Now</button>
+                    <button onClick={() => onStartTest(test)} className="w-full py-4 bg-slate-950 text-amber-500 rounded-2xl font-bold uppercase tracking-widest text-[10px] transition-all active:scale-95 shadow-lg">Start Test</button>
                   </div>
                 ))}
-                {tests.length === 0 && (
-                  <div className="col-span-full py-20 text-center bg-white rounded-[2rem] border-2 border-dashed border-slate-100">
-                    <p className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">No tests available right now.</p>
-                  </div>
-                )}
               </div>
             </section>
           </div>
           <aside className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-200 h-fit">
-            <h2 className="text-lg font-bold mb-8 text-slate-950 uppercase tracking-tight text-center">My Test History</h2>
+            <h2 className="text-lg font-bold mb-8 text-slate-950 uppercase tracking-tight text-center">My History</h2>
             <div className="space-y-4">
               {history.map(item => (
                 <div key={item.id} className="p-5 bg-slate-50 rounded-xl border border-slate-100 hover:border-amber-200 transition-all group">
@@ -205,11 +202,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onStartTest, onRe
                   </div>
                   <div className="flex justify-between items-center">
                      <span className="text-[8px] text-slate-400 font-bold uppercase">{new Date(item.completedAt).toLocaleDateString()}</span>
-                     <button onClick={() => onReviewResult(item)} className="text-[8px] font-bold text-amber-600 uppercase tracking-widest hover:underline">Review Questions</button>
+                     <button onClick={() => onReviewResult(item)} className="text-[8px] font-bold text-amber-600 uppercase tracking-widest hover:underline">Review</button>
                   </div>
                 </div>
               ))}
-              {history.length === 0 && <p className="text-center text-[10px] font-bold text-slate-300 uppercase py-10">No history found.</p>}
             </div>
           </aside>
         </div>
