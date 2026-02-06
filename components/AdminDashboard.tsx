@@ -168,11 +168,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onSwitc
     setImportProgress(5);
     const progressInterval = setInterval(() => {
       setImportProgress(prev => {
-        if (prev >= 92) return prev;
-        const inc = prev < 40 ? 4 : (prev < 70 ? 2 : 0.8);
+        if (prev >= 95) return prev;
+        const inc = prev < 40 ? 3 : (prev < 75 ? 1.5 : 0.5);
         return prev + inc;
       });
-    }, 1200);
+    }, 800);
 
     try {
       const reader = new FileReader();
@@ -212,7 +212,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onSwitc
       clearInterval(progressInterval);
       setImportProgress(100);
       setStagedQuestions(data);
-      setTimeout(() => { setImportStatus('review'); setImportProgress(0); }, 600);
+      setTimeout(() => { setImportStatus('review'); setImportProgress(0); }, 800);
     } catch (err) {
       clearInterval(progressInterval);
       console.error(err);
@@ -261,6 +261,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onSwitc
     } catch (err) { alert(err); } finally { setLoading(false); }
   };
 
+  const getStatusMessage = (progress: number) => {
+    if (progress < 20) return "Analyzing document layout...";
+    if (progress < 45) return "Recognizing medical terminology...";
+    if (progress < 70) return "Extracting question-answer pairs...";
+    if (progress < 90) return "Formatting scientific notation...";
+    return "Finalizing integration...";
+  };
+
   return (
     <div className="flex-1 w-full bg-slate-50 flex flex-col overflow-hidden">
       {showLeaderboard && <LeaderboardModal test={showLeaderboard} onClose={() => setShowLeaderboard(null)} />}
@@ -297,16 +305,49 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onSwitc
                  <button className="px-12 py-5 bg-slate-950 text-amber-500 rounded-2xl text-[10px] font-black uppercase tracking-[0.3em]">Select PDF</button>
               </div>
             )}
+            
             {importStatus === 'parsing' && (
-              <div className="bg-white p-12 rounded-[3rem] shadow-xl text-center">
-                <div className="w-24 h-24 bg-slate-100 rounded-full mx-auto mb-8 flex items-center justify-center relative overflow-hidden">
-                  <div className="absolute bottom-0 left-0 w-full bg-amber-500 transition-all duration-700" style={{ height: `${importProgress}%` }}></div>
-                  <span className="relative z-10 text-sm font-black text-slate-900">{Math.round(importProgress)}%</span>
+              <div className="bg-white p-12 rounded-[3rem] shadow-2xl border border-gray-100 text-center animate-in fade-in zoom-in duration-300">
+                <div className="mb-10 flex flex-col items-center">
+                  <div className="w-20 h-20 bg-slate-50 rounded-3xl flex items-center justify-center mb-6 relative">
+                    <svg className="w-10 h-10 text-amber-500 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                    <div className="absolute -top-2 -right-2 bg-slate-900 text-amber-500 text-[8px] font-black px-2 py-1 rounded-full animate-pulse">AI PROCESSING</div>
+                  </div>
+                  <h3 className="text-xl font-black text-slate-950 mb-2 uppercase tracking-tight">Integrating Knowledge Base</h3>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{getStatusMessage(importProgress)}</p>
                 </div>
-                <h3 className="text-lg font-black text-slate-950 mb-2 uppercase tracking-tight">AI Analysis in Progress</h3>
-                <p className="text-[9px] font-black text-amber-600 uppercase animate-pulse">Scanning patterns...</p>
+
+                <div className="relative pt-1">
+                  <div className="flex mb-4 items-center justify-between">
+                    <div>
+                      <span className="text-[10px] font-black inline-block py-1 px-3 uppercase rounded-full text-amber-600 bg-amber-50">
+                        Analyzing Patterns
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-sm font-black inline-block text-slate-950">
+                        {Math.round(importProgress)}%
+                      </span>
+                    </div>
+                  </div>
+                  <div className="overflow-hidden h-3 mb-4 text-xs flex rounded-full bg-slate-100 border border-slate-200">
+                    <div 
+                      style={{ width: `${importProgress}%` }} 
+                      className="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-amber-500 transition-all duration-500 ease-out relative"
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-[shimmer_2s_infinite] pointer-events-none"></div>
+                    </div>
+                  </div>
+                </div>
+                
+                <p className="text-[9px] font-black text-slate-300 uppercase tracking-[0.3em] mt-8 animate-pulse">
+                  Please do not close this window while the engine is running
+                </p>
               </div>
             )}
+
             {importStatus === 'review' && (
               <div className="space-y-6">
                 <div className="flex justify-between items-center bg-white p-6 rounded-2xl border border-gray-100 shadow-sm sticky top-0 z-10">
