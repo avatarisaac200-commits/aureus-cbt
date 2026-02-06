@@ -68,9 +68,9 @@ const App: React.FC = () => {
   if (isLoading) {
     return (
       <div className="h-full w-full flex flex-col items-center justify-center bg-slate-950 safe-top safe-bottom">
-        <img src={logo} className="w-20 h-20 animate-pulse mb-6" alt="Aureus Medicos Logo" />
+        <img src={logo} className="w-20 h-20 animate-pulse mb-6" alt="Loading" />
         <div className="flex flex-col items-center">
-          <p className="text-amber-500 text-[10px] font-black uppercase tracking-[0.5em] mb-2">Aureus Medicos</p>
+          <p className="text-amber-500 text-[10px] font-bold uppercase tracking-[0.5em] mb-2">Aureus Medicos</p>
           <div className="w-32 h-1 bg-slate-900 rounded-full overflow-hidden">
             <div className="h-full bg-amber-500 w-1/2 animate-[shimmer_2s_infinite]"></div>
           </div>
