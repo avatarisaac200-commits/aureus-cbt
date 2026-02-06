@@ -1,12 +1,10 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { User, Question, MockTest, TestSection, ExamResult } from '../types';
 import { db } from '../firebase';
 import { collection, addDoc, getDocs, deleteDoc, doc, query, orderBy, updateDoc, where, limit } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import { GoogleGenAI, Type } from '@google/genai';
 import ScientificText from './ScientificText';
-
-const logo = '/assets/logo.png?v=2';
+import logo from '../assets/logo.png';
 
 interface AdminDashboardProps {
   user: User;
@@ -87,8 +85,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onSwitc
   const [expandedSubjects, setExpandedSubjects] = useState<Record<string, boolean>>({});
   const [showLeaderboard, setShowLeaderboard] = useState<MockTest | null>(null);
   
+  // Staging for PDF Parser
   const [importStatus, setImportStatus] = useState<'idle' | 'parsing' | 'review'>('idle');
-  const [importProgress, setImportProgress] = useState(0);
   const [stagedQuestions, setStagedQuestions] = useState<Omit<Question, 'id' | 'createdAt' | 'createdBy'>[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -278,16 +276,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onSwitc
 
   const processDocument = async (file: File) => {
     setImportStatus('parsing');
-    setImportProgress(5);
-    
-    const progressInterval = setInterval(() => {
-      setImportProgress(prev => {
-        if (prev >= 92) return prev;
-        const inc = prev < 40 ? 4 : (prev < 70 ? 2 : 0.8);
-        return prev + inc;
-      });
-    }, 1200);
-
     try {
       const reader = new FileReader();
       const base64Promise = new Promise<string>((resolve) => {
@@ -335,21 +323,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onSwitc
       });
 
       const data = JSON.parse(response.text || '[]');
-      clearInterval(progressInterval);
-      setImportProgress(100);
       setStagedQuestions(data);
-      
-      setTimeout(() => {
-        setImportStatus('review');
-        setImportProgress(0);
-      }, 600);
-      
+      setImportStatus('review');
     } catch (err) {
-      clearInterval(progressInterval);
       console.error(err);
       alert("Structural analysis failed. Ensure the PDF contains clear multiple-choice questions.");
       setImportStatus('idle');
-      setImportProgress(0);
     }
   };
 
@@ -426,29 +405,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onSwitc
 
               {importStatus === 'parsing' && (
                 <div className="max-w-lg mx-auto bg-white p-12 rounded-[3rem] shadow-2xl border border-gray-100 flex flex-col items-center">
-                  <div className="relative w-24 h-24 mb-10 flex items-center justify-center">
+                  <div className="relative w-24 h-24 mb-10">
                     <div className="absolute inset-0 border-4 border-slate-50 rounded-full"></div>
-                    <div 
-                      className="absolute inset-0 border-4 border-amber-500 rounded-full border-t-transparent transition-all duration-300" 
-                      style={{ transform: `rotate(${importProgress * 3.6}deg)` }}
-                    ></div>
-                    <span className="text-sm font-black text-slate-900">{Math.round(importProgress)}%</span>
+                    <div className="absolute inset-0 border-4 border-amber-500 rounded-full border-t-transparent animate-spin"></div>
                   </div>
-                  <h3 className="text-lg font-black text-slate-950 mb-6 uppercase tracking-tight">Pattern Recognition</h3>
-                  
-                  <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden mb-4">
-                    <div 
-                      className="bg-amber-500 h-full transition-all duration-700 ease-out" 
-                      style={{ width: `${importProgress}%` }}
-                    ></div>
-                  </div>
-                  
-                  <p className="text-[9px] font-black text-amber-600 uppercase tracking-widest animate-pulse h-4 text-center">
-                    {importProgress < 30 ? 'Analyzing Document Layout...' : 
-                     importProgress < 60 ? 'Extracting Medical Context...' : 
-                     importProgress < 90 ? 'Formatting Scientific Notation...' : 
-                     'Finalizing Integration...'}
-                  </p>
+                  <h3 className="text-lg font-black text-slate-950 mb-2 uppercase tracking-tight">Pattern Recognition</h3>
+                  <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest animate-pulse">Mapping Medical Content Structures...</p>
                 </div>
               )}
 

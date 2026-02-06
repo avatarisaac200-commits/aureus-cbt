@@ -11,8 +11,7 @@ import RootAdminDashboard from './components/RootAdminDashboard';
 import ExamInterface from './components/ExamInterface';
 import ResultScreen from './components/ResultScreen';
 import ReviewInterface from './components/ReviewInterface';
-
-const logo = '/assets/logo.png?v=2';
+import logo from './assets/logo.png';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
