@@ -4,7 +4,8 @@ import { User, MockTest, ExamResult } from '../types';
 import { db } from '../firebase';
 import { collection, query, where, onSnapshot, getDocs, orderBy, limit } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import ScientificText from './ScientificText';
-import logo from '../assets/logo.png';
+
+const logo = '/assets/logo.png';
 
 interface DashboardProps {
   user: User;
@@ -20,7 +21,6 @@ const LeaderboardModal: React.FC<{ test: MockTest, onClose: () => void }> = ({ t
 
   useEffect(() => {
     const fetchTop = async () => {
-      // Query results for this test ordered by score
       const q = query(
         collection(db, 'results'), 
         where('testId', '==', test.id),
@@ -122,7 +122,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onStartTest, onRe
       setLoading(false);
     });
 
-    // Listen to all results to calculate counts globally
     const allResultsQuery = query(collection(db, 'results'));
     const unsubscribeAllResults = onSnapshot(allResultsQuery, (snapshot) => {
       setAllResults(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as ExamResult)));
@@ -145,7 +144,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onStartTest, onRe
     const counts: Record<string, number> = {};
     allResults.forEach(res => {
       if (!counts[res.testId]) counts[res.testId] = 0;
-      // We count unique participants per test
       const testResults = allResults.filter(r => r.testId === res.testId);
       const uniqueUsers = new Set(testResults.map(r => r.userId));
       counts[res.testId] = uniqueUsers.size;

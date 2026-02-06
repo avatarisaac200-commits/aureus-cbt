@@ -1,9 +1,11 @@
+
 import React, { useState, useEffect } from 'react';
 import { User } from '../types';
 import { db, auth } from '../firebase';
 import { collection, getDocs, doc, deleteDoc, setDoc, query, where } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import { createUserWithEmailAndPassword, sendPasswordResetEmail } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
-import logo from '../assets/logo.png';
+
+const logo = '/assets/logo.png';
 
 interface RootAdminDashboardProps {
   user: User;

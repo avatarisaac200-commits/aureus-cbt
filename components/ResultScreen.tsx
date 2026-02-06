@@ -1,7 +1,8 @@
 
 import React from 'react';
 import { ExamResult } from '../types';
-import logo from '../assets/logo.png';
+
+const logo = '/assets/logo.png';
 
 interface ResultScreenProps {
   result: ExamResult;

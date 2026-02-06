@@ -1,10 +1,12 @@
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { User, Question, MockTest, TestSection, ExamResult } from '../types';
 import { db } from '../firebase';
 import { collection, addDoc, getDocs, deleteDoc, doc, query, orderBy, updateDoc, where, limit } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import { GoogleGenAI, Type } from '@google/genai';
 import ScientificText from './ScientificText';
-import logo from '../assets/logo.png';
+
+const logo = '/assets/logo.png';
 
 interface AdminDashboardProps {
   user: User;
@@ -85,7 +87,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onLogout, onSwitc
   const [expandedSubjects, setExpandedSubjects] = useState<Record<string, boolean>>({});
   const [showLeaderboard, setShowLeaderboard] = useState<MockTest | null>(null);
   
-  // Staging for PDF Parser
   const [importStatus, setImportStatus] = useState<'idle' | 'parsing' | 'review'>('idle');
   const [stagedQuestions, setStagedQuestions] = useState<Omit<Question, 'id' | 'createdAt' | 'createdBy'>[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);

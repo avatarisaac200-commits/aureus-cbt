@@ -4,7 +4,8 @@ import { User } from '../types';
 import { auth, db } from '../firebase';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 import { doc, setDoc, getDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
-import logo from '../assets/logo.png';
+
+const logo = '/assets/logo.png';
 
 interface AuthProps {
   onLogin: (user: User) => void;

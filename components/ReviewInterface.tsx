@@ -4,7 +4,8 @@ import { ExamResult, MockTest, Question } from '../types';
 import { db } from '../firebase';
 import { collection, getDocs, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import ScientificText from './ScientificText';
-import logo from '../assets/logo.png';
+
+const logo = '/assets/logo.png';
 
 interface ReviewInterfaceProps {
   result: ExamResult;

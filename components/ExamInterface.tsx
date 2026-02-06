@@ -5,7 +5,8 @@ import { db } from '../firebase';
 import { collection, getDocs, addDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import Calculator from './Calculator';
 import ScientificText from './ScientificText';
-import logo from '../assets/logo.png';
+
+const logo = '/assets/logo.png';
 
 interface ExamInterfaceProps {
   test: MockTest;
@@ -56,7 +57,7 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, onFinish, onE
 
     const result: Omit<ExamResult, 'id'> = {
       userId: user.id,
-      userName: user.name, // Saved name for leaderboard
+      userName: user.name, 
       testId: test.id,
       testName: test.name,
       score: totalScore,
