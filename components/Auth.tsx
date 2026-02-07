@@ -30,12 +30,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
         
         const isOfficialEmail = trimmedEmail.toLowerCase().endsWith('@aureusmedicos.com');
         
-        // Trigger verification email only for non-staff emails
-        if (!isOfficialEmail) {
-          await sendEmailVerification(userCredential.user);
-          alert("Account created! A verification email has been sent. Please check your inbox before logging in.");
-        }
-        
+        // Save user profile immediately
         const newUser: User = { 
           id: userCredential.user.uid, 
           name, 
@@ -43,15 +38,21 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
           role: 'student' 
         };
         await setDoc(doc(db, 'users', userCredential.user.uid), newUser);
-        
-        if (isOfficialEmail) {
-          onLogin(userCredential.user);
-        } else {
+
+        // Verification logic
+        if (!isOfficialEmail) {
+          await sendEmailVerification(userCredential.user);
+          alert("Account successfully created! A verification link has been sent to your email. Please activate it to sign in.");
           setIsLogin(true);
+          setLoading(false);
+          return;
         }
+        
+        // Staff members skip verify-email screen
+        onLogin(userCredential.user);
       }
     } catch (error: any) {
-      alert(error.message);
+      alert("Authentication Error: " + error.message);
     } finally {
       setLoading(false);
     }
@@ -66,18 +67,20 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
       </div>
       <div className="w-full max-w-md bg-white rounded-[2.5rem] shadow-2xl overflow-hidden border border-slate-100">
         <div className="bg-slate-950 px-8 py-10 text-center border-b-4 border-amber-500">
-           <h1 className="text-xl font-black text-white tracking-widest mb-1 uppercase">{isLogin ? 'Login' : 'Create Account'}</h1>
-           <p className="text-amber-400 text-[9px] font-bold uppercase tracking-[0.2em]">Clinical Credential Portal</p>
+           <h1 className="text-xl font-black text-white tracking-widest mb-1 uppercase">{isLogin ? 'Grant Access' : 'Register Candidate'}</h1>
+           <p className="text-amber-400 text-[9px] font-bold uppercase tracking-[0.2em]">CBT Registry Hub</p>
         </div>
         <div className="p-8 md:p-12">
           <form onSubmit={handleSubmit} className="space-y-4">
             {!isLogin && (
               <input type="text" value={name} onChange={e => setName(e.target.value)} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-sm focus:ring-2 focus:ring-amber-500 outline-none" placeholder="Full Name" required />
             )}
-            <input type="email" value={email} onChange={e => setEmail(e.target.value)} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-sm focus:ring-2 focus:ring-amber-500 outline-none" placeholder="Official Email Address" required />
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-sm focus:ring-2 focus:ring-amber-500 outline-none" placeholder="Security Key" required />
-            <button disabled={loading} className="w-full py-5 bg-slate-950 text-amber-500 rounded-2xl font-black uppercase tracking-[0.3em] text-xs shadow-xl active:scale-95 transition-all mt-6 hover:bg-slate-900">
-               {loading ? 'Processing Registry...' : (isLogin ? 'Grant Access' : 'Register & Verify')}
+            <input type="email" value={email} onChange={e => setEmail(e.target.value)} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-sm focus:ring-2 focus:ring-amber-500 outline-none" placeholder="Email Address" required />
+            <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-sm focus:ring-2 focus:ring-amber-500 outline-none" placeholder="Registry Password" required />
+            <button disabled={loading} className="w-full py-5 bg-slate-950 text-amber-500 rounded-2xl font-black uppercase tracking-[0.3em] text-xs shadow-xl active:scale-95 transition-all mt-6 hover:bg-slate-900 flex justify-center items-center">
+               {loading ? (
+                 <div className="w-5 h-5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
+               ) : (isLogin ? 'Sign In' : 'Register & Verify')}
             </button>
           </form>
           <div className="mt-8 text-center">
@@ -88,8 +91,8 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
         </div>
       </div>
       <p className="mt-8 text-slate-400 text-[8px] font-bold uppercase tracking-widest text-center px-6 leading-relaxed">
-        Strict anti-spoofing enabled. All entries are audited.<br/>
-        Only the first attempt per test counts for the ranking registry.
+        Registry Security: Strict anti-spoofing enabled.<br/>
+        Official staff must use @aureusmedicos.com domain for bypass.
       </p>
     </div>
   );

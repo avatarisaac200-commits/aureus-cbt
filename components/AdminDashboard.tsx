@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { User, Question, MockTest } from '../types';
 import { db } from '../firebase';
-import { collection, addDoc, getDocs, deleteDoc, doc, query, orderBy, updateDoc, onSnapshot, writeBatch, limit } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+import { collection, addDoc, getDocs, deleteDoc, doc, query, orderBy, updateDoc, onSnapshot, writeBatch, limit, where } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import { GoogleGenAI, Type } from '@google/genai';
 import ScientificText from './ScientificText';
 import logo from '../assets/logo.png';
@@ -14,7 +14,7 @@ interface AdminDashboardProps {
   onSwitchToStudent: () => void;
 }
 
-type AdminTab = 'questions' | 'tests' | 'approvals' | 'import';
+type AdminTab = 'questions' | 'tests' | 'import' | 'approvals';
 type StagedQuestion = Omit<Question, 'id' | 'createdAt' | 'createdBy'>;
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'questions', onLogout, onSwitchToStudent }) => {
@@ -30,7 +30,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
   const [stagedQuestions, setStagedQuestions] = useState<StagedQuestion[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Question Form State
+  // Question Form State (Used for both Create and Edit)
   const [editingId, setEditingId] = useState<string | null>(null);
   const [qSubject, setQSubject] = useState('');
   const [qTopic, setQTopic] = useState('');
@@ -46,19 +46,23 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
   const [testSelectedQuestions, setTestSelectedQuestions] = useState<string[]>([]);
 
   useEffect(() => {
-    // Basic snapshot for real-time reactivity
-    const unsubQ = onSnapshot(query(collection(db, 'questions'), orderBy('createdAt', 'desc')), (snap) => {
+    // Optimized: Only fetch a limited number of questions initially to save quota
+    const qRef = collection(db, 'questions');
+    const unsubQ = onSnapshot(query(qRef, orderBy('createdAt', 'desc'), limit(50)), (snap) => {
       setQuestions(snap.docs.map(d => ({ ...d.data(), id: d.id } as Question)));
     });
+
     const unsubT = onSnapshot(collection(db, 'tests'), (snap) => {
       setTests(snap.docs.map(d => ({ ...d.data(), id: d.id } as MockTest)));
     });
+
     return () => { unsubQ(); unsubT(); };
   }, []);
 
   const filteredQuestions = useMemo(() => {
     const lowSearch = searchQuery.toLowerCase().trim();
     if (!lowSearch) return questions;
+    // For large banks, searching local state is cheaper than querying Firestore repeatedly
     return questions.filter(q => 
       q.text.toLowerCase().includes(lowSearch) || 
       q.subject.toLowerCase().includes(lowSearch) || 
@@ -66,60 +70,64 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
     );
   }, [questions, searchQuery]);
 
-  // AUTOMATED DE-DUPLICATION ALGORITHM
-  const removeDuplicates = async () => {
-    if (!window.confirm("Run Automated De-duplication? Identical clinical text entries will be merged into the oldest entry.")) return;
+  // ALGORITHM: AUTOMATIC DE-DUPLICATION
+  const runDeduplication = async () => {
+    if (!window.confirm("Run Automated De-duplication? Identical clinical text entries will be merged into the oldest entry to optimize the registry.")) return;
     setLoading(true);
     try {
-      const seen = new Map<string, string>(); // normalized text -> original id
-      const duplicatesToDelete: string[] = [];
-
-      // Sort by createdAt ASC to keep the oldest entries
-      const sorted = [...questions].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-
+      // Fetch ALL questions for a thorough cleanup (Quota heavy, but necessary for this feature)
+      const allQSnap = await getDocs(collection(db, 'questions'));
+      const allQs = allQSnap.docs.map(d => ({ ...d.data(), id: d.id } as Question));
+      
+      const seenTexts = new Map<string, string>(); // Normalized Text -> ID
+      const toDelete: string[] = [];
+      
+      // Sort by oldest first so we keep the first entry
+      const sorted = [...allQs].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+      
       sorted.forEach(q => {
-        const norm = q.text.toLowerCase().replace(/\s+/g, ' ').trim();
-        if (seen.has(norm)) {
-          duplicatesToDelete.push(q.id);
+        const normalized = q.text.toLowerCase().replace(/\s+/g, ' ').trim();
+        if (seenTexts.has(normalized)) {
+          toDelete.push(q.id);
         } else {
-          seen.set(norm, q.id);
+          seenTexts.set(normalized, q.id);
         }
       });
 
-      if (duplicatesToDelete.length === 0) {
-        alert("No duplicates found. Question bank is clean.");
+      if (toDelete.length === 0) {
+        alert("Registry is already optimized. No duplicates found.");
       } else {
         const batch = writeBatch(db);
-        duplicatesToDelete.forEach(id => batch.delete(doc(db, 'questions', id)));
+        toDelete.forEach(id => batch.delete(doc(db, 'questions', id)));
         await batch.commit();
-        alert(`Registry optimized. Deleted ${duplicatesToDelete.length} duplicate entries.`);
+        alert(`Successfully purged ${toDelete.length} redundant questions from the registry.`);
       }
     } catch (e) {
-      alert("Error during registry optimization.");
+      alert("Error during de-duplication. Check system logs.");
     } finally {
       setLoading(false);
     }
   };
 
-  const processDocument = async (file: File) => {
+  const processPDF = async (file: File) => {
     setImportStatus('parsing');
     setImportProgress(10);
     try {
       const reader = new FileReader();
-      const base64Promise = new Promise<string>((resolve, reject) => {
+      const base64Promise = new Promise<string>((resolve) => {
         reader.onload = () => resolve((reader.result as string).split(',')[1]);
-        reader.onerror = reject;
         reader.readAsDataURL(file);
       });
       const base64Data = await base64Promise;
       setImportProgress(30);
+      
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: {
           parts: [
             { inlineData: { mimeType: 'application/pdf', data: base64Data } },
-            { text: "Extract medical MCQs as JSON array: subject, topic, text, options(4), correctAnswerIndex(0-3), explanation." }
+            { text: "Extract clinical MCQs as JSON array: subject, topic, text, options(4), correctAnswerIndex(0-3), explanation." }
           ]
         },
         config: {
@@ -145,13 +153,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
       setImportProgress(100);
       setTimeout(() => setImportStatus('review'), 500);
     } catch (err) {
-      alert("Error parsing document.");
+      alert("AI Parsing failed. Check file format.");
       setImportStatus('idle');
     }
   };
 
-  const commitImport = async () => {
-    if (!window.confirm(`Add these ${stagedQuestions.length} questions to the master bank?`)) return;
+  const confirmAndCommit = async () => {
+    if (!window.confirm(`CONFIRMATION: Add ${stagedQuestions.length} questions to the Master Bank?`)) return;
     setIsCommitting(true);
     try {
       const batch = writeBatch(db);
@@ -166,9 +174,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
       await batch.commit();
       setStagedQuestions([]);
       setImportStatus('idle');
-      alert("Import Successful.");
-    } catch (err) {
-      alert("Commit failed.");
+      alert("Questions successfully added to the registry.");
+    } catch (e) {
+      alert("Batch commit failed. Registry quota might be full.");
     } finally {
       setIsCommitting(false);
     }
@@ -177,39 +185,35 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
   const handleSaveQuestion = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const qData = {
-      subject: qSubject || 'General', 
+    const data = {
+      subject: qSubject || 'General',
       topic: qTopic || 'General',
-      text: qText, 
-      options: qOptions, 
-      correctAnswerIndex: qCorrect, 
+      text: qText,
+      options: qOptions,
+      correctAnswerIndex: qCorrect,
       explanation: qExplanation,
     };
     try {
       if (editingId) {
-        await updateDoc(doc(db, 'questions', editingId), { 
-          ...qData, 
-          updatedAt: new Date().toISOString() 
-        });
-        alert("Question updated.");
+        await updateDoc(doc(db, 'questions', editingId), { ...data, updatedAt: new Date().toISOString() });
+        alert("Clinical entry updated.");
       } else {
-        await addDoc(collection(db, 'questions'), { 
-          ...qData, 
-          createdBy: user.id, 
-          createdAt: new Date().toISOString() 
-        });
-        alert("Stored in Bank.");
+        await addDoc(collection(db, 'questions'), { ...data, createdBy: user.id, createdAt: new Date().toISOString() });
+        alert("New question stored in Bank.");
       }
-      resetQForm();
-    } catch (err) { alert("Save error."); }
-    finally { setLoading(false); }
+      resetForm();
+    } catch (e) {
+      alert("Error saving to registry.");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const resetQForm = () => {
+  const resetForm = () => {
     setEditingId(null); setQSubject(''); setQTopic(''); setQText(''); setQOptions(['','','','']); setQCorrect(0); setQExplanation('');
   };
 
-  const handleEditQuestion = (q: Question) => {
+  const startEditing = (q: Question) => {
     setEditingId(q.id); setQSubject(q.subject); setQTopic(q.topic); setQText(q.text); setQOptions(q.options); setQCorrect(q.correctAnswerIndex); setQExplanation(q.explanation || '');
     setActiveTab('questions');
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -217,79 +221,88 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
 
   const handleCreateTest = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (testSelectedQuestions.length === 0) return alert("Selection empty.");
+    if (testSelectedQuestions.length === 0) return alert("Selection matrix is empty. Select questions first.");
     setLoading(true);
     try {
       await addDoc(collection(db, 'tests'), {
-        name: testName, 
-        description: testDesc, 
+        name: testName,
+        description: testDesc,
         totalDurationSeconds: testDuration * 60,
-        sections: [{ id: 'main', name: 'Main Section', questionIds: testSelectedQuestions, marksPerQuestion: 1 }],
-        allowRetake: true, 
-        createdBy: user.id, 
-        creatorName: user.name, 
-        isApproved: true, 
+        sections: [{ id: 'main', name: 'Master Section', questionIds: testSelectedQuestions, marksPerQuestion: 1 }],
+        allowRetake: true,
+        createdBy: user.id,
+        creatorName: user.name,
+        isApproved: true,
         createdAt: new Date().toISOString()
       });
       setTestName(''); setTestDesc(''); setTestSelectedQuestions([]);
-      alert("Test Deployed Successfully.");
-    } catch (err) { alert("Error deploying test."); }
-    finally { setLoading(false); }
+      alert("Mock Test Published.");
+    } catch (e) {
+      alert("Deployment failure.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <div className="flex-1 w-full bg-slate-50 flex flex-col overflow-hidden">
-      <div className="bg-white border-b border-slate-100 p-6 flex flex-col md:flex-row justify-between items-center gap-4 safe-top">
+      <div className="bg-white border-b border-slate-100 p-6 flex flex-col md:flex-row justify-between items-center gap-4 shrink-0 safe-top">
         <div className="flex items-center gap-4">
           <img src={logo} className="w-12 h-12" alt="Logo" />
           <div>
-            <h1 className="text-xl font-bold text-slate-900 uppercase tracking-tight leading-none">Admin Panel</h1>
-            <p className="text-[9px] font-bold text-amber-600 uppercase tracking-widest mt-1">Full Content Governance</p>
+            <h1 className="text-xl font-bold text-slate-900 uppercase tracking-tight leading-none">CBT Admin</h1>
+            <p className="text-[9px] font-bold text-amber-600 uppercase tracking-widest mt-1">Registry Governance</p>
           </div>
         </div>
         <div className="flex gap-2">
-          <button onClick={onSwitchToStudent} className="px-5 py-2.5 text-[10px] font-bold text-slate-600 border border-slate-200 rounded-xl uppercase tracking-widest hover:bg-slate-50 transition-all">Student View</button>
+          <button onClick={onSwitchToStudent} className="px-5 py-2.5 text-[10px] font-bold text-slate-600 border border-slate-200 rounded-xl uppercase tracking-widest hover:bg-slate-50 transition-all">Student Portal</button>
           <button onClick={onLogout} className="px-5 py-2.5 text-[10px] font-bold text-red-600 border border-red-50 rounded-xl uppercase tracking-widest hover:bg-red-50 transition-all">Logout</button>
         </div>
       </div>
 
-      <nav className="flex bg-white px-6 border-b border-slate-100 overflow-x-auto no-scrollbar">
-        {['questions', 'import', 'tests', 'approvals'].map((tab) => (
-          <button key={tab} onClick={() => setActiveTab(tab as AdminTab)} className={`px-6 py-4 text-[9px] font-bold uppercase tracking-widest whitespace-nowrap transition-all ${activeTab === tab ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50/50' : 'text-slate-400 hover:text-slate-600'}`}>{tab}</button>
+      <nav className="flex bg-white px-6 border-b border-slate-100 overflow-x-auto no-scrollbar shrink-0">
+        {['questions', 'import', 'tests'].map((tab) => (
+          <button key={tab} onClick={() => setActiveTab(tab as AdminTab)} className={`px-8 py-4 text-[10px] font-bold uppercase tracking-widest whitespace-nowrap transition-all ${activeTab === tab ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50/50' : 'text-slate-400 hover:text-slate-600'}`}>{tab}</button>
         ))}
       </nav>
 
-      <div className="flex-1 overflow-y-auto p-6 no-scrollbar safe-bottom">
+      <div className="flex-1 overflow-y-auto p-6 md:p-10 no-scrollbar safe-bottom">
         {activeTab === 'import' && (
-          <div className="max-w-3xl mx-auto py-10">
+          <div className="max-w-4xl mx-auto py-12">
             {importStatus === 'idle' && (
-              <div className="bg-white p-12 rounded-[2rem] border-4 border-dashed border-slate-200 text-center hover:border-amber-500 transition-all cursor-pointer" onClick={() => fileInputRef.current?.click()}>
-                 <input type="file" ref={fileInputRef} className="hidden" accept=".pdf" onChange={(e) => e.target.files?.[0] && processDocument(e.target.files[0])} />
-                 <h3 className="text-xl font-bold text-slate-950 mb-4 uppercase tracking-tight">AI PDF Batch Import</h3>
-                 <p className="text-xs text-slate-400 mb-8 italic">Upload clinical MCQs directly from study material.</p>
-                 <button className="px-12 py-4 bg-slate-950 text-amber-500 rounded-2xl text-[10px] font-bold uppercase tracking-widest shadow-xl">Select PDF File</button>
+              <div className="bg-white p-20 rounded-[3rem] border-4 border-dashed border-slate-100 text-center hover:border-amber-400 transition-all cursor-pointer" onClick={() => fileInputRef.current?.click()}>
+                 <input type="file" ref={fileInputRef} className="hidden" accept=".pdf" onChange={(e) => e.target.files?.[0] && processPDF(e.target.files[0])} />
+                 <h3 className="text-2xl font-bold text-slate-950 mb-4 uppercase tracking-tight">AI PDF Batch Import</h3>
+                 <p className="text-xs text-slate-400 mb-10 italic">Upload clinical source material to generate MCQ registry entries.</p>
+                 <button className="px-14 py-5 bg-slate-950 text-amber-500 rounded-2xl text-[10px] font-bold uppercase tracking-widest shadow-2xl">Select PDF Document</button>
               </div>
             )}
-            {importStatus === 'parsing' && <div className="text-center py-20 font-bold uppercase text-amber-600 animate-pulse">AI Parsing Document... {importProgress}%</div>}
+            {importStatus === 'parsing' && (
+              <div className="flex flex-col items-center justify-center py-20 text-center animate-in fade-in">
+                <div className="w-16 h-16 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mb-6"></div>
+                <h3 className="text-xl font-bold text-slate-950 uppercase mb-2">Parsing Clinical Dataset</h3>
+                <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest animate-pulse">{importProgress}% Completed</p>
+              </div>
+            )}
             {importStatus === 'review' && (
-              <div className="space-y-6">
-                <div className="bg-slate-950 p-8 rounded-[2rem] border-b-4 border-amber-500 flex justify-between items-center sticky top-0 z-20 shadow-2xl">
-                  <div className="text-white">
-                    <p className="text-lg font-bold uppercase">{stagedQuestions.length} Questions Staged</p>
-                    <p className="text-[10px] text-amber-400 font-bold uppercase tracking-widest">Verify and Commit to Registry</p>
+              <div className="space-y-6 animate-in slide-in-from-bottom-6 duration-500">
+                <div className="bg-slate-950 p-10 rounded-[2.5rem] border-b-8 border-amber-500 flex flex-col md:flex-row justify-between items-center sticky top-0 z-50 shadow-2xl gap-6">
+                  <div className="text-center md:text-left">
+                    <h2 className="text-white text-xl font-bold uppercase">{stagedQuestions.length} Items Extracted</h2>
+                    <p className="text-amber-400 text-[9px] font-bold uppercase tracking-widest">Master Registry Preview</p>
                   </div>
-                  <button onClick={commitImport} disabled={isCommitting} className="px-10 py-4 bg-amber-500 text-slate-950 rounded-xl text-[10px] font-bold uppercase tracking-widest shadow-lg active:scale-95 disabled:opacity-50 transition-all">
-                    {isCommitting ? "Questions are being added, please wait..." : "Commit to Bank"}
+                  <button onClick={confirmAndCommit} disabled={isCommitting} className="px-12 py-5 bg-amber-500 text-slate-950 rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-xl active:scale-95 disabled:bg-slate-800 disabled:text-slate-500 transition-all">
+                    {isCommitting ? "Questions are being added, please wait..." : "Confirm & Commit to Bank"}
                   </button>
                 </div>
                 {stagedQuestions.map((q, i) => (
-                  <div key={i} className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm">
-                    <p className="text-[10px] font-bold text-amber-600 uppercase mb-4 tracking-widest">{q.subject} • {q.topic}</p>
-                    <p className="text-base font-bold text-slate-800 mb-6 leading-relaxed"><ScientificText text={q.text} /></p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div key={i} className="bg-white p-10 rounded-[2.5rem] border border-slate-100 shadow-sm">
+                    <p className="text-[10px] font-bold text-amber-600 uppercase mb-4 tracking-[0.2em]">{q.subject} • {q.topic}</p>
+                    <p className="text-lg font-bold text-slate-900 mb-8 leading-relaxed"><ScientificText text={q.text} /></p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                        {q.options.map((opt, oi) => (
-                         <div key={oi} className={`p-4 rounded-xl text-xs font-bold border ${q.correctAnswerIndex === oi ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-slate-50 border-slate-100 text-slate-500'}`}>
-                           {String.fromCharCode(65 + oi)}. {opt}
+                         <div key={oi} className={`p-5 rounded-2xl text-xs font-bold border transition-all ${q.correctAnswerIndex === oi ? 'bg-emerald-50 border-emerald-300 text-emerald-700' : 'bg-slate-50 border-slate-100 text-slate-400'}`}>
+                           <span className="mr-3 opacity-50">{String.fromCharCode(65 + oi)}.</span> {opt}
                          </div>
                        ))}
                     </div>
@@ -303,64 +316,62 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
         {activeTab === 'questions' && (
           <div className="grid grid-cols-1 xl:grid-cols-4 gap-8">
             <div className="xl:col-span-1">
-              <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm sticky top-4">
+              <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-xl sticky top-4 z-40">
                 <div className="flex justify-between items-center mb-6">
-                  <h3 className="text-lg font-bold text-slate-950 uppercase">{editingId ? 'Edit Question' : 'Manual Entry'}</h3>
-                  {editingId && <button onClick={resetQForm} className="text-[8px] text-red-500 uppercase font-black px-3 py-1 bg-red-50 rounded-full">Cancel Edit</button>}
+                  <h3 className="text-xl font-bold text-slate-950 uppercase tracking-tight">{editingId ? 'Edit Question' : 'Manual Entry'}</h3>
+                  {editingId && <button onClick={resetForm} className="text-[9px] text-red-500 font-black uppercase hover:underline">Cancel</button>}
                 </div>
                 <form onSubmit={handleSaveQuestion} className="space-y-4">
-                  <div className="grid grid-cols-2 gap-2">
-                    <input placeholder="Subject" className="w-full p-4 bg-slate-50 border rounded-2xl text-[10px] font-bold outline-none" value={qSubject} onChange={e => setQSubject(e.target.value)} required />
-                    <input placeholder="Topic" className="w-full p-4 bg-slate-50 border rounded-2xl text-[10px] font-bold outline-none" value={qTopic} onChange={e => setQTopic(e.target.value)} required />
-                  </div>
-                  <textarea placeholder="Clinical Case / Question Text..." className="w-full p-4 bg-slate-50 border rounded-2xl text-xs h-32 outline-none" value={qText} onChange={e => setQText(e.target.value)} required />
+                  <input placeholder="Subject" className="w-full p-4 bg-slate-50 border rounded-2xl text-[10px] font-bold outline-none uppercase tracking-widest" value={qSubject} onChange={e => setQSubject(e.target.value)} required />
+                  <input placeholder="Topic" className="w-full p-4 bg-slate-50 border rounded-2xl text-[10px] font-bold outline-none uppercase tracking-widest" value={qTopic} onChange={e => setQTopic(e.target.value)} required />
+                  <textarea placeholder="Clinical Case Narrative..." className="w-full p-5 bg-slate-50 border rounded-2xl text-sm h-40 outline-none" value={qText} onChange={e => setQText(e.target.value)} required />
                   {qOptions.map((o, i) => (
                     <div key={i} className="flex gap-2">
-                       <input type="radio" name="correct" checked={qCorrect === i} onChange={() => setQCorrect(i)} className="accent-amber-500 w-4" />
-                       <input className="w-full p-3 bg-slate-50 border rounded-xl text-xs outline-none" value={o} placeholder={`Option ${String.fromCharCode(65+i)}`} onChange={e => { const n = [...qOptions]; n[i] = e.target.value; setQOptions(n); }} required />
+                       <input type="radio" checked={qCorrect === i} onChange={() => setQCorrect(i)} className="accent-amber-500 w-4" name="correctChoice" />
+                       <input className="w-full p-4 bg-slate-50 border rounded-2xl text-[10px] font-bold outline-none" value={o} placeholder={`Option ${String.fromCharCode(65+i)}`} onChange={e => { const n = [...qOptions]; n[i] = e.target.value; setQOptions(n); }} required />
                     </div>
                   ))}
-                  <textarea placeholder="Explanation / Rationale (Optional)" className="w-full p-4 bg-slate-50 border rounded-2xl text-xs h-20 outline-none" value={qExplanation} onChange={e => setQExplanation(e.target.value)} />
-                  <button className="w-full py-5 bg-slate-950 text-amber-500 rounded-2xl font-bold uppercase text-[10px] shadow-xl active:scale-95 transition-all">{editingId ? 'Update Registry' : 'Store in Bank'}</button>
+                  <textarea placeholder="Rationale / Explanation" className="w-full p-5 bg-slate-50 border rounded-2xl text-xs h-24 outline-none" value={qExplanation} onChange={e => setQExplanation(e.target.value)} />
+                  <button className="w-full py-5 bg-slate-950 text-amber-500 rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-xl active:scale-95 transition-all">{editingId ? 'Update Registry' : 'Save Entry'}</button>
                 </form>
               </div>
             </div>
             <div className="xl:col-span-3 space-y-6">
-               <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
+               <div className="flex flex-col lg:flex-row gap-4 bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm sticky top-4 z-30">
                   <div className="relative flex-1">
-                    <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-                    <input type="text" placeholder="Search Master Bank (Subject, Topic, Content)..." className="w-full p-4 pl-12 bg-slate-50 border border-slate-100 rounded-2xl text-[10px] font-bold uppercase outline-none focus:ring-2 focus:ring-amber-500" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+                    <svg className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                    <input type="text" placeholder="Search Master Bank (Content, Subject, Topic)..." className="w-full p-5 pl-14 bg-slate-50 border border-slate-100 rounded-2xl text-[10px] font-bold uppercase outline-none focus:ring-4 focus:ring-amber-500/10" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
                   </div>
-                  <button onClick={removeDuplicates} className="px-6 py-4 bg-red-50 text-red-600 border border-red-100 rounded-2xl text-[10px] font-bold uppercase tracking-widest hover:bg-red-100 transition-all flex items-center gap-2">
+                  <button onClick={runDeduplication} className="px-8 py-5 bg-red-50 text-red-600 rounded-2xl text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 hover:bg-red-100 transition-all">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                     Optimize Bank
                   </button>
                </div>
                <div className="space-y-4">
                   {filteredQuestions.length === 0 ? (
-                    <div className="py-20 text-center bg-white rounded-3xl border border-slate-100">
-                      <p className="text-slate-400 font-bold uppercase text-[10px] tracking-widest italic">No clinical entries found matching search.</p>
+                    <div className="py-20 text-center bg-white rounded-[2rem] border-2 border-dashed border-slate-100">
+                      <p className="text-slate-400 font-bold uppercase text-[10px] tracking-widest italic">Registry search returned no matches.</p>
                     </div>
                   ) : (
                     filteredQuestions.map(q => (
-                      <div key={q.id} className="bg-white p-8 rounded-[2rem] border border-slate-100 hover:border-amber-200 transition-all group flex flex-col md:flex-row justify-between items-start gap-6">
+                      <div key={q.id} className="bg-white p-10 rounded-[2.5rem] border border-slate-100 hover:border-amber-200 transition-all group flex flex-col md:flex-row gap-8 items-start relative shadow-sm animate-in fade-in slide-in-from-bottom-2 duration-300">
                         <div className="flex-1">
-                          <p className="text-[9px] font-black text-amber-600 uppercase tracking-[0.2em] mb-3">{q.subject} • {q.topic}</p>
-                          <p className="text-base font-bold text-slate-800 leading-relaxed mb-4"><ScientificText text={q.text} /></p>
-                          <div className="grid grid-cols-2 gap-2 opacity-60 group-hover:opacity-100 transition-opacity">
-                            {q.options.map((o, idx) => (
-                              <div key={idx} className={`text-[10px] font-bold flex items-center gap-2 ${q.correctAnswerIndex === idx ? 'text-emerald-600' : 'text-slate-400'}`}>
-                                <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[8px] ${q.correctAnswerIndex === idx ? 'bg-emerald-500 text-white' : 'bg-slate-100'}`}>{String.fromCharCode(65+idx)}</div>
-                                <span className="truncate">{o}</span>
-                              </div>
-                            ))}
+                          <p className="text-[10px] font-black text-amber-600 uppercase mb-4 tracking-[0.2em]">{q.subject} • {q.topic}</p>
+                          <p className="text-lg font-bold text-slate-800 leading-relaxed mb-6"><ScientificText text={q.text} /></p>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                             {q.options.map((opt, oi) => (
+                               <div key={oi} className={`p-4 rounded-xl text-[10px] font-bold flex items-center gap-3 border ${q.correctAnswerIndex === oi ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-slate-50/50 border-slate-100 text-slate-400'}`}>
+                                  <div className={`w-6 h-6 rounded-lg flex items-center justify-center text-[10px] ${q.correctAnswerIndex === oi ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-400'}`}>{String.fromCharCode(65+oi)}</div>
+                                  <span className="truncate">{opt}</span>
+                               </div>
+                             ))}
                           </div>
                         </div>
-                        <div className="flex md:flex-col gap-2 opacity-0 group-hover:opacity-100 transition-all">
-                          <button onClick={() => handleEditQuestion(q)} className="p-3 bg-slate-900 text-amber-500 rounded-xl hover:bg-slate-800 transition-all" title="Edit Clinical Entry">
+                        <div className="flex md:flex-col gap-2 shrink-0 md:opacity-0 group-hover:opacity-100 transition-all">
+                          <button onClick={() => startEditing(q)} className="p-4 bg-slate-950 text-amber-500 rounded-2xl hover:bg-slate-900 shadow-xl transition-all" title="Edit Clinical Entry">
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 012.828 0L21 4.586a2 2 0 010 2.828l-10 10a2 2 0 01-1.107.554l-3 .5a.5.5 0 01-.58-.58l.5-3a2 2 0 01.554-1.107l10-10z"></path></svg>
                           </button>
-                          <button onClick={() => { if(window.confirm('Delete question?')) deleteDoc(doc(db, 'questions', q.id)) }} className="p-3 bg-red-50 text-red-600 rounded-xl hover:bg-red-100" title="Purge Entry">
+                          <button onClick={() => { if(window.confirm('Delete this clinical entry?')) deleteDoc(doc(db, 'questions', q.id)) }} className="p-4 bg-red-50 text-red-600 rounded-2xl hover:bg-red-100 transition-all" title="Delete Entry">
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                           </button>
                         </div>
@@ -373,42 +384,42 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
         )}
 
         {activeTab === 'tests' && (
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-10">
              <div className="xl:col-span-1">
-                <div className="bg-white p-10 rounded-[2rem] border border-slate-100 shadow-xl sticky top-4">
-                   <h3 className="text-xl font-bold text-slate-950 uppercase tracking-tight mb-8">Deploy Mock Test</h3>
+                <div className="bg-white p-10 rounded-[2.5rem] border border-slate-100 shadow-2xl sticky top-4">
+                   <h3 className="text-2xl font-bold text-slate-950 uppercase tracking-tight mb-8">Deploy Simulation</h3>
                    <form onSubmit={handleCreateTest} className="space-y-4">
-                      <input placeholder="Test Title (e.g. Clinical Pediatrics Mock 1)" className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl text-[10px] font-bold uppercase outline-none focus:ring-2 focus:ring-amber-500" value={testName} onChange={e => setTestName(e.target.value)} required />
-                      <textarea placeholder="Instructions / Description..." className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl text-xs h-32 outline-none focus:ring-2 focus:ring-amber-500" value={testDesc} onChange={e => setTestDesc(e.target.value)} required />
+                      <input placeholder="Simulation Title" className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl text-[10px] font-bold uppercase outline-none focus:ring-2 focus:ring-amber-500" value={testName} onChange={e => setTestName(e.target.value)} required />
+                      <textarea placeholder="Instructions for Candidates..." className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl text-xs h-32 outline-none focus:ring-2 focus:ring-amber-500" value={testDesc} onChange={e => setTestDesc(e.target.value)} required />
                       <div className="flex items-center gap-4 bg-slate-50 p-5 rounded-2xl border border-slate-100">
-                        <span className="text-[10px] font-bold uppercase text-slate-400">Timer (Minutes)</span>
-                        <input type="number" className="bg-transparent font-bold w-16 text-center text-lg" value={testDuration} onChange={e => setTestDuration(parseInt(e.target.value))} />
+                        <span className="text-[10px] font-bold uppercase text-slate-400">Duration (Mins)</span>
+                        <input type="number" className="bg-transparent font-bold w-16 text-center text-xl" value={testDuration} onChange={e => setTestDuration(parseInt(e.target.value))} />
                       </div>
                       <div className="bg-slate-950 p-6 rounded-2xl text-amber-500 flex justify-between items-center shadow-inner">
                         <span className="text-[10px] font-black uppercase tracking-widest">Selected Items</span>
-                        <span className="text-2xl font-bold">{testSelectedQuestions.length}</span>
+                        <span className="text-3xl font-bold">{testSelectedQuestions.length}</span>
                       </div>
-                      <button className="w-full py-6 bg-slate-950 text-amber-500 rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-2xl active:scale-95 transition-all">Deploy Clinical Test</button>
+                      <button className="w-full py-6 bg-slate-950 text-amber-500 rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-2xl active:scale-95 transition-all">Publish Simulation</button>
                    </form>
                 </div>
              </div>
              <div className="xl:col-span-2">
-                <div className="bg-white p-10 rounded-[2rem] border border-slate-100 shadow-sm flex flex-col h-[800px]">
-                   <h3 className="text-xl font-bold text-slate-950 uppercase tracking-tight mb-8">Selector Matrix</h3>
+                <div className="bg-white p-10 rounded-[2.5rem] border border-slate-100 shadow-sm flex flex-col h-[800px]">
+                   <h3 className="text-xl font-bold text-slate-950 uppercase tracking-tight mb-6">Selector Matrix</h3>
                    <div className="relative mb-6">
-                    <input type="text" placeholder="Search Bank for specific questions..." className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl text-[10px] font-bold uppercase outline-none focus:ring-2 focus:ring-amber-500" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+                    <input type="text" placeholder="Filter questions by content..." className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl text-[10px] font-bold uppercase outline-none focus:ring-2 focus:ring-amber-500" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
                    </div>
-                   <div className="flex-1 overflow-y-auto no-scrollbar space-y-3">
+                   <div className="flex-1 overflow-y-auto no-scrollbar space-y-3 pr-2">
                       {filteredQuestions.map(q => {
                         const isSelected = testSelectedQuestions.includes(q.id);
                         return (
-                          <div key={q.id} onClick={() => setTestSelectedQuestions(prev => isSelected ? prev.filter(id => id !== q.id) : [...prev, q.id])} className={`p-5 border-2 rounded-2xl cursor-pointer transition-all flex justify-between items-center gap-6 ${isSelected ? 'bg-amber-50 border-amber-500 shadow-md ring-4 ring-amber-500/5' : 'bg-white border-slate-100 hover:border-slate-300'}`}>
+                          <div key={q.id} onClick={() => setTestSelectedQuestions(prev => isSelected ? prev.filter(id => id !== q.id) : [...prev, q.id])} className={`p-5 border-2 rounded-2xl cursor-pointer transition-all flex justify-between items-center gap-6 ${isSelected ? 'bg-amber-50 border-amber-500 shadow-md ring-4 ring-amber-500/10' : 'bg-white border-slate-100 hover:border-slate-200'}`}>
                              <div className="flex-1">
                                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">{q.subject} • {q.topic}</p>
                                 <p className="text-sm font-bold text-slate-800 line-clamp-2 leading-relaxed"><ScientificText text={q.text} /></p>
                              </div>
-                             <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all ${isSelected ? 'bg-amber-500 border-amber-500 text-slate-950' : 'border-slate-100 text-transparent'}`}>
-                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path></svg>
+                             <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all ${isSelected ? 'bg-amber-500 border-amber-500 text-slate-950 shadow-sm' : 'border-slate-100 text-transparent'}`}>
+                               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path></svg>
                              </div>
                           </div>
                         );
