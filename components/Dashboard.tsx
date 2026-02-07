@@ -22,7 +22,6 @@ const LeaderboardModal: React.FC<{ test: MockTest, onClose: () => void }> = ({ t
     const fetchTop = async () => {
       setLoading(true);
       try {
-        // Fetch all results for this test. Filtering on client prevents index errors.
         const q = query(
           collection(db, 'results'), 
           where('testId', '==', test.id)
@@ -30,14 +29,21 @@ const LeaderboardModal: React.FC<{ test: MockTest, onClose: () => void }> = ({ t
         const snap = await getDocs(q);
         const results = snap.docs.map(d => ({ ...d.data(), id: d.id } as ExamResult));
         
-        // Sort results by score locally
-        const sorted = results
+        // Only keep the first attempt per user
+        const userFirstAttempts: Record<string, ExamResult> = {};
+        results.forEach(res => {
+          if (!userFirstAttempts[res.userId] || new Date(res.completedAt) < new Date(userFirstAttempts[res.userId].completedAt)) {
+            userFirstAttempts[res.userId] = res;
+          }
+        });
+
+        const sorted = Object.values(userFirstAttempts)
           .sort((a, b) => b.score - a.score)
           .slice(0, 10);
           
         setTopScores(sorted);
       } catch (err) {
-        console.error("Leaderboard failed:", err);
+        console.error("Leaderboard fetch failed:", err);
       } finally {
         setLoading(false);
       }
@@ -47,22 +53,22 @@ const LeaderboardModal: React.FC<{ test: MockTest, onClose: () => void }> = ({ t
 
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm safe-top safe-bottom">
-      <div className="w-full max-w-lg bg-white rounded-[2rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-        <div className="bg-slate-900 p-8 text-center relative border-b-4 border-amber-500">
+      <div className="w-full max-w-lg bg-white rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 border-4 border-amber-500">
+        <div className="bg-slate-900 p-8 text-center relative">
           <button onClick={onClose} className="absolute top-6 right-6 text-slate-500 hover:text-white transition-colors">
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
           </button>
-          <p className="text-amber-500 text-[9px] font-bold uppercase tracking-[0.3em] mb-2">Leaderboard</p>
+          <p className="text-amber-500 text-[9px] font-bold uppercase tracking-[0.3em] mb-2">Student Rankings (First Attempts)</p>
           <h2 className="text-xl font-bold text-white uppercase tracking-tight">{test.name}</h2>
         </div>
         <div className="p-8 max-h-[60vh] overflow-y-auto no-scrollbar">
           {loading ? (
             <div className="flex flex-col items-center justify-center py-10">
               <div className="w-8 h-8 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Loading List...</p>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Loading Rankings...</p>
             </div>
           ) : topScores.length === 0 ? (
-            <p className="text-center py-10 text-slate-400 font-bold text-[10px] uppercase tracking-widest">No results yet</p>
+            <p className="text-center py-10 text-slate-400 font-bold text-[10px] uppercase tracking-widest">No rankings recorded yet</p>
           ) : (
             <div className="space-y-3">
               {topScores.map((res, i) => (
@@ -91,6 +97,7 @@ const LeaderboardModal: React.FC<{ test: MockTest, onClose: () => void }> = ({ t
 const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onStartTest, onReviewResult, onReturnToAdmin }) => {
   const [tests, setTests] = useState<MockTest[]>([]);
   const [history, setHistory] = useState<ExamResult[]>([]);
+  const [allResults, setAllResults] = useState<ExamResult[]>([]);
   const [loading, setLoading] = useState(true);
   const [showLeaderboard, setShowLeaderboard] = useState<MockTest | null>(null);
 
@@ -107,7 +114,12 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onStartTest, onRe
         .sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime()));
     });
 
-    return () => { unsubTests(); unsubResults(); };
+    const allResultsQuery = query(collection(db, 'results'));
+    const unsubAllResults = onSnapshot(allResultsQuery, (snapshot) => {
+      setAllResults(snapshot.docs.map(d => d.data() as ExamResult));
+    });
+
+    return () => { unsubTests(); unsubResults(); unsubAllResults(); };
   }, [user.id]);
 
   const stats = useMemo(() => {
@@ -120,17 +132,32 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onStartTest, onRe
     };
   }, [history]);
 
+  const activeUsersToday = useMemo(() => {
+    const today = new Date().toDateString();
+    const uniqueUsers = new Set(allResults.filter(r => new Date(r.completedAt).toDateString() === today).map(r => r.userId));
+    return uniqueUsers.size;
+  }, [allResults]);
+
+  const getTakenCount = (testId: string) => {
+    return allResults.filter(r => r.testId === testId).length;
+  };
+
   if (loading) {
     return (
       <div className="h-full w-full flex flex-col items-center justify-center bg-slate-50 safe-top safe-bottom">
         <img src={logo} className="w-16 h-16 animate-pulse mb-4" alt="Loading" />
-        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.4em]">Loading Dashboard...</p>
+        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.4em]">Syncing Student Portal...</p>
       </div>
     );
   }
 
   return (
     <div className="flex-1 w-full bg-slate-50 flex flex-col overflow-hidden relative">
+      <div className="bg-slate-950 text-amber-500 py-2 px-6 flex justify-between items-center text-[8px] font-black uppercase tracking-[0.3em] shrink-0">
+         <span>Platform Status: Operational</span>
+         <span>Candidates Active Today: {activeUsersToday}</span>
+      </div>
+
       {showLeaderboard && <LeaderboardModal test={showLeaderboard} onClose={() => setShowLeaderboard(null)} />}
 
       <div className="max-w-6xl mx-auto w-full flex-1 overflow-y-auto no-scrollbar p-4 md:p-8 safe-top safe-bottom">
@@ -141,7 +168,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onStartTest, onRe
               <h1 className="text-xl font-bold text-slate-950 uppercase tracking-tight leading-none">
                 Aureus Medicos
               </h1>
-              <p className="text-amber-600 text-[9px] tracking-widest font-bold uppercase mt-1">Student Area</p>
+              <p className="text-amber-600 text-[9px] tracking-widest font-bold uppercase mt-1">Student Dashboard</p>
             </div>
           </div>
           <div className="flex gap-2 w-full md:w-auto">
@@ -153,16 +180,16 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onStartTest, onRe
         </div>
 
         <div className="grid grid-cols-3 gap-3 md:gap-6 mb-12">
-          <div className="bg-white p-6 rounded-[1.5rem] shadow-sm border border-slate-100 flex flex-col items-center">
-            <span className="text-slate-400 text-[8px] md:text-[9px] font-bold uppercase tracking-widest mb-2">Average</span>
+          <div className="bg-white p-6 rounded-[1.5rem] shadow-sm border border-slate-100 flex flex-col items-center text-center">
+            <span className="text-slate-400 text-[8px] md:text-[9px] font-bold uppercase tracking-widest mb-2">Average Score</span>
             <span className="text-xl md:text-3xl font-bold text-slate-900">{stats.avgScore}%</span>
           </div>
-          <div className="bg-white p-6 rounded-[1.5rem] shadow-sm border border-slate-100 flex flex-col items-center">
-            <span className="text-amber-600 text-[8px] md:text-[9px] font-bold uppercase tracking-widest mb-2">Best</span>
+          <div className="bg-white p-6 rounded-[1.5rem] shadow-sm border border-slate-100 flex flex-col items-center text-center">
+            <span className="text-amber-600 text-[8px] md:text-[9px] font-bold uppercase tracking-widest mb-2">Top Score</span>
             <span className="text-xl md:text-3xl font-bold text-amber-500">{stats.highestScore}%</span>
           </div>
-          <div className="bg-white p-6 rounded-[1.5rem] shadow-sm border border-slate-100 flex flex-col items-center">
-            <span className="text-slate-400 text-[8px] md:text-[9px] font-bold uppercase tracking-widest mb-2">Tests</span>
+          <div className="bg-white p-6 rounded-[1.5rem] shadow-sm border border-slate-100 flex flex-col items-center text-center">
+            <span className="text-slate-400 text-[8px] md:text-[9px] font-bold uppercase tracking-widest mb-2">Tests Taken</span>
             <span className="text-xl md:text-3xl font-bold text-slate-900">{stats.totalTaken}</span>
           </div>
         </div>
@@ -171,28 +198,34 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onStartTest, onRe
           <div className="lg:col-span-2 space-y-10">
             <section>
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-bold text-slate-900 uppercase tracking-tight">Available Tests</h2>
-                <span className="bg-amber-100 text-amber-700 text-[10px] font-bold px-3 py-1 rounded-full">{tests.length} Active</span>
+                <h2 className="text-xl font-bold text-slate-900 uppercase tracking-tight">Active Tests</h2>
+                <span className="bg-slate-100 text-slate-500 text-[10px] font-bold px-3 py-1 rounded-full uppercase">{tests.length} available</span>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {tests.map(test => (
-                  <div key={test.id} className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-100 hover:border-amber-200 transition-all group flex flex-col relative overflow-hidden">
-                    <h3 className="font-bold text-lg text-slate-900 mb-2 group-hover:text-amber-600 transition-colors uppercase tracking-tight">{test.name}</h3>
-                    <p className="text-[10px] text-slate-400 mb-6 line-clamp-3 font-medium flex-1 italic">{test.description}</p>
-                    <div className="flex flex-wrap gap-2 text-[8px] font-bold uppercase tracking-widest mb-8">
-                       <span className="bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-full text-slate-500">{test.totalDurationSeconds / 60} min</span>
-                       <button onClick={(e) => { e.stopPropagation(); setShowLeaderboard(test); }} className="bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-full text-amber-600 hover:bg-amber-500 hover:text-white transition-all">
-                         Ranking
-                       </button>
+                {tests.map(test => {
+                  const takenBy = getTakenCount(test.id);
+                  return (
+                    <div key={test.id} className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-100 hover:border-amber-200 transition-all group flex flex-col relative overflow-hidden">
+                      <div className="flex justify-between items-start mb-2">
+                        <h3 className="font-bold text-lg text-slate-900 group-hover:text-amber-600 transition-colors uppercase tracking-tight">{test.name}</h3>
+                        <span className="bg-amber-50 text-amber-600 text-[8px] font-bold px-2 py-1 rounded-md uppercase">Taken By {takenBy}</span>
+                      </div>
+                      <p className="text-[10px] text-slate-400 mb-6 line-clamp-3 font-medium flex-1 italic leading-relaxed">{test.description}</p>
+                      <div className="flex flex-wrap gap-2 text-[8px] font-bold uppercase tracking-widest mb-8">
+                         <span className="bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-full text-slate-500">{test.totalDurationSeconds / 60} Minutes</span>
+                         <button onClick={(e) => { e.stopPropagation(); setShowLeaderboard(test); }} className="bg-amber-500 text-slate-950 px-4 py-1.5 rounded-full hover:bg-amber-600 transition-all shadow-md">
+                           Rankings
+                         </button>
+                      </div>
+                      <button onClick={() => onStartTest(test)} className="w-full py-4 bg-slate-950 text-amber-500 rounded-2xl font-bold uppercase tracking-widest text-[10px] transition-all active:scale-95 shadow-lg">Begin Test</button>
                     </div>
-                    <button onClick={() => onStartTest(test)} className="w-full py-4 bg-slate-950 text-amber-500 rounded-2xl font-bold uppercase tracking-widest text-[10px] transition-all active:scale-95 shadow-lg">Start Test</button>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </section>
           </div>
           <aside className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-200 h-fit">
-            <h2 className="text-lg font-bold mb-8 text-slate-950 uppercase tracking-tight text-center">My History</h2>
+            <h2 className="text-lg font-bold mb-8 text-slate-950 uppercase tracking-tight text-center">Your Performance</h2>
             <div className="space-y-4">
               {history.map(item => (
                 <div key={item.id} className="p-5 bg-slate-50 rounded-xl border border-slate-100 hover:border-amber-200 transition-all group">
@@ -202,10 +235,11 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onStartTest, onRe
                   </div>
                   <div className="flex justify-between items-center">
                      <span className="text-[8px] text-slate-400 font-bold uppercase">{new Date(item.completedAt).toLocaleDateString()}</span>
-                     <button onClick={() => onReviewResult(item)} className="text-[8px] font-bold text-amber-600 uppercase tracking-widest hover:underline">Review</button>
+                     <button onClick={() => onReviewResult(item)} className="text-[8px] font-bold text-amber-600 uppercase tracking-widest hover:underline">Review Questions</button>
                   </div>
                 </div>
               ))}
+              {history.length === 0 && <p className="text-center text-[10px] font-bold text-slate-300 uppercase py-10">No tests completed yet.</p>}
             </div>
           </aside>
         </div>

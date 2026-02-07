@@ -7,7 +7,8 @@ export interface User {
   email: string;
   password?: string;
   role: UserRole;
-  title?: string; // e.g. "Content Manager"
+  title?: string;
+  emailVerified?: boolean;
 }
 
 export interface Question {
@@ -45,7 +46,7 @@ export interface MockTest {
 export interface ExamResult {
   id: string;
   userId: string;
-  userName: string; // Added for leaderboard
+  userName: string;
   testId: string;
   testName: string;
   score: number;
@@ -60,4 +61,4 @@ export interface ExamResult {
   }[];
 }
 
-export type ViewState = 'auth' | 'dashboard' | 'exam' | 'admin' | 'root-admin' | 'results' | 'review';
+export type ViewState = 'auth' | 'verify-email' | 'dashboard' | 'exam' | 'admin' | 'root-admin' | 'results' | 'review';

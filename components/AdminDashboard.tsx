@@ -1,8 +1,8 @@
 
-import React, { useState, useEffect, useRef } from 'react';
-import { User, Question } from '../types';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { User, Question, MockTest } from '../types';
 import { db } from '../firebase';
-import { collection, addDoc, getDocs, deleteDoc, doc, query, orderBy, updateDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+import { collection, addDoc, getDocs, deleteDoc, doc, query, orderBy, updateDoc, onSnapshot, writeBatch } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import { GoogleGenAI, Type } from '@google/genai';
 import ScientificText from './ScientificText';
 import logo from '../assets/logo.png';
@@ -15,17 +15,23 @@ interface AdminDashboardProps {
 }
 
 type AdminTab = 'questions' | 'tests' | 'approvals' | 'import';
+type StagedQuestion = Omit<Question, 'id' | 'createdAt' | 'createdBy'>;
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'questions', onLogout, onSwitchToStudent }) => {
   const [activeTab, setActiveTab] = useState<AdminTab>(initialTab);
   const [questions, setQuestions] = useState<Question[]>([]);
+  const [tests, setTests] = useState<MockTest[]>([]);
   const [loading, setLoading] = useState(false);
+  const [isCommitting, setIsCommitting] = useState(false);
+  const [expandedTopics, setExpandedTopics] = useState<Record<string, boolean>>({});
+  const [searchQuery, setSearchQuery] = useState('');
   
   const [importStatus, setImportStatus] = useState<'idle' | 'parsing' | 'review'>('idle');
   const [importProgress, setImportProgress] = useState(0);
-  const [stagedQuestions, setStagedQuestions] = useState<Omit<Question, 'id' | 'createdAt' | 'createdBy'>[]>([]);
+  const [stagedQuestions, setStagedQuestions] = useState<StagedQuestion[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Question Form State
   const [editingId, setEditingId] = useState<string | null>(null);
   const [qSubject, setQSubject] = useState('');
   const [qTopic, setQTopic] = useState('');
@@ -34,45 +40,91 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
   const [qCorrect, setQCorrect] = useState(0);
   const [qExplanation, setQExplanation] = useState('');
 
-  const fetchData = async () => {
+  // Test Form State
+  const [testName, setTestName] = useState('');
+  const [testDesc, setTestDesc] = useState('');
+  const [testDuration, setTestDuration] = useState(60);
+  const [testSelectedQuestions, setTestSelectedQuestions] = useState<string[]>([]);
+
+  useEffect(() => {
+    const unsubQ = onSnapshot(query(collection(db, 'questions'), orderBy('createdAt', 'desc')), (snap) => {
+      setQuestions(snap.docs.map(d => ({ ...d.data(), id: d.id } as Question)));
+    });
+    const unsubT = onSnapshot(collection(db, 'tests'), (snap) => {
+      setTests(snap.docs.map(d => ({ ...d.data(), id: d.id } as MockTest)));
+    });
+    return () => { unsubQ(); unsubT(); };
+  }, []);
+
+  const filteredQuestions = useMemo(() => {
+    if (!searchQuery) return questions;
+    const lowSearch = searchQuery.toLowerCase();
+    return questions.filter(q => 
+      q.text.toLowerCase().includes(lowSearch) || 
+      q.subject.toLowerCase().includes(lowSearch) || 
+      q.topic.toLowerCase().includes(lowSearch)
+    );
+  }, [questions, searchQuery]);
+
+  const groupedQuestions = useMemo(() => {
+    const groups: Record<string, Question[]> = {};
+    filteredQuestions.forEach(q => {
+      const topic = q.topic || 'General';
+      if (!groups[topic]) groups[topic] = [];
+      groups[topic].push(q);
+    });
+    return groups;
+  }, [filteredQuestions]);
+
+  const removeDuplicates = async () => {
+    if (!window.confirm("Search and delete identical questions from the bank?")) return;
     setLoading(true);
-    try {
-      const qSnap = await getDocs(query(collection(db, 'questions'), orderBy('createdAt', 'desc')));
-      setQuestions(qSnap.docs.map(d => ({ ...d.data(), id: d.id } as Question)));
-    } catch (err) {
-      console.error("Database fetch error:", err);
-    } finally {
-      setLoading(false);
+    const seen = new Map<string, string>(); // text -> id
+    const toDelete: string[] = [];
+    
+    questions.forEach(q => {
+      const normalizedText = q.text.toLowerCase().trim();
+      if (seen.has(normalizedText)) {
+        toDelete.push(q.id);
+      } else {
+        seen.set(normalizedText, q.id);
+      }
+    });
+
+    if (toDelete.length === 0) {
+      alert("No duplicate questions found.");
+    } else {
+      const batch = writeBatch(db);
+      toDelete.forEach(id => batch.delete(doc(db, 'questions', id)));
+      await batch.commit();
+      alert(`Deleted ${toDelete.length} duplicate questions.`);
     }
+    setLoading(false);
   };
 
-  useEffect(() => { fetchData(); }, []);
+  const toggleTopic = (topic: string) => {
+    setExpandedTopics(prev => ({ ...prev, [topic]: !prev[topic] }));
+  };
 
   const processDocument = async (file: File) => {
     setImportStatus('parsing');
     setImportProgress(10);
-    
     try {
       const reader = new FileReader();
       const base64Promise = new Promise<string>((resolve, reject) => {
-        reader.onload = () => {
-          const result = reader.result as string;
-          resolve(result.split(',')[1]);
-        };
+        reader.onload = () => resolve((reader.result as string).split(',')[1]);
         reader.onerror = reject;
         reader.readAsDataURL(file);
       });
-      
       const base64Data = await base64Promise;
       setImportProgress(30);
-
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: {
           parts: [
             { inlineData: { mimeType: 'application/pdf', data: base64Data } },
-            { text: "Extract all Multiple Choice Questions from this medical document. For every question, identify: 1. Subject (e.g. Surgery), 2. Topic, 3. Question text, 4. Four options, 5. The correct answer (0-3), 6. A detailed explanation. Format the output as a JSON array of objects. Be thorough and capture as many questions as possible." }
+            { text: "Extract medical MCQs as JSON array: subject, topic, text, options(4), correctAnswerIndex(0-3), explanation." }
           ]
         },
         config: {
@@ -94,75 +146,77 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
           },
         },
       });
-
-      const textOutput = response.text;
-      if (!textOutput || textOutput === "[]") {
-        throw new Error("The AI couldn't find any questions in this file.");
-      }
-      
-      const data = JSON.parse(textOutput);
+      setStagedQuestions(JSON.parse(response.text) as StagedQuestion[]);
       setImportProgress(100);
-      setStagedQuestions(data);
       setTimeout(() => setImportStatus('review'), 500);
-    } catch (err: any) {
-      console.error("PDF Processing Error:", err);
-      alert(err.message || "We couldn't read questions from this PDF. Please try a different file or ensure the text is selectable.");
+    } catch (err) {
+      alert("Error parsing PDF.");
       setImportStatus('idle');
-      setImportProgress(0);
     }
   };
 
   const commitImport = async () => {
-    setLoading(true);
+    if (!window.confirm(`Are you sure you want to add ${stagedQuestions.length} questions to the bank?`)) return;
+    setIsCommitting(true);
     try {
-      for (const q of stagedQuestions) {
-        await addDoc(collection(db, 'questions'), { 
-          ...q, 
-          createdBy: user.id, 
-          createdAt: new Date().toISOString() 
-        });
-      }
-      setStagedQuestions([]); 
-      setImportStatus('idle'); 
-      fetchData();
-    } catch (err) { 
-      alert("Error saving questions to database."); 
-    } finally { 
-      setLoading(false); 
+      const batch = writeBatch(db);
+      stagedQuestions.forEach(q => {
+        const newRef = doc(collection(db, 'questions'));
+        batch.set(newRef, { ...q, createdBy: user.id, createdAt: new Date().toISOString() });
+      });
+      await batch.commit();
+      setStagedQuestions([]);
+      setImportStatus('idle');
+      alert("Successfully committed.");
+    } catch (err) {
+      alert("Error committing questions.");
+    } finally {
+      setIsCommitting(false);
     }
   };
 
-  const handleAddOrUpdateQuestion = async (e: React.FormEvent) => {
+  const handleSaveQuestion = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     const qData = {
-      subject: qSubject || 'General', 
-      topic: qTopic || 'General', 
-      text: qText, 
-      options: qOptions,
-      correctAnswerIndex: qCorrect, 
-      explanation: qExplanation, 
-      updatedAt: new Date().toISOString()
+      subject: qSubject || 'General', topic: qTopic || 'General',
+      text: qText, options: qOptions, correctAnswerIndex: qCorrect, explanation: qExplanation,
     };
     try {
-      if (editingId) { 
-        await updateDoc(doc(db, 'questions', editingId), qData); 
-      } else { 
-        await addDoc(collection(db, 'questions'), { 
-          ...qData, 
-          createdBy: user.id, 
-          createdAt: new Date().toISOString() 
-        }); 
+      if (editingId) {
+        await updateDoc(doc(db, 'questions', editingId), { ...qData, updatedAt: new Date().toISOString() });
+      } else {
+        await addDoc(collection(db, 'questions'), { ...qData, createdBy: user.id, createdAt: new Date().toISOString() });
       }
-      setEditingId(null); 
-      setQText(''); 
-      setQOptions(['','','','']); 
-      fetchData();
-    } catch (err) { 
-      alert("Error saving question."); 
-    } finally { 
-      setLoading(false); 
-    }
+      resetQForm();
+    } catch (err) { alert("Save error."); }
+    finally { setLoading(false); }
+  };
+
+  const resetQForm = () => {
+    setEditingId(null); setQSubject(''); setQTopic(''); setQText(''); setQOptions(['','','','']); setQCorrect(0); setQExplanation('');
+  };
+
+  const handleEditQuestion = (q: Question) => {
+    setEditingId(q.id); setQSubject(q.subject); setQTopic(q.topic); setQText(q.text); setQOptions(q.options); setQCorrect(q.correctAnswerIndex); setQExplanation(q.explanation || '');
+    setActiveTab('questions');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleCreateTest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (testSelectedQuestions.length === 0) return alert("Select at least 1 question.");
+    setLoading(true);
+    try {
+      await addDoc(collection(db, 'tests'), {
+        name: testName, description: testDesc, totalDurationSeconds: testDuration * 60,
+        sections: [{ id: 'main', name: 'Main Section', questionIds: testSelectedQuestions, marksPerQuestion: 1 }],
+        allowRetake: true, createdBy: user.id, creatorName: user.name, isApproved: true, createdAt: new Date().toISOString()
+      });
+      setTestName(''); setTestDesc(''); setTestSelectedQuestions([]);
+      alert("Test Created!");
+    } catch (err) { alert("Error creating test."); }
+    finally { setLoading(false); }
   };
 
   return (
@@ -172,125 +226,137 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
           <img src={logo} className="w-12 h-12" alt="Logo" />
           <div>
             <h1 className="text-xl font-bold text-slate-900 uppercase tracking-tight leading-none">Admin Panel</h1>
-            <p className="text-[9px] font-bold text-amber-600 uppercase tracking-widest mt-1">Manage Content</p>
+            <p className="text-[9px] font-bold text-amber-600 uppercase tracking-widest mt-1">Full Content Governance</p>
           </div>
         </div>
         <div className="flex gap-2">
-          <button onClick={onSwitchToStudent} className="px-5 py-2.5 text-[10px] font-bold text-slate-600 border border-slate-200 rounded-xl uppercase tracking-widest hover:bg-slate-50 transition-all">Go to Student View</button>
+          <button onClick={onSwitchToStudent} className="px-5 py-2.5 text-[10px] font-bold text-slate-600 border border-slate-200 rounded-xl uppercase tracking-widest hover:bg-slate-50 transition-all">Student View</button>
           <button onClick={onLogout} className="px-5 py-2.5 text-[10px] font-bold text-red-600 border border-red-50 rounded-xl uppercase tracking-widest hover:bg-red-50 transition-all">Logout</button>
         </div>
       </div>
 
       <nav className="flex bg-white px-6 border-b border-slate-100 overflow-x-auto no-scrollbar">
-        {[
-          { id: 'questions', label: 'All Questions' },
-          { id: 'import', label: 'Import PDF' },
-          { id: 'tests', label: 'Manage Tests' },
-          { id: 'approvals', label: 'Queue' }
-        ].map((tab) => (
-          <button 
-            key={tab.id} 
-            onClick={() => setActiveTab(tab.id as AdminTab)} 
-            className={`relative px-6 py-4 text-[9px] font-bold uppercase tracking-widest whitespace-nowrap transition-all ${activeTab === tab.id ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50/50' : 'text-slate-400 hover:text-slate-600'}`}
-          >
-            {tab.label}
-          </button>
+        {['questions', 'import', 'tests', 'approvals'].map((tab) => (
+          <button key={tab} onClick={() => setActiveTab(tab as AdminTab)} className={`px-6 py-4 text-[9px] font-bold uppercase tracking-widest whitespace-nowrap transition-all ${activeTab === tab ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50/50' : 'text-slate-400 hover:text-slate-600'}`}>{tab}</button>
         ))}
       </nav>
 
       <div className="flex-1 overflow-y-auto p-6 no-scrollbar safe-bottom">
         {activeTab === 'import' && (
-          <div className="max-w-3xl mx-auto py-10 px-4">
+          <div className="max-w-3xl mx-auto py-10">
             {importStatus === 'idle' && (
-              <div className="bg-white p-12 rounded-[2rem] border-4 border-dashed border-slate-200 text-center hover:border-amber-500 transition-all cursor-pointer group" onClick={() => fileInputRef.current?.click()}>
+              <div className="bg-white p-12 rounded-[2rem] border-4 border-dashed border-slate-200 text-center hover:border-amber-500 transition-all cursor-pointer" onClick={() => fileInputRef.current?.click()}>
                  <input type="file" ref={fileInputRef} className="hidden" accept=".pdf" onChange={(e) => e.target.files?.[0] && processDocument(e.target.files[0])} />
-                 <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-8 group-hover:bg-amber-50 transition-colors">
-                    <svg className="w-10 h-10 text-slate-300 group-hover:text-amber-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
-                 </div>
-                 <h3 className="text-xl font-bold text-slate-950 mb-4 uppercase tracking-tight">Extract Questions from PDF</h3>
-                 <p className="text-xs text-slate-400 mb-10 italic leading-relaxed">Upload a PDF file. The AI will look for Multiple Choice Questions and format them automatically.</p>
-                 <button className="px-12 py-4 bg-slate-950 text-amber-500 rounded-2xl text-[10px] font-bold uppercase tracking-widest shadow-xl hover:bg-slate-900 transition-all">Select PDF File</button>
+                 <h3 className="text-xl font-bold text-slate-950 mb-4 uppercase tracking-tight">AI PDF Batch Import</h3>
+                 <p className="text-xs text-slate-400 mb-8 italic">Upload MCQs from clinical PDFs.</p>
+                 <button className="px-12 py-4 bg-slate-950 text-amber-500 rounded-2xl text-[10px] font-bold uppercase tracking-widest shadow-xl">Select PDF File</button>
               </div>
             )}
-            
-            {importStatus === 'parsing' && (
-              <div className="bg-white p-12 rounded-[2rem] shadow-2xl text-center border border-slate-100 animate-in fade-in zoom-in-95 duration-500">
-                <div className="w-24 h-24 bg-slate-50 rounded-2xl mx-auto mb-10 flex items-center justify-center relative overflow-hidden">
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <span className="text-lg font-bold text-slate-950 z-10">{importProgress}%</span>
-                  </div>
-                  <div className="absolute bottom-0 left-0 w-full bg-amber-500 transition-all duration-700 ease-out" style={{ height: `${importProgress}%` }}></div>
-                </div>
-                <h3 className="text-lg font-bold text-slate-950 mb-3 uppercase tracking-tight">Reading PDF...</h3>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest animate-pulse h-4">Extracting question data</p>
-              </div>
-            )}
-
+            {importStatus === 'parsing' && <div className="text-center py-20 font-bold uppercase text-amber-600 animate-pulse">AI is reading document... {importProgress}%</div>}
             {importStatus === 'review' && (
-              <div className="space-y-6 animate-in slide-in-from-bottom-6 duration-500">
-                <div className="flex flex-col md:flex-row justify-between items-center bg-slate-950 p-8 rounded-[2rem] shadow-2xl sticky top-4 z-10 gap-4 border-b-4 border-amber-500">
-                  <div className="text-center md:text-left">
-                    <h3 className="text-lg font-bold text-white uppercase tracking-tight">Review Results</h3>
-                    <p className="text-[9px] font-bold text-amber-400 uppercase tracking-widest">{stagedQuestions.length} Questions found</p>
-                  </div>
-                  <button onClick={commitImport} className="w-full md:w-auto px-10 py-4 bg-amber-500 text-slate-950 rounded-xl text-[10px] font-bold uppercase tracking-widest shadow-lg hover:bg-amber-400 transition-all">Save All to Database</button>
+              <div className="space-y-6">
+                <div className="bg-slate-950 p-8 rounded-[2rem] border-b-4 border-amber-500 flex justify-between items-center sticky top-0 z-20">
+                  <div className="text-white"><p className="text-lg font-bold uppercase">{stagedQuestions.length} Items Detected</p></div>
+                  <button onClick={commitImport} disabled={isCommitting} className="px-10 py-4 bg-amber-500 text-slate-950 rounded-xl text-[10px] font-bold uppercase tracking-widest shadow-lg">
+                    {isCommitting ? "Questions are being added, please wait..." : "Commit to Bank"}
+                  </button>
                 </div>
-                <div className="grid grid-cols-1 gap-6">
-                  {stagedQuestions.map((q, i) => (
-                    <div key={i} className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm hover:border-amber-200 transition-all group">
-                      <div className="flex justify-between items-center mb-6">
-                         <span className="text-[8px] font-bold bg-slate-100 text-slate-400 px-3 py-1 rounded-full uppercase tracking-widest">{q.subject}</span>
-                         <span className="text-[8px] font-bold text-amber-600 uppercase tracking-widest">{q.topic}</span>
-                      </div>
-                      <p className="text-sm font-bold text-slate-800 mb-8 leading-relaxed"><ScientificText text={q.text} /></p>
-                    </div>
-                  ))}
-                </div>
+                {stagedQuestions.map((q, i) => (
+                  <div key={i} className="bg-white p-6 rounded-2xl border border-slate-100"><p className="text-sm font-bold text-slate-800"><ScientificText text={q.text} /></p></div>
+                ))}
               </div>
             )}
           </div>
         )}
 
         {activeTab === 'questions' && (
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-10">
+          <div className="grid grid-cols-1 xl:grid-cols-4 gap-8">
             <div className="xl:col-span-1">
-              <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-100 sticky top-4">
-                <h3 className="text-lg font-bold text-slate-950 mb-6 uppercase tracking-tight">New Question</h3>
-                <form onSubmit={handleAddOrUpdateQuestion} className="space-y-4">
-                  <div className="grid grid-cols-2 gap-3">
-                    <input placeholder="Subject" className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl text-[10px] font-bold uppercase outline-none focus:ring-2 focus:ring-amber-500" value={qSubject} onChange={e => setQSubject(e.target.value)} required />
-                    <input placeholder="Topic" className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl text-[10px] font-bold uppercase outline-none focus:ring-2 focus:ring-amber-500" value={qTopic} onChange={e => setQTopic(e.target.value)} required />
+              <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm sticky top-4">
+                <div className="flex justify-between items-center mb-6">
+                  <h3 className="text-lg font-bold text-slate-950 uppercase">{editingId ? 'Edit Item' : 'Add Item'}</h3>
+                  {editingId && <button onClick={resetQForm} className="text-[8px] text-red-500 uppercase font-black">Cancel</button>}
+                </div>
+                <form onSubmit={handleSaveQuestion} className="space-y-4">
+                  <div className="grid grid-cols-2 gap-2">
+                    <input placeholder="Subject" className="w-full p-4 bg-slate-50 border rounded-2xl text-[10px] font-bold outline-none" value={qSubject} onChange={e => setQSubject(e.target.value)} required />
+                    <input placeholder="Topic" className="w-full p-4 bg-slate-50 border rounded-2xl text-[10px] font-bold outline-none" value={qTopic} onChange={e => setQTopic(e.target.value)} required />
                   </div>
-                  <textarea placeholder="Type question text here..." className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-bold h-32 outline-none focus:ring-2 focus:ring-amber-500" value={qText} onChange={e => setQText(e.target.value)} required />
+                  <textarea placeholder="Clinical Text..." className="w-full p-4 bg-slate-50 border rounded-2xl text-xs h-32 outline-none" value={qText} onChange={e => setQText(e.target.value)} required />
                   {qOptions.map((o, i) => (
-                    <div key={i} className="flex gap-2 group">
+                    <div key={i} className="flex gap-2">
                        <input type="radio" checked={qCorrect === i} onChange={() => setQCorrect(i)} className="accent-amber-500" />
-                       <input className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-medium outline-none focus:border-amber-500" value={o} placeholder={`Option ${String.fromCharCode(65+i)}`} onChange={e => { const n = [...qOptions]; n[i] = e.target.value; setQOptions(n); }} required />
+                       <input className="w-full p-3 bg-slate-50 border rounded-xl text-xs outline-none" value={o} placeholder={`Opt ${String.fromCharCode(65+i)}`} onChange={e => { const n = [...qOptions]; n[i] = e.target.value; setQOptions(n); }} required />
                     </div>
                   ))}
-                  <button className="w-full py-5 bg-slate-950 text-amber-500 rounded-2xl font-bold uppercase tracking-widest text-[10px] shadow-xl hover:bg-slate-900 transition-all">Save Question</button>
+                  <textarea placeholder="Explanation/Rationale" className="w-full p-4 bg-slate-50 border rounded-2xl text-xs h-20 outline-none" value={qExplanation} onChange={e => setQExplanation(e.target.value)} />
+                  <button className="w-full py-5 bg-slate-950 text-amber-500 rounded-2xl font-bold uppercase text-[10px] shadow-xl">{editingId ? 'Update Item' : 'Store in Bank'}</button>
                 </form>
               </div>
             </div>
-            <div className="xl:col-span-2 space-y-4">
-               {questions.map(q => (
-                 <div key={q.id} className="bg-white p-6 rounded-2xl border border-slate-100 flex justify-between items-start hover:border-amber-200 transition-all group shadow-sm">
-                   <div className="flex-1 pr-6">
-                     <div className="flex gap-2 items-center mb-3">
-                        <span className="text-[8px] font-bold bg-slate-100 text-slate-400 px-2.5 py-1 rounded uppercase tracking-widest">{q.subject}</span>
-                        <span className="text-[8px] font-bold text-amber-600 uppercase tracking-widest">{q.topic}</span>
-                     </div>
-                     <p className="text-sm font-bold text-slate-800 leading-relaxed"><ScientificText text={q.text} /></p>
-                   </div>
-                   <button onClick={() => { if(window.confirm("Delete this question?")) deleteDoc(doc(db, 'questions', q.id!)).then(fetchData); }} className="text-slate-200 hover:text-red-500 transition-colors p-2 bg-slate-50 rounded-xl group-hover:bg-red-50"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>
+            <div className="xl:col-span-3 space-y-6">
+               <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-white p-6 rounded-[1.5rem] border border-slate-100 shadow-sm">
+                  <input type="text" placeholder="Search Bank (Text, Topic, Subject)..." className="flex-1 p-4 bg-slate-50 border rounded-2xl text-xs outline-none" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+                  <button onClick={removeDuplicates} className="px-6 py-4 bg-red-50 text-red-600 border border-red-100 rounded-2xl text-[10px] font-bold uppercase tracking-widest hover:bg-red-100">Clean Duplicates</button>
+               </div>
+               {Object.entries(groupedQuestions).map(([topic, qs]) => (
+                 <div key={topic} className="bg-white rounded-3xl border shadow-sm overflow-hidden">
+                    <button onClick={() => toggleTopic(topic)} className="w-full p-6 flex justify-between items-center bg-slate-50">
+                       <div className="text-left"><h3 className="font-bold text-slate-900 uppercase text-sm">{topic}</h3><p className="text-[9px] text-slate-400 uppercase">{qs.length} Items</p></div>
+                       <svg className={`w-5 h-5 transition-transform ${expandedTopics[topic] ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+                    {expandedTopics[topic] && (
+                      <div className="p-6 space-y-4">
+                        {qs.map(q => (
+                          <div key={q.id} className="p-5 border rounded-2xl flex justify-between items-center gap-4 group">
+                             <div className="flex-1"><p className="text-sm font-bold text-slate-800 leading-relaxed"><ScientificText text={q.text} /></p></div>
+                             <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                               <button onClick={() => handleEditQuestion(q)} className="p-3 bg-slate-100 text-slate-600 rounded-xl hover:bg-amber-100 hover:text-amber-600"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg></button>
+                               <button onClick={() => deleteDoc(doc(db, 'questions', q.id))} className="p-3 bg-red-50 text-red-600 rounded-xl"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>
+                             </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                  </div>
                ))}
-               {questions.length === 0 && !loading && (
-                 <div className="py-20 text-center bg-white rounded-2xl border border-slate-100">
-                    <p className="text-slate-400 font-bold uppercase text-[10px] tracking-widest">No questions added yet.</p>
-                 </div>
-               )}
             </div>
+          </div>
+        )}
+
+        {activeTab === 'tests' && (
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+             <div className="xl:col-span-1">
+                <div className="bg-white p-8 rounded-[2rem] border shadow-sm">
+                   <h3 className="text-lg font-bold text-slate-950 uppercase mb-6">Create New Mock Test</h3>
+                   <form onSubmit={handleCreateTest} className="space-y-4">
+                      <input placeholder="Test Title" className="w-full p-4 bg-slate-50 border rounded-2xl text-[10px] font-bold outline-none" value={testName} onChange={e => setTestName(e.target.value)} required />
+                      <textarea placeholder="Description" className="w-full p-4 bg-slate-50 border rounded-2xl text-xs h-24 outline-none" value={testDesc} onChange={e => setTestDesc(e.target.value)} required />
+                      <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl border">
+                        <span className="text-[10px] font-bold uppercase text-slate-400">Duration (Min)</span>
+                        <input type="number" className="bg-transparent font-bold w-16" value={testDuration} onChange={e => setTestDuration(parseInt(e.target.value))} />
+                      </div>
+                      <div className="bg-slate-50 p-4 rounded-2xl border text-[10px] font-bold uppercase">
+                        Selected: {testSelectedQuestions.length} Questions
+                      </div>
+                      <button className="w-full py-5 bg-slate-950 text-amber-500 rounded-2xl font-bold uppercase text-[10px] shadow-xl">Deploy Test</button>
+                   </form>
+                </div>
+             </div>
+             <div className="xl:col-span-2">
+                <div className="bg-white p-8 rounded-[2rem] border shadow-sm">
+                   <h3 className="text-lg font-bold text-slate-950 uppercase mb-6">Select Questions from Bank</h3>
+                   <input type="text" placeholder="Search..." className="w-full p-4 bg-slate-50 border rounded-2xl mb-6 text-xs" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+                   <div className="space-y-2 max-h-[600px] overflow-y-auto no-scrollbar">
+                      {filteredQuestions.map(q => (
+                        <div key={q.id} onClick={() => setTestSelectedQuestions(prev => prev.includes(q.id) ? prev.filter(id => id !== q.id) : [...prev, q.id])} className={`p-4 border rounded-xl cursor-pointer transition-all ${testSelectedQuestions.includes(q.id) ? 'bg-amber-50 border-amber-500' : 'bg-white border-slate-100 hover:border-slate-300'}`}>
+                           <p className="text-[11px] font-bold text-slate-800 line-clamp-2">{q.text}</p>
+                           <p className="text-[8px] text-slate-400 mt-1 uppercase">{q.subject} • {q.topic}</p>
+                        </div>
+                      ))}
+                   </div>
+                </div>
+             </div>
           </div>
         )}
       </div>

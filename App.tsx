@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
-import { User, MockTest, ExamResult, ViewState } from './types';
+import { User, MockTest, ExamResult } from './types';
 import { auth, db } from './firebase';
-import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+import { onAuthStateChanged, sendEmailVerification } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 import { doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import Auth from './components/Auth';
 import Dashboard from './components/Dashboard';
@@ -26,6 +26,12 @@ const App: React.FC = () => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setIsLoading(true);
       if (firebaseUser) {
+        if (!firebaseUser.emailVerified) {
+          setCurrentView('verify-email');
+          setIsLoading(false);
+          return;
+        }
+
         const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
         if (userDoc.exists()) {
           const userData = userDoc.data() as User;
@@ -51,6 +57,10 @@ const App: React.FC = () => {
 
   const handleLogin = (user: User) => {
     setCurrentUser(user);
+    if (!auth.currentUser?.emailVerified) {
+      setCurrentView('verify-email');
+      return;
+    }
     if (user.role === 'root-admin') {
       setCurrentView('root-admin');
     } else if (user.role === 'admin') {
@@ -74,6 +84,38 @@ const App: React.FC = () => {
           <div className="w-32 h-1 bg-slate-900 rounded-full overflow-hidden">
             <div className="h-full bg-amber-500 w-1/2 animate-[shimmer_2s_infinite]"></div>
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (currentView === 'verify-email') {
+    return (
+      <div className="h-full w-full flex flex-col items-center justify-center bg-slate-50 p-6 text-center">
+        <img src={logo} className="w-16 h-16 mb-6" alt="Logo" />
+        <h2 className="text-2xl font-bold text-slate-900 uppercase tracking-tight mb-2">Verify Your Email</h2>
+        <p className="text-slate-500 text-sm max-w-sm mb-8 leading-relaxed">
+          We've sent a verification link to your email. Please check your inbox (and spam folder) and click the link to continue.
+        </p>
+        <div className="flex flex-col gap-3 w-full max-w-xs">
+          <button 
+            onClick={() => window.location.reload()} 
+            className="w-full py-4 bg-slate-950 text-amber-500 rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-lg"
+          >
+            I've Verified My Email
+          </button>
+          <button 
+            onClick={() => auth.currentUser && sendEmailVerification(auth.currentUser).then(() => alert('Verification email resent!'))}
+            className="w-full py-4 bg-white text-slate-600 border border-slate-200 rounded-2xl font-bold uppercase text-[10px] tracking-widest"
+          >
+            Resend Email
+          </button>
+          <button 
+            onClick={() => auth.signOut()} 
+            className="mt-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest hover:text-red-500"
+          >
+            Log Out
+          </button>
         </div>
       </div>
     );
