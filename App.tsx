@@ -24,14 +24,16 @@ const App: React.FC = () => {
 
   const checkUserStatus = async (firebaseUser: any) => {
     try {
-      // Force reload to get latest verification status from Firebase servers
       await firebaseUser.reload();
       const updatedUser = auth.currentUser;
-      if (!updatedUser) return;
+      if (!updatedUser) {
+        setIsLoading(false);
+        return;
+      }
 
       const isOfficialEmail = updatedUser.email?.toLowerCase().endsWith('@aureusmedicos.com');
 
-      // Check verification unless it's an official staff email
+      // Verification Logic: Bypass for staff emails, enforce for others
       if (!updatedUser.emailVerified && !isOfficialEmail) {
         setCurrentView('verify-email');
         setIsLoading(false);
@@ -52,12 +54,12 @@ const App: React.FC = () => {
           setCurrentView('dashboard');
         }
       } else {
-        // Document doesn't exist - break the loop and go to auth
+        // Fallback for missing document
         setCurrentUser(null);
         setCurrentView('auth');
       }
     } catch (error) {
-      console.error("Error syncing user:", error);
+      console.error("Critical error in checkUserStatus:", error);
       setCurrentView('auth');
     } finally {
       setIsLoading(false);
@@ -66,7 +68,6 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      setIsLoading(true);
       if (firebaseUser) {
         await checkUserStatus(firebaseUser);
       } else {
@@ -105,7 +106,7 @@ const App: React.FC = () => {
         <img src={logo} className="w-16 h-16 mb-6" alt="Logo" />
         <h2 className="text-2xl font-bold text-slate-900 uppercase tracking-tight mb-2">Verify Your Email</h2>
         <p className="text-slate-500 text-sm max-w-sm mb-8 leading-relaxed">
-          We've sent a verification link to your email. Please check your inbox (and spam folder) and click the link to continue.
+          Check your inbox and verify your account to access the CBT Registry.
         </p>
         <div className="flex flex-col gap-3 w-full max-w-xs">
           <button 
@@ -115,17 +116,12 @@ const App: React.FC = () => {
             I've Verified My Email
           </button>
           <button 
-            onClick={() => auth.currentUser && sendEmailVerification(auth.currentUser).then(() => alert('Verification email resent!'))}
+            onClick={() => auth.currentUser && sendEmailVerification(auth.currentUser).then(() => alert('Email resent.'))}
             className="w-full py-4 bg-white text-slate-600 border border-slate-200 rounded-2xl font-bold uppercase text-[10px] tracking-widest"
           >
             Resend Email
           </button>
-          <button 
-            onClick={() => auth.signOut()} 
-            className="mt-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest hover:text-red-500"
-          >
-            Log Out
-          </button>
+          <button onClick={() => auth.signOut()} className="mt-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest hover:text-red-500">Log Out</button>
         </div>
       </div>
     );
