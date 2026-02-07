@@ -7,7 +7,7 @@ import { doc, setDoc, getDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/f
 import logo from '../assets/logo.png';
 
 interface AuthProps {
-  onLogin: (user: User) => void;
+  onLogin: (firebaseUser: any) => void;
 }
 
 const Auth: React.FC<AuthProps> = ({ onLogin }) => {
@@ -22,20 +22,33 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
     setLoading(true);
     try {
       if (isLogin) {
-        const userCredential = await signInWithEmailAndPassword(auth, email, password);
-        const userDoc = await getDoc(doc(db, 'users', userCredential.user.uid));
-        if (userDoc.exists()) { 
-          onLogin(userDoc.data() as User); 
-        }
+        const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password);
+        onLogin(userCredential.user);
       } else {
-        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        // Trigger verification email immediately
-        await sendEmailVerification(userCredential.user);
+        const trimmedEmail = email.trim();
+        const userCredential = await createUserWithEmailAndPassword(auth, trimmedEmail, password);
         
-        const newUser: User = { id: userCredential.user.uid, name, email, role: 'student' };
+        const isOfficialEmail = trimmedEmail.toLowerCase().endsWith('@aureusmedicos.com');
+        
+        // Trigger verification email only for non-staff emails
+        if (!isOfficialEmail) {
+          await sendEmailVerification(userCredential.user);
+          alert("Account created! A verification email has been sent. Please check your inbox before logging in.");
+        }
+        
+        const newUser: User = { 
+          id: userCredential.user.uid, 
+          name, 
+          email: trimmedEmail, 
+          role: 'student' 
+        };
         await setDoc(doc(db, 'users', userCredential.user.uid), newUser);
-        alert("Account created! A verification email has been sent. Please check your inbox before logging in.");
-        setIsLogin(true);
+        
+        if (isOfficialEmail) {
+          onLogin(userCredential.user);
+        } else {
+          setIsLogin(true);
+        }
       }
     } catch (error: any) {
       alert(error.message);
@@ -54,7 +67,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
       <div className="w-full max-w-md bg-white rounded-[2.5rem] shadow-2xl overflow-hidden border border-slate-100">
         <div className="bg-slate-950 px-8 py-10 text-center border-b-4 border-amber-500">
            <h1 className="text-xl font-black text-white tracking-widest mb-1 uppercase">{isLogin ? 'Login' : 'Create Account'}</h1>
-           <p className="text-amber-400 text-[9px] font-bold uppercase tracking-[0.2em]">Verified Email Required</p>
+           <p className="text-amber-400 text-[9px] font-bold uppercase tracking-[0.2em]">Clinical Credential Portal</p>
         </div>
         <div className="p-8 md:p-12">
           <form onSubmit={handleSubmit} className="space-y-4">
