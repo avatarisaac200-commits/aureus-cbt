@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { User, MockTest, ExamResult } from './types';
 import { auth, db } from './firebase';
@@ -106,8 +107,8 @@ const App: React.FC = () => {
           Check your inbox. A clinical activation link has been sent to your email to verify your registry access.
         </p>
         <div className="flex flex-col gap-3 w-full max-w-xs">
-          <button onClick={handleManualVerifyCheck} className="w-full py-4 bg-slate-950 text-amber-500 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-lg active:scale-95 transition-all">Refresh Status</button>
-          <button onClick={() => auth.currentUser && sendEmailVerification(auth.currentUser).then(() => alert('Verification email resent!'))} className="w-full py-4 bg-white text-slate-600 border border-slate-200 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-slate-50">Resend Link</button>
+          <button onClick={handleManualVerifyCheck} className="w-full py-4 bg-slate-950 text-amber-500 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-lg">Refresh Status</button>
+          <button onClick={() => auth.currentUser && sendEmailVerification(auth.currentUser).then(() => alert('Verification email resent!'))} className="w-full py-4 bg-white text-slate-600 border border-slate-200 rounded-2xl font-black uppercase text-[10px] tracking-widest">Resend Link</button>
           <button onClick={() => auth.signOut()} className="mt-4 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-red-500">Log Out</button>
         </div>
       </div>
@@ -117,7 +118,6 @@ const App: React.FC = () => {
   return (
     <div className="h-full w-full overflow-hidden flex flex-col">
       {currentView === 'auth' && <Auth onLogin={checkUserStatus} />}
-      
       {currentView === 'dashboard' && currentUser && (
         <Dashboard 
           user={currentUser} 
@@ -127,7 +127,6 @@ const App: React.FC = () => {
           onReturnToAdmin={() => setCurrentView(currentUser.role === 'root-admin' ? 'root-admin' : 'admin')}
         />
       )}
-
       {currentView === 'admin' && currentUser && (
         <AdminDashboard 
           user={currentUser} 
@@ -136,7 +135,6 @@ const App: React.FC = () => {
           onSwitchToStudent={() => setCurrentView('dashboard')}
         />
       )}
-
       {currentView === 'root-admin' && currentUser && (
         <RootAdminDashboard 
           user={currentUser} 
@@ -146,7 +144,6 @@ const App: React.FC = () => {
           onGoToImport={() => { setAdminDefaultTab('import'); setCurrentView('admin'); }}
         />
       )}
-
       {currentView === 'exam' && activeTest && currentUser && (
         <ExamInterface 
           test={activeTest} 
@@ -155,11 +152,9 @@ const App: React.FC = () => {
           onExit={() => setCurrentView('dashboard')}
         />
       )}
-
       {currentView === 'results' && recentResult && (
         <ResultScreen result={recentResult} onClose={() => setCurrentView('dashboard')} onReview={() => { setReviewResult(recentResult); setCurrentView('review'); }} />
       )}
-
       {currentView === 'review' && reviewResult && (
         <ReviewInterface result={reviewResult} onExit={() => setCurrentView('dashboard')} />
       )}
