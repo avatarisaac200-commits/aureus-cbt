@@ -111,7 +111,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
       },
       (err) => {
         console.error("Firestore Error:", err);
-        setDbError(err.message.includes('offline') ? "You appear to be offline." : "Database sync error. Check console for details.");
+        setDbError(err.message.includes('offline') ? "You appear to be offline." : "Database sync error. Check database settings for details.");
       }
     );
     return () => unsub();
