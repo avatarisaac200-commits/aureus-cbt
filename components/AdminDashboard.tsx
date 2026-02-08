@@ -23,6 +23,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
   const [loading, setLoading] = useState(false);
   const [dbError, setDbError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [collapsedSubjects, setCollapsedSubjects] = useState<Record<string, boolean>>({});
+  const autoCleanupRunning = useRef(false);
+  const [isBankCollapsed, setIsBankCollapsed] = useState(true);
   
   // Test Builder State
   const [testName, setTestName] = useState('');
@@ -47,24 +50,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
   const [stagedQuestions, setStagedQuestions] = useState<StagedQuestion[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // EFFECT: Fetch Bank Data
-  useEffect(() => {
-    setDbError(null);
-    // Note: Removed orderBy('createdAt') to avoid index requirement issues
-    const q = query(collection(db, 'questions'), limit(100));
-    const unsub = onSnapshot(q, 
-      (snap) => {
-        const data = snap.docs.map(d => ({ ...d.data(), id: d.id } as Question));
-        setQuestions(data);
-      },
-      (err) => {
-        console.error("Firestore Error:", err);
-        setDbError(err.message.includes('offline') ? "You appear to be offline." : "Database sync error. Check console for details.");
-      }
-    );
-    return () => unsub();
-  }, []);
-
   const filteredQuestions = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
     if (!q) return questions;
@@ -74,24 +59,92 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
     );
   }, [questions, searchQuery]);
 
+  const normalizeQuestionText = (text: string) => text.toLowerCase().trim().replace(/\s+/g, ' ');
+  const normalizeQuestionOptions = (options: string[]) =>
+    options.map(option => normalizeQuestionText(option)).join('|');
+  const getQuestionSignature = (question: Question) =>
+    `${normalizeQuestionText(question.text)}::${normalizeQuestionOptions(question.options)}`;
+
+  const findDuplicateQuestionIds = (items: Question[]) => {
+    const seenTexts = new Map<string, string>();
+    const duplicates: string[] = [];
+    items.forEach(q => {
+      const signature = getQuestionSignature(q);
+      if (seenTexts.has(signature)) {
+        duplicates.push(q.id);
+      } else {
+        seenTexts.set(signature, q.id);
+      }
+    });
+    return duplicates;
+  };
+
+  const runAutoBankCleanup = async (items: Question[]) => {
+    if (autoCleanupRunning.current) return;
+    const duplicatesToDelete = findDuplicateQuestionIds(items);
+    if (duplicatesToDelete.length === 0) return;
+    autoCleanupRunning.current = true;
+    try {
+      const batch = writeBatch(db);
+      duplicatesToDelete.forEach(id => {
+        batch.delete(doc(db, 'questions', id));
+      });
+      await batch.commit();
+      console.info(`Auto-cleanup removed ${duplicatesToDelete.length} duplicate questions.`);
+    } catch (err) {
+      console.error("Auto-cleanup failed:", err);
+    } finally {
+      autoCleanupRunning.current = false;
+    }
+  };
+
+  // EFFECT: Fetch Bank Data
+  useEffect(() => {
+    setDbError(null);
+    // Note: Removed orderBy('createdAt') to avoid index requirement issues
+    const q = query(collection(db, 'questions'), limit(100));
+    const unsub = onSnapshot(q, 
+      (snap) => {
+        const data = snap.docs.map(d => ({ ...d.data(), id: d.id } as Question));
+        setQuestions(data);
+        runAutoBankCleanup(data);
+      },
+      (err) => {
+        console.error("Firestore Error:", err);
+        setDbError(err.message.includes('offline') ? "You appear to be offline." : "Database sync error. Check console for details.");
+      }
+    );
+    return () => unsub();
+  }, []);
+
+  const groupedQuestions = useMemo(() => {
+    const groups = new Map<string, Question[]>();
+    filteredQuestions.forEach(q => {
+      const key = q.subject?.trim() || 'General';
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(q);
+    });
+    return Array.from(groups.entries()).sort(([a], [b]) => a.localeCompare(b));
+  }, [filteredQuestions]);
+
+  useEffect(() => {
+    if (groupedQuestions.length === 0) return;
+    setCollapsedSubjects(prev => {
+      const next = { ...prev };
+      groupedQuestions.forEach(([subject]) => {
+        if (next[subject] === undefined) next[subject] = true;
+      });
+      return next;
+    });
+  }, [groupedQuestions]);
+
   const runBankCleanup = async () => {
     if (!window.confirm("Find and remove identical questions? This cannot be undone.")) return;
     setLoading(true);
     try {
       const snap = await getDocs(collection(db, 'questions'));
       const all = snap.docs.map(d => ({ ...d.data(), id: d.id } as Question));
-      
-      const seenTexts = new Map<string, string>(); 
-      const duplicatesToDelete: string[] = [];
-
-      all.forEach(q => {
-        const cleanText = q.text.toLowerCase().trim().replace(/\s+/g, ' ');
-        if (seenTexts.has(cleanText)) {
-          duplicatesToDelete.push(q.id);
-        } else {
-          seenTexts.set(cleanText, q.id);
-        }
-      });
+      const duplicatesToDelete = findDuplicateQuestionIds(all);
 
       if (duplicatesToDelete.length > 0) {
         const batch = writeBatch(db);
@@ -218,6 +271,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
     setSections(newSections);
   };
 
+  const toggleSubjectGroup = (subject: string) => {
+    setCollapsedSubjects(prev => ({ ...prev, [subject]: !prev[subject] }));
+  };
+
   return (
     <div className="flex-1 w-full bg-slate-50 flex flex-col overflow-hidden">
       <div className="bg-white border-b border-slate-100 p-6 flex justify-between items-center shrink-0 safe-top shadow-sm z-10">
@@ -285,18 +342,36 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
                       {searchQuery ? "No search results" : "Bank is currently empty"}
                     </div>
                   )}
-                  {filteredQuestions.map(q => (
-                    <div key={q.id} className="bg-white p-6 rounded-[2rem] border border-slate-100 flex justify-between items-start gap-6 shadow-sm hover:border-amber-100 transition-all">
-                      <div className="flex-1">
-                        <p className="text-[10px] font-bold text-amber-600 mb-2 uppercase tracking-widest">{q.subject}</p>
-                        <p className="text-sm font-bold text-slate-800"><ScientificText text={q.text} /></p>
+                  {groupedQuestions.map(([subject, items]) => {
+                    const isCollapsed = collapsedSubjects[subject];
+                    return (
+                      <div key={subject} className="space-y-3">
+                        <button onClick={() => toggleSubjectGroup(subject)} className="w-full flex items-center justify-between bg-white px-6 py-4 rounded-[1.5rem] border border-slate-100 shadow-sm hover:border-amber-200 transition-all">
+                          <div className="flex items-center gap-3">
+                            <span className="text-[10px] font-bold text-amber-600 uppercase tracking-widest">{subject}</span>
+                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{items.length} items</span>
+                          </div>
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{isCollapsed ? 'Show' : 'Hide'}</span>
+                        </button>
+                        {!isCollapsed && (
+                          <div className="space-y-4">
+                            {items.map(q => (
+                              <div key={q.id} className="bg-white p-6 rounded-[2rem] border border-slate-100 flex justify-between items-start gap-6 shadow-sm hover:border-amber-100 transition-all">
+                                <div className="flex-1">
+                                  <p className="text-[10px] font-bold text-amber-600 mb-2 uppercase tracking-widest">{q.subject}</p>
+                                  <p className="text-sm font-bold text-slate-800"><ScientificText text={q.text} /></p>
+                                </div>
+                                <div className="flex gap-2 shrink-0">
+                                  <button onClick={() => { setEditingId(q.id); setQSubject(q.subject); setQText(q.text); setQOptions(q.options); setQCorrect(q.correctAnswerIndex); setQExplanation(q.explanation || ''); }} className="p-3 bg-slate-100 rounded-xl hover:bg-slate-200"><svg className="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg></button>
+                                  <button onClick={() => { if(window.confirm('Delete this?')) deleteDoc(doc(db, 'questions', q.id)) }} className="p-3 bg-red-50 rounded-xl hover:bg-red-100"><svg className="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                      <div className="flex gap-2 shrink-0">
-                        <button onClick={() => { setEditingId(q.id); setQSubject(q.subject); setQText(q.text); setQOptions(q.options); setQCorrect(q.correctAnswerIndex); setQExplanation(q.explanation || ''); }} className="p-3 bg-slate-100 rounded-xl hover:bg-slate-200"><svg className="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg></button>
-                        <button onClick={() => { if(window.confirm('Delete this?')) deleteDoc(doc(db, 'questions', q.id)) }} className="p-3 bg-red-50 rounded-xl hover:bg-red-100"><svg className="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                </div>
             </div>
           </div>
@@ -350,16 +425,41 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
                   <input type="text" placeholder="Filter current view..." className="bg-slate-800 border-none p-3 rounded-xl text-xs font-bold w-48 outline-none" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
                </div>
                
-               <div className="flex-1 overflow-y-auto pr-2 space-y-3 no-scrollbar pb-10">
-                  {filteredQuestions.map(q => {
-                    const isSelected = sections[activeBuilderSection].questionIds.includes(q.id);
+               <div className="flex-1 overflow-y-auto pr-2 space-y-4 no-scrollbar pb-10">
+                  <button onClick={() => setIsBankCollapsed(prev => !prev)} className="w-full flex items-center justify-between bg-white px-6 py-4 rounded-[1.5rem] border border-slate-100 shadow-sm hover:border-amber-200 transition-all">
+                    <div className="flex items-center gap-3">
+                      <span className="text-[10px] font-bold text-slate-600 uppercase tracking-widest">Question Bank</span>
+                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{filteredQuestions.length} total</span>
+                    </div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{isBankCollapsed ? 'Show' : 'Hide'}</span>
+                  </button>
+                  {!isBankCollapsed && groupedQuestions.map(([subject, items]) => {
+                    const isCollapsed = collapsedSubjects[subject];
                     return (
-                      <div key={q.id} onClick={() => toggleQuestionInActiveSection(q.id)} className={`p-5 border-2 rounded-2xl cursor-pointer transition-all flex justify-between items-center gap-6 shadow-sm ${isSelected ? 'border-amber-500 bg-amber-50 shadow-md ring-2 ring-amber-500/10' : 'border-white bg-white hover:border-slate-200'}`}>
-                         <div className="flex-1">
-                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">{q.subject}</p>
-                            <p className="text-sm font-bold text-slate-800 leading-relaxed"><ScientificText text={q.text} /></p>
-                         </div>
-                         <div className={`w-6 h-6 rounded-lg flex items-center justify-center border-2 shrink-0 ${isSelected ? 'bg-amber-500 border-amber-500 text-slate-950 shadow-sm' : 'border-slate-100 text-transparent'}`}><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path></svg></div>
+                      <div key={subject} className="space-y-3">
+                        <button onClick={() => toggleSubjectGroup(subject)} className="w-full flex items-center justify-between bg-white px-5 py-4 rounded-2xl border border-slate-100 shadow-sm hover:border-amber-200 transition-all">
+                          <div className="flex items-center gap-3">
+                            <span className="text-[9px] font-bold text-amber-500 uppercase tracking-widest">{subject}</span>
+                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{items.length} items</span>
+                          </div>
+                          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{isCollapsed ? 'Show' : 'Hide'}</span>
+                        </button>
+                        {!isCollapsed && (
+                          <div className="space-y-3">
+                            {items.map(q => {
+                              const isSelected = sections[activeBuilderSection].questionIds.includes(q.id);
+                              return (
+                                <div key={q.id} onClick={() => toggleQuestionInActiveSection(q.id)} className={`p-5 border-2 rounded-2xl cursor-pointer transition-all flex justify-between items-center gap-6 shadow-sm ${isSelected ? 'border-amber-500 bg-amber-50 shadow-md ring-2 ring-amber-500/10' : 'border-white bg-white hover:border-slate-200'}`}>
+                                   <div className="flex-1">
+                                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">{q.subject}</p>
+                                      <p className="text-sm font-bold text-slate-800 leading-relaxed"><ScientificText text={q.text} /></p>
+                                   </div>
+                                   <div className={`w-6 h-6 rounded-lg flex items-center justify-center border-2 shrink-0 ${isSelected ? 'bg-amber-500 border-amber-500 text-slate-950 shadow-sm' : 'border-slate-100 text-transparent'}`}><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path></svg></div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
