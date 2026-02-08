@@ -316,7 +316,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
             <div className="xl:col-span-1">
               <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-xl space-y-6">
-                h3 className="text-lg font-bold">Step 1: Test Details</h3>
+                <h3 className="text-lg font-bold">Step 1: Test Details</h3>
                 <input placeholder="Test Name (e.g. Mock Exam 1)" className="w-full p-4 bg-slate-50 border rounded-2xl text-xs font-bold" value={testName} onChange={e => setTestName(e.target.value)} />
                 <textarea placeholder="Instructions for students..." className="w-full p-4 bg-slate-50 border rounded-2xl text-xs h-20" value={testDesc} onChange={e => setTestDesc(e.target.value)} />
                 <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl">
