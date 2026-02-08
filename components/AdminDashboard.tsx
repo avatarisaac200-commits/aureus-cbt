@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { User, Question, MockTest, TestSection } from '../types';
 import { db } from '../firebase';
@@ -76,7 +75,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
       const duplicatesToDelete: string[] = [];
 
       all.forEach(q => {
-        // Normalize: lowercase, remove extra spaces, trim
         const cleanText = q.text.toLowerCase().trim().replace(/\s+/g, ' ');
         if (seenTexts.has(cleanText)) {
           duplicatesToDelete.push(q.id);
@@ -97,15 +95,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
       }
     } catch (err) {
       console.error(err);
-      alert("Cleanup failed. Check your internet connection.");
+      alert("Cleanup failed.");
     } finally {
       setLoading(false);
     }
   };
 
-  /**
-   * AI PDF Processing: Extracts medical MCQs from PDF using Gemini.
-   */
   const processPDF = async (file: File) => {
     setImportStatus('parsing');
     try {
@@ -125,15 +120,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
         model: 'gemini-3-pro-preview',
         contents: {
           parts: [
-            {
-              inlineData: {
-                mimeType: 'application/pdf',
-                data: base64Data,
-              },
-            },
-            {
-              text: "Act as a clinical educator. Analyze the provided medical PDF and extract multiple-choice questions. For each question, provide: 1. Subject, 2. Topic, 3. Question Text, 4. Four distinct options, 5. The zero-based index of the correct answer (0-3), 6. A detailed clinical rationale (explanation). Return the results as a clean JSON array.",
-            }
+            { inlineData: { mimeType: 'application/pdf', data: base64Data } },
+            { text: "Extract medical MCQs. Return a JSON array with: subject, topic, text, options (4 items), correctAnswerIndex (0-3), explanation." }
           ]
         },
         config: {
@@ -146,10 +134,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
                 subject: { type: Type.STRING },
                 topic: { type: Type.STRING },
                 text: { type: Type.STRING },
-                options: {
-                  type: Type.ARRAY,
-                  items: { type: Type.STRING },
-                },
+                options: { type: Type.ARRAY, items: { type: Type.STRING } },
                 correctAnswerIndex: { type: Type.INTEGER },
                 explanation: { type: Type.STRING },
               },
@@ -168,8 +153,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
         throw new Error("AI returned an empty response.");
       }
     } catch (err) {
-      console.error("PDF Processing Failure:", err);
-      alert("AI extraction failed. Please ensure the PDF contains clear medical text.");
+      console.error(err);
+      alert("AI extraction failed.");
       setImportStatus('idle');
     }
   };
@@ -193,7 +178,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
       }
       resetForm();
       alert("Question saved.");
-    } catch (e) { alert("Could not save. Check your connection."); }
+    } catch (e) { alert("Error saving question."); }
     finally { setLoading(false); }
   };
 
@@ -203,7 +188,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
 
   const handleCreateTest = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!testName) return alert("Please enter a name for the test.");
+    if (!testName) return alert("Please enter a test name.");
     
     const hasEmptySections = sections.some(s => s.questionIds.length === 0);
     if (hasEmptySections) return alert("Every section needs at least one question.");
@@ -227,8 +212,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
       setTestName(''); setTestDesc(''); setSections([{ id: 'sec_' + Date.now(), name: 'Section 1', questionIds: [], marksPerQuestion: 1 }]);
       setActiveTab('tests');
     } catch (e) { 
-      console.error("Publish Error:", e);
-      alert("Error publishing test. Ensure you filled in all fields."); 
+      console.error(e);
+      alert("Deployment error. Ensure connectivity."); 
     }
     finally { setLoading(false); }
   };
@@ -254,7 +239,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
       <div className="bg-white border-b border-slate-100 p-6 flex justify-between items-center shrink-0 safe-top">
         <div className="flex items-center gap-4">
           <img src={logo} className="w-10 h-10" alt="Logo" />
-          <h1 className="text-lg font-bold text-slate-900">Admin Panel</h1>
+          <h1 className="text-lg font-bold text-slate-900">Admin Hub</h1>
         </div>
         <div className="flex gap-2">
           <button onClick={onSwitchToStudent} className="px-5 py-2 text-[10px] font-bold text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50 uppercase tracking-widest">Student View</button>
@@ -264,8 +249,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
 
       <nav className="flex bg-white px-6 border-b border-slate-100 shrink-0">
         <button onClick={() => setActiveTab('questions')} className={`px-8 py-4 text-[10px] font-bold uppercase tracking-widest transition-all ${activeTab === 'questions' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50' : 'text-slate-400'}`}>Question Bank</button>
-        <button onClick={() => setActiveTab('tests')} className={`px-8 py-4 text-[10px] font-bold uppercase tracking-widest transition-all ${activeTab === 'tests' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50' : 'text-slate-400'}`}>Create Test</button>
-        <button onClick={() => setActiveTab('import')} className={`px-8 py-4 text-[10px] font-bold uppercase tracking-widest transition-all ${activeTab === 'import' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50' : 'text-slate-400'}`}>Upload PDF</button>
+        <button onClick={() => setActiveTab('tests')} className={`px-8 py-4 text-[10px] font-bold uppercase tracking-widest transition-all ${activeTab === 'tests' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50' : 'text-slate-400'}`}>Test Builder</button>
+        <button onClick={() => setActiveTab('import')} className={`px-8 py-4 text-[10px] font-bold uppercase tracking-widest transition-all ${activeTab === 'import' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50' : 'text-slate-400'}`}>Import PDF</button>
       </nav>
 
       <div className="flex-1 overflow-y-auto p-6 md:p-10 no-scrollbar safe-bottom">
@@ -273,7 +258,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
           <div className="grid grid-cols-1 xl:grid-cols-4 gap-8">
             <div className="xl:col-span-1">
               <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-xl sticky top-0">
-                <h3 className="text-lg font-bold text-slate-900 mb-6">{editingId ? 'Edit Question' : 'Add New Question'}</h3>
+                <h3 className="text-lg font-bold text-slate-900 mb-6">{editingId ? 'Update Item' : 'Create Item'}</h3>
                 <form onSubmit={handleSaveQuestion} className="space-y-4">
                   <input placeholder="Subject" className="w-full p-4 bg-slate-50 border rounded-2xl text-xs font-bold outline-none" value={qSubject} onChange={e => setQSubject(e.target.value)} required />
                   <textarea placeholder="The question..." className="w-full p-5 bg-slate-50 border rounded-2xl text-sm h-32 outline-none" value={qText} onChange={e => setQText(e.target.value)} required />
@@ -283,27 +268,27 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
                        <input className="w-full p-3 bg-slate-50 border rounded-xl text-xs" value={o} placeholder={`Option ${String.fromCharCode(65+i)}`} onChange={e => { const n = [...qOptions]; n[i] = e.target.value; setQOptions(n); }} required />
                     </div>
                   ))}
-                  <textarea placeholder="Explanation for students..." className="w-full p-4 bg-slate-50 border rounded-2xl text-xs h-20 outline-none" value={qExplanation} onChange={e => setQExplanation(e.target.value)} />
-                  <button className="w-full py-4 bg-slate-950 text-amber-500 rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-xl">{editingId ? 'Update' : 'Save'}</button>
+                  <textarea placeholder="Detailed explanation..." className="w-full p-4 bg-slate-50 border rounded-2xl text-xs h-20 outline-none" value={qExplanation} onChange={e => setQExplanation(e.target.value)} />
+                  <button className="w-full py-4 bg-slate-950 text-amber-500 rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-xl">{editingId ? 'Save Updates' : 'Add to Bank'}</button>
                   {editingId && <button type="button" onClick={resetForm} className="w-full py-2 text-red-500 text-[9px] font-bold uppercase">Cancel</button>}
                 </form>
               </div>
             </div>
             <div className="xl:col-span-3 space-y-6">
                <div className="flex gap-4">
-                 <input type="text" placeholder="Search by text or subject..." className="flex-1 p-5 bg-white border border-slate-100 rounded-2xl text-xs font-bold outline-none shadow-sm" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
-                 <button onClick={runBankCleanup} className="px-6 py-5 bg-white border border-red-100 text-red-500 rounded-2xl text-[9px] font-bold uppercase tracking-widest hover:bg-red-50 transition-all">Clean Bank</button>
+                 <input type="text" placeholder="Search questions..." className="flex-1 p-5 bg-white border border-slate-100 rounded-2xl text-xs font-bold outline-none shadow-sm" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+                 <button onClick={runBankCleanup} className="px-6 py-5 bg-white border border-red-100 text-red-500 rounded-2xl text-[9px] font-bold uppercase tracking-widest hover:bg-red-50 transition-all">Delete Duplicates</button>
                </div>
                <div className="space-y-4">
                   {filteredQuestions.map(q => (
-                    <div key={q.id} className="bg-white p-6 rounded-[2rem] border border-slate-100 flex justify-between items-start gap-6 shadow-sm group">
+                    <div key={q.id} className="bg-white p-6 rounded-[2rem] border border-slate-100 flex justify-between items-start gap-6 shadow-sm">
                       <div className="flex-1">
                         <p className="text-[10px] font-bold text-amber-600 mb-2 uppercase tracking-widest">{q.subject}</p>
                         <p className="text-sm font-bold text-slate-800"><ScientificText text={q.text} /></p>
                       </div>
                       <div className="flex gap-2 shrink-0">
-                        <button onClick={() => { setEditingId(q.id); setQSubject(q.subject); setQText(q.text); setQOptions(q.options); setQCorrect(q.correctAnswerIndex); setQExplanation(q.explanation || ''); }} className="p-3 bg-slate-100 rounded-xl hover:bg-slate-200 transition-all"><svg className="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg></button>
-                        <button onClick={() => { if(window.confirm('Delete this question?')) deleteDoc(doc(db, 'questions', q.id)) }} className="p-3 bg-red-50 rounded-xl hover:bg-red-100 transition-all"><svg className="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>
+                        <button onClick={() => { setEditingId(q.id); setQSubject(q.subject); setQText(q.text); setQOptions(q.options); setQCorrect(q.correctAnswerIndex); setQExplanation(q.explanation || ''); }} className="p-3 bg-slate-100 rounded-xl hover:bg-slate-200"><svg className="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg></button>
+                        <button onClick={() => { if(window.confirm('Delete this?')) deleteDoc(doc(db, 'questions', q.id)) }} className="p-3 bg-red-50 rounded-xl hover:bg-red-100"><svg className="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>
                       </div>
                     </div>
                   ))}
@@ -316,16 +301,16 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
             <div className="xl:col-span-1">
               <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-xl space-y-6">
-                <h3 className="text-lg font-bold">Step 1: Test Details</h3>
-                <input placeholder="Test Name (e.g. Mock Exam 1)" className="w-full p-4 bg-slate-50 border rounded-2xl text-xs font-bold" value={testName} onChange={e => setTestName(e.target.value)} />
-                <textarea placeholder="Instructions for students..." className="w-full p-4 bg-slate-50 border rounded-2xl text-xs h-20" value={testDesc} onChange={e => setTestDesc(e.target.value)} />
+                <h3 className="text-lg font-bold">1. Test Setup</h3>
+                <input placeholder="Name of Test" className="w-full p-4 bg-slate-50 border rounded-2xl text-xs font-bold" value={testName} onChange={e => setTestName(e.target.value)} />
+                <textarea placeholder="Description or instructions..." className="w-full p-4 bg-slate-50 border rounded-2xl text-xs h-20" value={testDesc} onChange={e => setTestDesc(e.target.value)} />
                 <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl">
                    <span className="text-[10px] font-bold uppercase text-slate-400">Time (Mins)</span>
                    <input type="number" className="bg-transparent font-bold w-full text-center text-xl outline-none" value={testDuration} onChange={e => setTestDuration(parseInt(e.target.value))} />
                 </div>
                 
                 <div className="space-y-3">
-                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Step 2: Manage Sections</p>
+                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">2. Sections</p>
                    {sections.map((s, idx) => (
                      <button key={s.id} onClick={() => setActiveBuilderSection(idx)} className={`w-full p-4 rounded-2xl border-2 text-left flex justify-between items-center transition-all ${activeBuilderSection === idx ? 'border-amber-500 bg-amber-50' : 'border-slate-50 bg-white'}`}>
                         <div>
@@ -339,25 +324,25 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
                             }}
                             onClick={(e) => e.stopPropagation()}
                           />
-                          <p className="text-[9px] text-slate-400 mt-1">{s.questionIds.length} questions selected</p>
+                          <p className="text-[9px] text-slate-400 mt-1">{s.questionIds.length} items</p>
                         </div>
                         {activeBuilderSection === idx && <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></div>}
                      </button>
                    ))}
-                   <button onClick={addSection} className="w-full p-3 border-2 border-dashed border-slate-100 rounded-2xl text-[10px] font-bold text-slate-400 uppercase tracking-widest hover:border-amber-200 hover:text-amber-500 transition-all">+ Add Another Section</button>
+                   <button onClick={addSection} className="w-full p-3 border-2 border-dashed border-slate-100 rounded-2xl text-[10px] font-bold text-slate-400 uppercase tracking-widest">+ New Section</button>
                 </div>
 
-                <button onClick={handleCreateTest} className="w-full py-5 bg-slate-950 text-amber-500 rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-xl hover:bg-slate-900 transition-all">Step 4: Finalize & Publish</button>
+                <button onClick={handleCreateTest} className="w-full py-5 bg-slate-950 text-amber-500 rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-xl">Deploy Test</button>
               </div>
             </div>
             
             <div className="xl:col-span-2 space-y-6 flex flex-col h-[700px]">
                <div className="bg-slate-900 text-white p-6 rounded-[2rem] flex justify-between items-center shadow-lg">
                   <div>
-                    <h4 className="text-sm font-bold uppercase tracking-widest text-amber-500">Step 3: Picking questions for "{sections[activeBuilderSection].name}"</h4>
-                    <p className="text-[9px] text-slate-400 mt-1">Click questions below to add or remove them from this section</p>
+                    <h4 className="text-sm font-bold uppercase tracking-widest text-amber-500">Pick for: {sections[activeBuilderSection].name}</h4>
+                    <p className="text-[9px] text-slate-400 mt-1">Tap a question to add/remove it</p>
                   </div>
-                  <input type="text" placeholder="Search the bank..." className="bg-slate-800 border-none p-3 rounded-xl text-xs font-bold w-48 outline-none placeholder:text-slate-500" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+                  <input type="text" placeholder="Filter bank..." className="bg-slate-800 border-none p-3 rounded-xl text-xs font-bold w-48 outline-none" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
                </div>
                
                <div className="flex-1 overflow-y-auto pr-2 space-y-3 no-scrollbar pb-10">
@@ -374,7 +359,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
                     );
                   })}
                   <div className="text-center p-6 text-[10px] text-slate-400 font-bold uppercase tracking-widest bg-white rounded-2xl border border-dashed">
-                    (Showing top 50 questions for performance. Use search to find specific items.)
+                    (Showing top 50 recent items. Search to find others.)
                   </div>
                </div>
             </div>
@@ -390,19 +375,19 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
                     <svg className="w-8 h-8 text-slate-400 group-hover:text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
                   </div>
                   <h3 className="text-xl font-bold mb-4 uppercase text-slate-900">Upload medical PDF</h3>
-                  <p className="text-xs text-slate-400 font-medium">We'll use AI to find the questions and answers for you.</p>
+                  <p className="text-xs text-slate-400 font-medium">Extract questions and answers automatically.</p>
                 </div>
               ) : importStatus === 'parsing' ? (
                 <div className="py-20 flex flex-col items-center">
                   <div className="w-12 h-12 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mb-6 shadow-lg"></div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest animate-pulse">AI is reading the file. Please wait...</p>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest animate-pulse">Processing PDF content...</p>
                 </div>
               ) : (
                 <div className="space-y-6 text-left animate-in slide-in-from-bottom-10">
                   <div className="flex justify-between items-center bg-slate-950 p-6 rounded-3xl text-white shadow-2xl">
                     <div>
-                      <p className="text-sm font-bold uppercase text-amber-500">{stagedQuestions.length} Questions Found</p>
-                      <p className="text-[9px] text-slate-400 uppercase font-bold mt-1">Review them before saving</p>
+                      <p className="text-sm font-bold uppercase text-amber-500">{stagedQuestions.length} Items Found</p>
+                      <p className="text-[9px] text-slate-400 uppercase font-bold mt-1">Review before saving to bank</p>
                     </div>
                     <button onClick={async () => {
                        setLoading(true);
@@ -414,10 +399,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
                          });
                          await batch.commit();
                          setImportStatus('idle');
-                         alert("Successfully added all questions!");
-                       } catch (e) { alert("Error saving batch."); }
+                         alert("Successfully added all items!");
+                       } catch (e) { alert("Error saving items."); }
                        finally { setLoading(false); }
-                    }} className="px-8 py-3 bg-amber-500 text-slate-950 rounded-xl font-bold uppercase text-[10px] hover:bg-amber-600 transition-all">Save All to Bank</button>
+                    }} className="px-8 py-3 bg-amber-500 text-slate-950 rounded-xl font-bold uppercase text-[10px] hover:bg-amber-600">Add All to Bank</button>
                   </div>
                   {stagedQuestions.map((q, i) => (
                     <div key={i} className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
@@ -425,7 +410,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
                       <p className="text-sm font-bold text-slate-800 leading-relaxed"><ScientificText text={q.text} /></p>
                     </div>
                   ))}
-                  <button onClick={() => setImportStatus('idle')} className="w-full py-4 text-slate-400 text-[9px] font-bold uppercase tracking-widest hover:text-red-500 transition-colors">Discard and Try Again</button>
+                  <button onClick={() => setImportStatus('idle')} className="w-full py-4 text-slate-400 text-[9px] font-bold uppercase tracking-widest hover:text-red-500">Cancel Import</button>
                 </div>
               )}
            </div>

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { User, MockTest, ExamResult } from '../types';
 import { db } from '../firebase';
@@ -47,15 +46,15 @@ const LeaderboardModal: React.FC<{ test: MockTest, onClose: () => void }> = ({ t
       <div className="w-full max-w-lg bg-white rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 border-b-8 border-amber-500">
         <div className="bg-slate-900 p-8 text-center relative">
           <button onClick={onClose} className="absolute top-6 right-6 text-slate-400 hover:text-white"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
-          <p className="text-amber-500 text-[10px] font-black uppercase tracking-widest mb-1">Top Scores</p>
+          <p className="text-amber-500 text-[10px] font-black uppercase tracking-widest mb-1">Hall of Fame</p>
           <h2 className="text-xl font-bold text-white uppercase truncate">{test.name}</h2>
-          <p className="text-[9px] text-slate-400 uppercase mt-2 italic">Official first attempts only</p>
+          <p className="text-[9px] text-slate-400 uppercase mt-2 italic">Official records</p>
         </div>
         <div className="p-6 max-h-[60vh] overflow-y-auto no-scrollbar">
           {loading ? (
-            <div className="flex flex-col items-center py-20"><div className="w-8 h-8 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mb-4"></div><p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Finding records...</p></div>
+            <div className="flex flex-col items-center py-20"><div className="w-8 h-8 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mb-4"></div><p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Searching...</p></div>
           ) : topScores.length === 0 ? (
-            <div className="text-center py-20 text-slate-400 font-bold uppercase text-[10px]">No scores found yet.</div>
+            <div className="text-center py-20 text-slate-400 font-bold uppercase text-[10px]">No attempts yet.</div>
           ) : (
             <div className="space-y-2">
               {topScores.map((res, i) => (
@@ -109,9 +108,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onStartTest, onRe
   return (
     <div className="flex-1 w-full bg-slate-50 flex flex-col overflow-hidden relative">
       <div className="bg-slate-950 text-amber-500 py-3 px-8 flex justify-between items-center text-[10px] font-black uppercase tracking-widest shrink-0 border-b border-slate-900 shadow-xl z-50 safe-top">
-         <div className="flex items-center gap-3"><span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-sm"></span>Online</div>
-         <div className="hidden sm:block">Aureus Registry v3.7</div>
-         <button onClick={onLogout} className="text-white hover:text-red-500 transition-colors uppercase text-[9px] font-bold">Logout</button>
+         <div className="flex items-center gap-3"><span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-sm"></span>Connection Stable</div>
+         <div className="hidden sm:block">Aureus CBT v4.0</div>
+         <button onClick={onLogout} className="text-white hover:text-red-500 transition-colors uppercase text-[9px] font-bold">Sign Out</button>
       </div>
 
       {showLeaderboard && <LeaderboardModal test={showLeaderboard} onClose={() => setShowLeaderboard(null)} />}
@@ -122,19 +121,19 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onStartTest, onRe
             <div className="flex items-center gap-6">
               <img src={logo} alt="Logo" className="w-16 h-16" />
               <div>
-                <h1 className="text-2xl font-bold text-slate-950 uppercase tracking-tight leading-none">Student Portal</h1>
+                <h1 className="text-2xl font-bold text-slate-950 uppercase tracking-tight leading-none">Your Portal</h1>
                 <p className="text-amber-600 text-[10px] font-black uppercase mt-1">Aureus Medicos</p>
               </div>
             </div>
             {(user.role === 'admin' || user.role === 'root-admin') && onReturnToAdmin && (
-              <button onClick={onReturnToAdmin} className="px-10 py-4 text-[10px] font-black text-amber-600 bg-amber-50 border border-amber-100 rounded-2xl hover:bg-amber-100 uppercase tracking-widest shadow-sm transition-all">Go to Admin Hub</button>
+              <button onClick={onReturnToAdmin} className="px-10 py-4 text-[10px] font-black text-amber-600 bg-amber-50 border border-amber-100 rounded-2xl hover:bg-amber-100 uppercase tracking-widest shadow-sm">Staff Settings</button>
             )}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
             {[
-              { label: 'Average Score', val: stats.avg + '%', color: 'text-slate-950' },
-              { label: 'Highest Score', val: stats.peak + '%', color: 'text-amber-500' },
+              { label: 'Avg Performance', val: stats.avg + '%', color: 'text-slate-950' },
+              { label: 'Top Score', val: stats.peak + '%', color: 'text-amber-500' },
               { label: 'Exams Completed', val: stats.count, color: 'text-slate-950' }
             ].map((s, i) => (
               <div key={i} className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-100 text-center hover:border-amber-200 transition-all">
@@ -147,20 +146,20 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onStartTest, onRe
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-10">
             <div className="xl:col-span-2 space-y-10">
               <section>
-                <div className="flex items-center justify-between mb-8"><h2 className="text-xl font-bold text-slate-950 uppercase">Exam List</h2></div>
+                <div className="flex items-center justify-between mb-8"><h2 className="text-xl font-bold text-slate-950 uppercase">Ready Tests</h2></div>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   {tests.map(test => (
                     <div key={test.id} className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 hover:border-amber-400 transition-all flex flex-col h-full group">
                       <div className="flex justify-between items-start mb-4">
-                        <h3 className="font-bold text-xl text-slate-950 uppercase truncate leading-tight mr-2 group-hover:text-amber-600 transition-colors">{test.name}</h3>
+                        <h3 className="font-bold text-xl text-slate-950 uppercase truncate leading-tight mr-2">{test.name}</h3>
                         <span className="bg-slate-50 text-slate-500 text-[8px] font-black px-3 py-1.5 rounded-lg uppercase whitespace-nowrap">{test.totalDurationSeconds / 60}m</span>
                       </div>
-                      <p className="text-xs text-slate-400 mb-8 font-medium italic line-clamp-2 leading-relaxed">{test.description || 'Practice exam simulation.'}</p>
+                      <p className="text-xs text-slate-400 mb-8 font-medium italic line-clamp-2 leading-relaxed">{test.description || 'Start this simulation test.'}</p>
                       <div className="mt-auto flex justify-between items-center">
                          <button onClick={() => setShowLeaderboard(test)} className="text-[9px] font-bold text-amber-600 uppercase tracking-widest hover:underline flex items-center gap-1">
-                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>View Rankings
+                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>Rankings
                          </button>
-                         <button onClick={() => onStartTest(test)} className="px-8 py-3 bg-amber-500 text-slate-950 rounded-xl font-bold uppercase tracking-widest text-[9px] hover:bg-amber-600 shadow-lg active:scale-95 transition-all">Take Exam</button>
+                         <button onClick={() => onStartTest(test)} className="px-8 py-3 bg-amber-500 text-slate-950 rounded-xl font-bold uppercase tracking-widest text-[9px] shadow-lg active:scale-95">Enter Exam</button>
                       </div>
                     </div>
                   ))}
