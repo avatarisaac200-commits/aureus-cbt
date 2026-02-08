@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { User, MockTest, ExamResult } from './types';
 import { auth, db } from './firebase';
@@ -24,7 +23,6 @@ const App: React.FC = () => {
 
   const checkUserStatus = async (firebaseUser: any) => {
     try {
-      // Force reload to get the latest emailVerified status from Firebase Auth
       await firebaseUser.reload();
       const updatedUser = auth.currentUser;
       if (!updatedUser) {
@@ -34,21 +32,18 @@ const App: React.FC = () => {
 
       const isOfficialEmail = updatedUser.email?.toLowerCase().endsWith('@aureusmedicos.com');
 
-      // 1. Enforcement: If not verified and not official staff, block entry
       if (!updatedUser.emailVerified && !isOfficialEmail) {
         setCurrentView('verify-email');
         setIsLoading(false);
         return;
       }
 
-      // 2. Fetch User Data from Firestore
       const userDoc = await getDoc(doc(db, 'users', updatedUser.uid));
       if (userDoc.exists()) {
         const userData = userDoc.data() as User;
         const userObj = { ...userData, id: updatedUser.uid };
         setCurrentUser(userObj);
         
-        // 3. Routing
         if (userData.role === 'root-admin') {
           setCurrentView('root-admin');
         } else if (userData.role === 'admin') {
@@ -57,12 +52,11 @@ const App: React.FC = () => {
           setCurrentView('dashboard');
         }
       } else {
-        // Handle case where auth user exists but firestore doc is missing
         setCurrentUser(null);
         setCurrentView('auth');
       }
     } catch (error) {
-      console.error("Auth status error:", error);
+      console.error("Critical Registry Error:", error);
       setCurrentView('auth');
     } finally {
       setIsLoading(false);
@@ -91,10 +85,10 @@ const App: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="h-full w-full flex flex-col items-center justify-center bg-slate-950 safe-top safe-bottom">
-        <img src={logo} className="w-20 h-20 animate-pulse mb-6" alt="Loading" />
+      <div className="h-full w-full flex flex-col items-center justify-center bg-slate-950">
+        <img src={logo} className="w-20 h-20 animate-pulse mb-6" alt="Aureus Logo" />
         <div className="flex flex-col items-center">
-          <p className="text-amber-500 text-[10px] font-bold uppercase tracking-[0.5em] mb-2">Aureus Medicos</p>
+          <p className="text-amber-500 text-[10px] font-black uppercase tracking-[0.5em] mb-2">Aureus Registry</p>
           <div className="w-32 h-1 bg-slate-900 rounded-full overflow-hidden">
             <div className="h-full bg-amber-500 w-1/2 animate-shimmer"></div>
           </div>
@@ -107,24 +101,14 @@ const App: React.FC = () => {
     return (
       <div className="h-full w-full flex flex-col items-center justify-center bg-slate-50 p-6 text-center">
         <img src={logo} className="w-16 h-16 mb-6" alt="Logo" />
-        <h2 className="text-2xl font-bold text-slate-900 uppercase tracking-tight mb-2 text-center">Check Your Email</h2>
+        <h2 className="text-2xl font-black text-slate-950 uppercase tracking-tight mb-2">Verification Required</h2>
         <p className="text-slate-500 text-sm max-w-sm mb-8 leading-relaxed">
-          A verification link has been sent to your inbox. Please activate your account to access the CBT Registry.
+          Check your inbox. A clinical activation link has been sent to your email to verify your registry access.
         </p>
         <div className="flex flex-col gap-3 w-full max-w-xs">
-          <button 
-            onClick={handleManualVerifyCheck} 
-            className="w-full py-4 bg-slate-950 text-amber-500 rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-lg active:scale-95 transition-all"
-          >
-            I've Verified My Email
-          </button>
-          <button 
-            onClick={() => auth.currentUser && sendEmailVerification(auth.currentUser).then(() => alert('Verification email resent!'))}
-            className="w-full py-4 bg-white text-slate-600 border border-slate-200 rounded-2xl font-bold uppercase text-[10px] tracking-widest hover:bg-slate-50 transition-all"
-          >
-            Resend Link
-          </button>
-          <button onClick={() => auth.signOut()} className="mt-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest hover:text-red-500">Log Out</button>
+          <button onClick={handleManualVerifyCheck} className="w-full py-4 bg-slate-950 text-amber-500 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-lg active:scale-95 transition-all">Refresh Status</button>
+          <button onClick={() => auth.currentUser && sendEmailVerification(auth.currentUser).then(() => alert('Verification email resent!'))} className="w-full py-4 bg-white text-slate-600 border border-slate-200 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-slate-50">Resend Link</button>
+          <button onClick={() => auth.signOut()} className="mt-4 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-red-500">Log Out</button>
         </div>
       </div>
     );
