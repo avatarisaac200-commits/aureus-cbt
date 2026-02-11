@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { User, MockTest, ExamResult } from './types';
 import { auth, db } from './firebase';
 import { onAuthStateChanged, sendEmailVerification } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
-import { doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+import { doc, getDoc, collection, getDocs, query, where, limit } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import Auth from './components/Auth';
 import Dashboard from './components/Dashboard';
 import AdminDashboard from './components/AdminDashboard';
@@ -21,6 +21,78 @@ const App: React.FC = () => {
   const [reviewResult, setReviewResult] = useState<ExamResult | null>(null);
   const [recentResult, setRecentResult] = useState<ExamResult | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  const getDefaultViewForRole = (role: User['role']) => {
+    if (role === 'root-admin') return 'root-admin';
+    if (role === 'admin') return 'admin';
+    return 'dashboard';
+  };
+
+  const getLinkedTestId = (): string | null => {
+    if (typeof window === 'undefined') return null;
+    const match = window.location.pathname.match(/^\/test\/([^/?#]+)/i);
+    if (match?.[1]) {
+      const id = decodeURIComponent(match[1]);
+      window.localStorage.setItem('linkedTestId', id);
+      return id;
+    }
+    return window.localStorage.getItem('linkedTestId');
+  };
+
+  const clearLinkedTestId = () => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.removeItem('linkedTestId');
+    if (window.location.pathname.startsWith('/test/')) {
+      window.history.replaceState({}, '', '/');
+    }
+  };
+
+  const tryStartTestFromLink = async (userObj: User, testId: string): Promise<boolean> => {
+    try {
+      const testDoc = await getDoc(doc(db, 'tests', testId));
+      if (!testDoc.exists()) {
+        alert('This test link is invalid or no longer available.');
+        clearLinkedTestId();
+        return false;
+      }
+
+      const test = { ...testDoc.data(), id: testDoc.id } as MockTest & { isPaused?: boolean };
+      if (!test.isApproved || test.isPaused) {
+        alert('This test is currently unavailable.');
+        clearLinkedTestId();
+        return false;
+      }
+
+      const attemptsSnap = await getDocs(
+        query(
+          collection(db, 'results'),
+          where('userId', '==', userObj.id),
+          where('testId', '==', test.id),
+          limit(200)
+        )
+      );
+
+      const attempts = attemptsSnap.size;
+      const maxAttempts = test.maxAttempts ?? null;
+      const retakeBlocked = !test.allowRetake && attempts >= 1;
+      const attemptsBlocked = maxAttempts !== null && maxAttempts > 0 && attempts >= maxAttempts;
+      if (retakeBlocked || attemptsBlocked) {
+        alert('You cannot take this test again.');
+        clearLinkedTestId();
+        return false;
+      }
+
+      setActiveTest(test);
+      setCurrentView('exam');
+      clearLinkedTestId();
+      return true;
+    } catch (err) {
+      console.error('Linked test open error:', err);
+      alert('Unable to open this shared test right now.');
+      clearLinkedTestId();
+      return false;
+    }
+  };
 
   const checkUserStatus = async (firebaseUser: any) => {
     try {
@@ -44,13 +116,15 @@ const App: React.FC = () => {
         const userData = userDoc.data() as User;
         const userObj = { ...userData, id: updatedUser.uid };
         setCurrentUser(userObj);
-        
-        if (userData.role === 'root-admin') {
-          setCurrentView('root-admin');
-        } else if (userData.role === 'admin') {
-          setCurrentView('admin');
+
+        const linkedTestId = getLinkedTestId();
+        if (linkedTestId) {
+          const started = await tryStartTestFromLink(userObj, linkedTestId);
+          if (!started) {
+            setCurrentView(getDefaultViewForRole(userData.role));
+          }
         } else {
-          setCurrentView('dashboard');
+          setCurrentView(getDefaultViewForRole(userData.role));
         }
       } else {
         setCurrentUser(null);

@@ -24,6 +24,125 @@ const chunkArray = <T,>(arr: T[], size: number) => {
   return chunks;
 };
 
+const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+const normalizeExtractedQuestions = (input: any): StagedQuestion[] => {
+  if (!Array.isArray(input)) return [];
+  return input
+    .map((item: any) => {
+      const options = Array.isArray(item?.options) ? item.options.slice(0, 4).map((opt: any) => String(opt ?? '').trim()) : [];
+      while (options.length < 4) options.push('');
+      const correct = Number.isInteger(item?.correctAnswerIndex) ? item.correctAnswerIndex : 0;
+      return {
+        subject: String(item?.subject ?? 'General').trim() || 'General',
+        topic: String(item?.topic ?? 'General').trim() || 'General',
+        text: String(item?.text ?? '').trim(),
+        options,
+        correctAnswerIndex: Math.min(3, Math.max(0, correct)),
+        explanation: String(item?.explanation ?? '').trim(),
+        selected: true
+      } as StagedQuestion;
+    })
+    .filter(q => q.text.length > 0 && q.options.every(opt => opt.length > 0));
+};
+
+const decodePdfBase64ToText = (base64Data: string): string => {
+  try {
+    const binary = atob(base64Data);
+    let text = '';
+    for (let i = 0; i < binary.length; i++) {
+      text += String.fromCharCode(binary.charCodeAt(i) & 0xff);
+    }
+    return text;
+  } catch {
+    return '';
+  }
+};
+
+const extractQuestionsFromPdfTextFallback = (pdfText: string): StagedQuestion[] => {
+  if (!pdfText) return [];
+
+  // Extract likely readable fragments from the PDF byte stream.
+  const rawFragments = pdfText.match(/[A-Za-z0-9][A-Za-z0-9\s.,;:()\-_/+%'"!?]{4,}/g) || [];
+  const normalizedText = rawFragments
+    .join('\n')
+    .replace(/\r/g, '\n')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n{3,}/g, '\n\n');
+
+  const lines = normalizedText
+    .split('\n')
+    .map(line => line.trim())
+    .filter(Boolean);
+
+  const questions: StagedQuestion[] = [];
+  let currentQuestion = '';
+  let options: string[] = [];
+  let answerIndex = 0;
+  let collecting = false;
+
+  const pushCurrent = () => {
+    if (!currentQuestion || options.length < 4) return;
+    questions.push({
+      subject: 'General',
+      topic: 'General',
+      text: currentQuestion.trim(),
+      options: options.slice(0, 4),
+      correctAnswerIndex: Math.min(3, Math.max(0, answerIndex)),
+      explanation: '',
+      selected: true
+    });
+  };
+
+  for (const line of lines) {
+    const qMatch = line.match(/^(\d{1,3})[\).\]]\s+(.+)/);
+    const optMatch = line.match(/^([A-Da-d])[\).\]]\s+(.+)/);
+    const ansMatch = line.match(/^(ans|answer)\s*[:\-]\s*([A-Da-d])/);
+
+    if (qMatch) {
+      if (collecting) pushCurrent();
+      collecting = true;
+      currentQuestion = qMatch[2];
+      options = [];
+      answerIndex = 0;
+      continue;
+    }
+
+    if (!collecting) continue;
+
+    if (optMatch) {
+      const idx = optMatch[1].toUpperCase().charCodeAt(0) - 65;
+      const text = optMatch[2].trim();
+      while (options.length < idx) options.push('');
+      options[idx] = text;
+      continue;
+    }
+
+    if (ansMatch) {
+      answerIndex = ansMatch[2].toUpperCase().charCodeAt(0) - 65;
+      continue;
+    }
+
+    // Continue question stem until options begin.
+    if (options.length === 0 && line.length > 1) {
+      currentQuestion += ' ' + line;
+    }
+  }
+
+  if (collecting) pushCurrent();
+
+  return questions
+    .map(q => ({
+      ...q,
+      options: q.options.filter(Boolean)
+    }))
+    .filter(q => q.text.length > 0 && q.options.length >= 4)
+    .map(q => ({
+      ...q,
+      options: q.options.slice(0, 4)
+    }));
+};
+
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'questions', onLogout, onSwitchToStudent }) => {
   const [activeTab, setActiveTab] = useState<AdminTab>(initialTab);
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -216,26 +335,91 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
 
       const base64Data = await fileToBase64(file);
       const ai = new GoogleGenAI({ apiKey });
-      
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-pro-preview',
-        contents: {
-          parts: [
-            { inlineData: { mimeType: 'application/pdf', data: base64Data } },
-            { text: "Extract CBT MCQs as a JSON array with: subject, topic, text, options(4), correctAnswerIndex(0-3), explanation." }
-          ]
-        },
-        config: { responseMimeType: "application/json" }
-      });
+      const prompt = `
+Extract CBT multiple-choice questions from this PDF.
+Return ONLY a JSON array.
+Each item must use this exact shape:
+{
+  "subject": "string",
+  "topic": "string",
+  "text": "string",
+  "options": ["string","string","string","string"],
+  "correctAnswerIndex": 0,
+  "explanation": "string"
+}
+Rules:
+- Exactly 4 options per question.
+- correctAnswerIndex must be 0,1,2,3.
+- Skip incomplete questions.
+      `.trim();
 
-      const extractedText = response.text;
-      if (extractedText) {
-        const parsed = JSON.parse(extractedText.trim()) as StagedQuestion[];
-        setStagedQuestions(parsed.map(item => ({ ...item, selected: true })));
-        setImportStatus('review');
+      let parsedQuestions: StagedQuestion[] = [];
+      const models = ['gemini-2.0-flash', 'gemini-1.5-flash'];
+      let lastError: any = null;
+
+      // New extraction algorithm:
+      // 1) Try lower-cost models first.
+      // 2) Retry with exponential backoff on quota spikes.
+      for (const model of models) {
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            const response = await ai.models.generateContent({
+              model,
+              contents: {
+                parts: [
+                  { inlineData: { mimeType: 'application/pdf', data: base64Data } },
+                  { text: prompt }
+                ]
+              },
+              config: { responseMimeType: "application/json" }
+            });
+
+            const raw = (response.text || '').trim();
+            if (!raw) throw new Error('EMPTY_RESPONSE');
+
+            const cleaned = raw.startsWith('```')
+              ? raw.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```$/i, '').trim()
+              : raw;
+
+            const normalized = normalizeExtractedQuestions(JSON.parse(cleaned));
+            if (normalized.length === 0) {
+              throw new Error('NO_VALID_QUESTIONS');
+            }
+
+            parsedQuestions = normalized;
+            break;
+          } catch (err: any) {
+            lastError = err;
+            const isRateLimited = String(err?.message || '').includes('429') || String(err?.status || '') === '429';
+            if (isRateLimited && attempt < 2) {
+              await wait((attempt + 1) * 1500);
+              continue;
+            }
+          }
+        }
+        if (parsedQuestions.length > 0) break;
       }
-    } catch (err) {
-      alert("AI reading failed. Check your API key and file.");
+
+      if (parsedQuestions.length === 0) {
+        // Non-AI fallback: attempt regex extraction directly from PDF text fragments.
+        const fallbackQuestions = extractQuestionsFromPdfTextFallback(decodePdfBase64ToText(base64Data));
+        if (fallbackQuestions.length > 0) {
+          setStagedQuestions(fallbackQuestions);
+          setImportStatus('review');
+          alert(`AI extraction failed, but fallback parser found ${fallbackQuestions.length} question(s). Please review carefully.`);
+          return;
+        }
+
+        const errorText = String(lastError?.message || '').includes('429')
+          ? 'Extraction limit reached. Please wait 1-2 minutes and try again.'
+          : 'AI extraction failed and fallback parser found no valid questions.';
+        throw new Error(errorText);
+      }
+
+      setStagedQuestions(parsedQuestions);
+      setImportStatus('review');
+    } catch (err: any) {
+      alert(err?.message || "AI reading failed. Check your API key and file.");
       setImportStatus('idle');
     }
   };
@@ -468,6 +652,25 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
       setManagedTests(prev => prev.filter(item => item.id !== test.id));
     } catch (err: any) {
       alert('Failed to delete test. ' + (err?.message || ''));
+    }
+  };
+
+  const copyTestLink = async (test: MockTest) => {
+    const link = `${window.location.origin}/test/${test.id}`;
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(link);
+      } else {
+        const temp = document.createElement('input');
+        temp.value = link;
+        document.body.appendChild(temp);
+        temp.select();
+        document.execCommand('copy');
+        document.body.removeChild(temp);
+      }
+      alert('Test link copied.');
+    } catch {
+      alert('Could not copy link. Link: ' + link);
     }
   };
 
@@ -718,6 +921,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
                         </div>
                         <p className="text-sm text-slate-500">{test.description || 'No instructions set.'}</p>
                         <div className="flex flex-wrap gap-2">
+                          <button onClick={() => copyTestLink(test)} className="px-5 py-2 bg-emerald-50 rounded-xl text-[10px] font-bold uppercase tracking-widest text-emerald-700 hover:bg-emerald-100">Copy Link</button>
                           <button onClick={() => startEditTest(test)} className="px-5 py-2 bg-slate-100 rounded-xl text-[10px] font-bold uppercase tracking-widest text-slate-700 hover:bg-slate-200">Edit</button>
                           <button onClick={() => togglePauseTest(test)} className="px-5 py-2 bg-amber-100 rounded-xl text-[10px] font-bold uppercase tracking-widest text-amber-700 hover:bg-amber-200">{isPaused ? 'Resume' : 'Pause'}</button>
                           <button onClick={() => removeTest(test)} className="px-5 py-2 bg-red-50 rounded-xl text-[10px] font-bold uppercase tracking-widest text-red-600 hover:bg-red-100">Delete</button>
