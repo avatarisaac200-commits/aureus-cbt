@@ -143,6 +143,104 @@ const extractQuestionsFromPdfTextFallback = (pdfText: string): StagedQuestion[] 
     }));
 };
 
+const renderPdfPagesToBase64Images = async (base64Data: string, maxPages = 8): Promise<string[]> => {
+  const pdfjsLib: any = await import(/* @vite-ignore */ 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/+esm');
+  const bytes = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
+
+  if (pdfjsLib?.GlobalWorkerOptions) {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs';
+  }
+
+  const loadingTask = pdfjsLib.getDocument({ data: bytes });
+  const pdf = await loadingTask.promise;
+  const pageCount = Math.min(pdf.numPages, maxPages);
+  const images: string[] = [];
+
+  for (let i = 1; i <= pageCount; i++) {
+    const page = await pdf.getPage(i);
+    const viewport = page.getViewport({ scale: 1.5 });
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) continue;
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    await page.render({ canvasContext: ctx, viewport }).promise;
+    const jpegBase64 = canvas.toDataURL('image/jpeg', 0.86).split(',')[1];
+    images.push(jpegBase64);
+  }
+
+  return images;
+};
+
+const extractQuestionsFromImagesWithGemini = async (
+  ai: GoogleGenAI,
+  imageBase64List: string[]
+): Promise<StagedQuestion[]> => {
+  const prompt = `
+You are extracting CBT multiple-choice questions from page images.
+Return ONLY a JSON array.
+Each item must be:
+{
+  "subject": "string",
+  "topic": "string",
+  "text": "string",
+  "options": ["string","string","string","string"],
+  "correctAnswerIndex": 0,
+  "explanation": "string"
+}
+Rules:
+- exactly 4 options
+- correctAnswerIndex in [0,1,2,3]
+- skip incomplete or ambiguous items
+  `.trim();
+
+  const collected: StagedQuestion[] = [];
+  const seen = new Set<string>();
+
+  for (const image of imageBase64List) {
+    let pageQuestions: StagedQuestion[] = [];
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const response = await ai.models.generateContent({
+          model: 'gemini-1.5-flash',
+          contents: {
+            parts: [
+              { inlineData: { mimeType: 'image/jpeg', data: image } },
+              { text: prompt }
+            ]
+          },
+          config: { responseMimeType: 'application/json' }
+        });
+
+        const raw = (response.text || '').trim();
+        if (!raw) throw new Error('EMPTY_RESPONSE');
+        const cleaned = raw.startsWith('```')
+          ? raw.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```$/i, '').trim()
+          : raw;
+
+        pageQuestions = normalizeExtractedQuestions(JSON.parse(cleaned));
+        break;
+      } catch (err: any) {
+        const isRateLimited = String(err?.message || '').includes('429') || String(err?.status || '') === '429';
+        if (isRateLimited && attempt < 1) {
+          await wait(1800);
+          continue;
+        }
+      }
+    }
+
+    pageQuestions.forEach(q => {
+      const key = normalizeText(q.text);
+      if (!seen.has(key)) {
+        seen.add(key);
+        collected.push(q);
+      }
+    });
+  }
+
+  return collected;
+};
+
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'questions', onLogout, onSwitchToStudent }) => {
   const [activeTab, setActiveTab] = useState<AdminTab>(initialTab);
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -408,6 +506,22 @@ Rules:
           setImportStatus('review');
           alert(`AI extraction failed, but fallback parser found ${fallbackQuestions.length} question(s). Please review carefully.`);
           return;
+        }
+
+        // OCR + vision fallback for scanned/image PDFs.
+        try {
+          const pageImages = await renderPdfPagesToBase64Images(base64Data, 8);
+          if (pageImages.length > 0) {
+            const imageQuestions = await extractQuestionsFromImagesWithGemini(ai, pageImages);
+            if (imageQuestions.length > 0) {
+              setStagedQuestions(imageQuestions);
+              setImportStatus('review');
+              alert(`AI PDF parser failed, but OCR/vision fallback found ${imageQuestions.length} question(s). Please review carefully.`);
+              return;
+            }
+          }
+        } catch (ocrErr) {
+          console.error('OCR fallback error:', ocrErr);
         }
 
         const errorText = String(lastError?.message || '').includes('429')
