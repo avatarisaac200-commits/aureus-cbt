@@ -1,9 +1,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { User } from '../types';
-import { db, auth } from '../firebase';
+import { db, firebaseConfig } from '../firebase';
 import { collection, getDocs, doc, deleteDoc, setDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
-import { createUserWithEmailAndPassword } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+import { createUserWithEmailAndPassword, getAuth, sendEmailVerification } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
 import logo from '../assets/logo.png';
 
 interface RootAdminDashboardProps {
@@ -43,16 +44,19 @@ const RootAdminDashboard: React.FC<RootAdminDashboardProps> = ({ user, onLogout,
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await createUserWithEmailAndPassword(auth, newEmail, newPass);
+      const secondaryApp = getApps().find(app => app.name === 'admin-create') || initializeApp(firebaseConfig, 'admin-create');
+      const secondaryAuth = getAuth(secondaryApp);
+      const res = await createUserWithEmailAndPassword(secondaryAuth, newEmail, newPass);
       await setDoc(doc(db, 'users', res.user.uid), { 
         id: res.user.uid, 
         name: newName, 
         email: newEmail, 
         role: 'admin' 
       });
+      await sendEmailVerification(res.user);
       setNewEmail(''); setNewPass(''); setNewName(''); 
       fetchAdmins();
-      alert("Administrator created successfully.");
+      alert("Administrator created. A verification email was sent.");
     } catch (err: any) { 
       alert(err.message); 
     } finally { 
@@ -101,7 +105,7 @@ const RootAdminDashboard: React.FC<RootAdminDashboardProps> = ({ user, onLogout,
                    <svg className="w-8 h-8 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
                 </div>
                 <h3 className="text-xl font-bold text-slate-950 mb-3 uppercase tracking-tight">AI PDF Uploader</h3>
-                <p className="text-xs text-slate-400 mb-10 italic">Automatically parse questions from medical PDFs.</p>
+                <p className="text-xs text-slate-400 mb-10 italic">Automatically parse questions from PDFs.</p>
                 <button className="w-full py-5 bg-slate-950 text-amber-500 rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-2xl hover:bg-slate-900 transition-all">Open PDF Tool</button>
              </div>
           </div>

@@ -1,9 +1,9 @@
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { User, Question, MockTest, TestSection } from '../types';
-import { db } from '../firebase';
-import { collection, addDoc, getDocs, deleteDoc, doc, query, orderBy, updateDoc, onSnapshot, writeBatch, limit, where } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
-import { GoogleGenAI, Type } from '@google/genai';
+import React, { useState, useRef, useMemo } from 'react';
+import { User, Question, TestSection } from '../types';
+import { db, auth } from '../firebase';
+import { collection, addDoc, getDocs, deleteDoc, doc, query, updateDoc, writeBatch, limit, where } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+import { GoogleGenAI } from '@google/genai';
 import ScientificText from './ScientificText';
 import logo from '../assets/logo.png';
 
@@ -15,19 +15,33 @@ interface AdminDashboardProps {
 }
 
 type AdminTab = 'questions' | 'tests' | 'import';
-type StagedQuestion = Omit<Question, 'id' | 'createdAt' | 'createdBy'>;
+type StagedQuestion = Omit<Question, 'id' | 'createdAt' | 'createdBy'> & { selected?: boolean };
+
+const normalizeText = (text: string) => text.toLowerCase().trim().replace(/\s+/g, ' ');
+const chunkArray = <T,>(arr: T[], size: number) => {
+  const chunks: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) chunks.push(arr.slice(i, i + size));
+  return chunks;
+};
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'questions', onLogout, onSwitchToStudent }) => {
   const [activeTab, setActiveTab] = useState<AdminTab>(initialTab);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [loading, setLoading] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
   const [dbError, setDbError] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [bankSearchQuery, setBankSearchQuery] = useState('');
+  const [builderSearchQuery, setBuilderSearchQuery] = useState('');
+  const [hasSearched, setHasSearched] = useState(false);
+  const [collapsedSubjects, setCollapsedSubjects] = useState<Record<string, boolean>>({});
+  const [isQuestionModalOpen, setIsQuestionModalOpen] = useState(false);
   
   // Test Builder State
   const [testName, setTestName] = useState('');
   const [testDesc, setTestDesc] = useState('');
   const [testDuration, setTestDuration] = useState(60);
+  const [allowRetake, setAllowRetake] = useState(true);
+  const [maxAttempts, setMaxAttempts] = useState<number | ''>('');
   const [sections, setSections] = useState<TestSection[]>([
     { id: 'sec_' + Date.now(), name: 'Section 1', questionIds: [], marksPerQuestion: 1 }
   ]);
@@ -47,32 +61,72 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
   const [stagedQuestions, setStagedQuestions] = useState<StagedQuestion[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // EFFECT: Fetch Bank Data
-  useEffect(() => {
-    setDbError(null);
-    // Note: Removed orderBy('createdAt') to avoid index requirement issues
-    const q = query(collection(db, 'questions'), limit(100));
-    const unsub = onSnapshot(q, 
-      (snap) => {
-        const data = snap.docs.map(d => ({ ...d.data(), id: d.id } as Question));
-        setQuestions(data);
-      },
-      (err) => {
-        console.error("Firestore Error:", err);
-        setDbError(err.message.includes('offline') ? "You appear to be offline." : "Database sync error. Check console for details.");
-      }
-    );
-    return () => unsub();
-  }, []);
+  const groupedQuestions = useMemo(() => {
+    const groups: Record<string, Question[]> = {};
+    questions.forEach(q => {
+      const subject = q.subject?.trim() || 'General';
+      if (!groups[subject]) groups[subject] = [];
+      groups[subject].push(q);
+    });
+    return groups;
+  }, [questions]);
 
-  const filteredQuestions = useMemo(() => {
-    const q = searchQuery.toLowerCase().trim();
+  const builderQuestions = useMemo(() => {
+    const q = builderSearchQuery.toLowerCase().trim();
     if (!q) return questions;
-    return questions.filter(item => 
-      item.text.toLowerCase().includes(q) || 
-      item.subject.toLowerCase().includes(q)
+    return questions.filter(item =>
+      item.text.toLowerCase().includes(q) ||
+      item.subject.toLowerCase().includes(q) ||
+      (item.topic || '').toLowerCase().includes(q)
     );
-  }, [questions, searchQuery]);
+  }, [questions, builderSearchQuery]);
+
+  const runQuestionSearch = async (rawQuery: string) => {
+    const q = rawQuery.trim();
+    setBankSearchQuery(rawQuery);
+    setHasSearched(!!q);
+    if (!q) {
+      setQuestions([]);
+      return;
+    }
+    setIsSearching(true);
+    setDbError(null);
+    try {
+      const snap = await getDocs(query(collection(db, 'questions'), limit(500)));
+      const data = snap.docs.map(d => ({ ...d.data(), id: d.id } as Question));
+      const lowerQ = q.toLowerCase();
+      const filtered = data.filter(item =>
+        item.text.toLowerCase().includes(lowerQ) ||
+        item.subject.toLowerCase().includes(lowerQ) ||
+        (item.topic || '').toLowerCase().includes(lowerQ)
+      );
+      setQuestions(filtered);
+      setCollapsedSubjects({});
+    } catch (err: any) {
+      console.error('Question search error:', err);
+      if (err.code === 'permission-denied') {
+        setDbError('Permission denied. Verify your account and admin role.');
+      } else if (err.code === 'unavailable' || !navigator.onLine) {
+        setDbError('You appear to be offline.');
+      } else {
+        setDbError('Unable to load questions. Check console for details.');
+      }
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const findDuplicateQuestion = async (rawText: string, ignoreId?: string) => {
+    const normalized = normalizeText(rawText);
+    const colRef = collection(db, 'questions');
+    const [normSnap, rawSnap] = await Promise.all([
+      getDocs(query(colRef, where('normalizedText', '==', normalized), limit(1))),
+      getDocs(query(colRef, where('text', '==', rawText), limit(1)))
+    ]);
+
+    const candidate = [...normSnap.docs, ...rawSnap.docs].find(d => d.id !== ignoreId);
+    return candidate ? candidate.id : null;
+  };
 
   const runBankCleanup = async () => {
     if (!window.confirm("Find and remove identical questions? This cannot be undone.")) return;
@@ -116,6 +170,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
   };
 
   const processPDF = async (file: File) => {
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY as string | undefined;
+    if (!apiKey) {
+      alert('Missing Gemini API key. Add VITE_GEMINI_API_KEY to .env.local.');
+      return;
+    }
+
     setImportStatus('parsing');
     try {
       const fileToBase64 = (f: File): Promise<string> => {
@@ -128,14 +188,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
       };
 
       const base64Data = await fileToBase64(file);
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const ai = new GoogleGenAI({ apiKey });
       
       const response = await ai.models.generateContent({
         model: 'gemini-3-pro-preview',
         contents: {
           parts: [
             { inlineData: { mimeType: 'application/pdf', data: base64Data } },
-            { text: "Extract medical MCQs as a JSON array with: subject, topic, text, options(4), correctAnswerIndex(0-3), explanation." }
+            { text: "Extract CBT MCQs as a JSON array with: subject, topic, text, options(4), correctAnswerIndex(0-3), explanation." }
           ]
         },
         config: { responseMimeType: "application/json" }
@@ -143,7 +203,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
 
       const extractedText = response.text;
       if (extractedText) {
-        setStagedQuestions(JSON.parse(extractedText.trim()));
+        const parsed = JSON.parse(extractedText.trim()) as StagedQuestion[];
+        setStagedQuestions(parsed.map(item => ({ ...item, selected: true })));
         setImportStatus('review');
       }
     } catch (err) {
@@ -158,19 +219,32 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
     const data = {
       subject: qSubject || 'General',
       topic: qTopic || 'General',
-      text: qText,
-      options: qOptions,
+      text: qText.trim(),
+      options: qOptions.map(o => o.trim()),
       correctAnswerIndex: qCorrect,
-      explanation: qExplanation,
+      explanation: qExplanation.trim(),
+      normalizedText: normalizeText(qText)
     };
     try {
+      const duplicateId = await findDuplicateQuestion(data.text, editingId || undefined);
+      if (duplicateId) {
+        alert('This question already exists.');
+        setLoading(false);
+        return;
+      }
       if (editingId) {
         await updateDoc(doc(db, 'questions', editingId), { ...data, updatedAt: new Date().toISOString() });
       } else {
         await addDoc(collection(db, 'questions'), { ...data, createdBy: user.id, createdAt: new Date().toISOString() });
       }
       resetForm();
-    } catch (e) { alert("Could not save to cloud."); }
+      setIsQuestionModalOpen(false);
+      if (hasSearched) {
+        await runQuestionSearch(bankSearchQuery);
+      }
+    } catch (e: any) {
+      alert("Could not save to database. " + (e?.message || ""));
+    }
     finally { setLoading(false); }
   };
 
@@ -182,6 +256,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
     e.preventDefault();
     if (!testName) return alert("Test name is required.");
     if (sections.some(s => s.questionIds.length === 0)) return alert("One or more sections are empty.");
+    if (!allowRetake && maxAttempts !== '' && Number(maxAttempts) > 1) {
+      return alert("Retake is off, so max attempts must be 1.");
+    }
     
     setLoading(true);
     try {
@@ -190,15 +267,16 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
         description: testDesc,
         totalDurationSeconds: testDuration * 60,
         sections,
-        allowRetake: true,
+        allowRetake,
+        maxAttempts: allowRetake ? (maxAttempts === '' ? null : Number(maxAttempts)) : 1,
         createdBy: user.id,
         creatorName: user.name,
         isApproved: true,
         createdAt: new Date().toISOString()
       });
-      alert("Test Published!");
+      alert("Test published.");
       setActiveTab('tests');
-    } catch (e) { alert("Error deploying test."); }
+    } catch (e: any) { alert("Error creating test. " + (e?.message || "")); }
     finally { setLoading(false); }
   };
 
@@ -218,16 +296,112 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
     setSections(newSections);
   };
 
+  const openNewQuestionModal = () => {
+    resetForm();
+    setIsQuestionModalOpen(true);
+  };
+
+  const openEditModal = (q: Question) => {
+    setEditingId(q.id);
+    setQSubject(q.subject);
+    setQTopic(q.topic || '');
+    setQText(q.text);
+    setQOptions(q.options);
+    setQCorrect(q.correctAnswerIndex);
+    setQExplanation(q.explanation || '');
+    setIsQuestionModalOpen(true);
+  };
+
+  const toggleSubjectCollapse = (subject: string) => {
+    setCollapsedSubjects(prev => ({ ...prev, [subject]: !prev[subject] }));
+  };
+
+  const commitImportedQuestions = async () => {
+    setLoading(true);
+    try {
+      const selected = stagedQuestions.filter(q => q.selected);
+      if (selected.length === 0) {
+        alert('Select at least one question to import.');
+        setLoading(false);
+        return;
+      }
+
+      const seen = new Set<string>();
+      const uniqueSelected: StagedQuestion[] = [];
+      selected.forEach(q => {
+        const norm = normalizeText(q.text);
+        if (!seen.has(norm)) {
+          seen.add(norm);
+          uniqueSelected.push(q);
+        }
+      });
+
+      const normalizedList = uniqueSelected.map(q => normalizeText(q.text));
+      const textList = uniqueSelected.map(q => q.text.trim());
+
+      const existingNormalized = new Set<string>();
+      const existingRaw = new Set<string>();
+
+      for (const chunk of chunkArray(normalizedList, 10)) {
+        const snap = await getDocs(query(collection(db, 'questions'), where('normalizedText', 'in', chunk)));
+        snap.docs.forEach(d => {
+          const data = d.data() as Question;
+          if (data.normalizedText) existingNormalized.add(data.normalizedText);
+        });
+      }
+
+      for (const chunk of chunkArray(textList, 10)) {
+        const snap = await getDocs(query(collection(db, 'questions'), where('text', 'in', chunk)));
+        snap.docs.forEach(d => {
+          const data = d.data() as Question;
+          if (data.text) existingRaw.add(normalizeText(data.text));
+        });
+      }
+
+      const finalList = uniqueSelected.filter(q => {
+        const norm = normalizeText(q.text);
+        return !existingNormalized.has(norm) && !existingRaw.has(norm);
+      });
+
+      if (finalList.length === 0) {
+        alert('All selected questions are already in the bank.');
+        setLoading(false);
+        return;
+      }
+
+      const batch = writeBatch(db);
+      finalList.forEach(q => {
+        const ref = doc(collection(db, 'questions'));
+        batch.set(ref, { ...q, normalizedText: normalizeText(q.text), createdBy: user.id, createdAt: new Date().toISOString() });
+      });
+      await batch.commit();
+
+      const skipped = uniqueSelected.length - finalList.length;
+      if (skipped > 0) {
+        alert(`Bank updated. Skipped ${skipped} duplicate(s).`);
+      } else {
+        alert('Bank updated successfully.');
+      }
+
+      setImportStatus('idle');
+      setStagedQuestions([]);
+    } catch (e: any) {
+      alert('Import failed. ' + (e?.message || ''));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="flex-1 w-full bg-slate-50 flex flex-col overflow-hidden">
       <div className="bg-white border-b border-slate-100 p-6 flex justify-between items-center shrink-0 safe-top shadow-sm z-10">
         <div className="flex items-center gap-4">
           <img src={logo} className="w-10 h-10" alt="Logo" />
           <div>
-            <h1 className="text-lg font-bold text-slate-900 leading-none">Admin Hub</h1>
+            <h1 className="text-lg font-bold text-slate-900 leading-none">Admin Panel</h1>
             <div className="flex items-center gap-2 mt-1">
                <span className={`w-2 h-2 rounded-full ${dbError ? 'bg-red-500' : 'bg-emerald-500'} animate-pulse`}></span>
-               <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{dbError || 'Cloud Synced'}</span>
+               <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{dbError || 'Connected'}</span>
             </div>
           </div>
         </div>
@@ -239,8 +413,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
 
       <nav className="flex bg-white px-6 border-b border-slate-100 shrink-0">
         <button onClick={() => setActiveTab('questions')} className={`px-8 py-4 text-[10px] font-bold uppercase tracking-widest transition-all ${activeTab === 'questions' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50' : 'text-slate-400'}`}>Question Bank</button>
-        <button onClick={() => setActiveTab('tests')} className={`px-8 py-4 text-[10px] font-bold uppercase tracking-widest transition-all ${activeTab === 'tests' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50' : 'text-slate-400'}`}>Test Builder</button>
-        <button onClick={() => setActiveTab('import')} className={`px-8 py-4 text-[10px] font-bold uppercase tracking-widest transition-all ${activeTab === 'import' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50' : 'text-slate-400'}`}>Import PDF</button>
+        <button onClick={() => setActiveTab('tests')} className={`px-8 py-4 text-[10px] font-bold uppercase tracking-widest transition-all ${activeTab === 'tests' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50' : 'text-slate-400'}`}>Create Test</button>
+        <button onClick={() => setActiveTab('import')} className={`px-8 py-4 text-[10px] font-bold uppercase tracking-widest transition-all ${activeTab === 'import' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50' : 'text-slate-400'}`}>Extract PDF</button>
       </nav>
 
       <div className="flex-1 overflow-y-auto p-6 md:p-10 no-scrollbar safe-bottom">
@@ -252,52 +426,82 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
         )}
 
         {activeTab === 'questions' && (
-          <div className="grid grid-cols-1 xl:grid-cols-4 gap-8">
-            <div className="xl:col-span-1">
-              <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-xl sticky top-0">
-                <h3 className="text-lg font-bold text-slate-900 mb-6">{editingId ? 'Update Item' : 'New Bank Item'}</h3>
-                <form onSubmit={handleSaveQuestion} className="space-y-4">
-                  <input placeholder="Subject" className="w-full p-4 bg-slate-50 border rounded-2xl text-xs font-bold outline-none" value={qSubject} onChange={e => setQSubject(e.target.value)} required />
-                  <textarea placeholder="Clinical Scenario..." className="w-full p-5 bg-slate-50 border rounded-2xl text-sm h-32 outline-none" value={qText} onChange={e => setQText(e.target.value)} required />
-                  {qOptions.map((o, i) => (
-                    <div key={i} className="flex gap-2">
-                       <input type="radio" checked={qCorrect === i} onChange={() => setQCorrect(i)} className="accent-amber-500 w-4" name="correct" />
-                       <input className="w-full p-3 bg-slate-50 border rounded-xl text-xs" value={o} placeholder={`Option ${String.fromCharCode(65+i)}`} onChange={e => { const n = [...qOptions]; n[i] = e.target.value; setQOptions(n); }} required />
-                    </div>
-                  ))}
-                  <textarea placeholder="Medical Rationale..." className="w-full p-4 bg-slate-50 border rounded-2xl text-xs h-20 outline-none" value={qExplanation} onChange={e => setQExplanation(e.target.value)} />
-                  <button className="w-full py-4 bg-slate-950 text-amber-500 rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-xl active:scale-95 transition-all">{editingId ? 'Save' : 'Add'}</button>
-                  {editingId && <button type="button" onClick={resetForm} className="w-full py-2 text-red-500 text-[9px] font-bold uppercase">Cancel</button>}
-                </form>
+          <div className="space-y-6">
+            {!auth.currentUser?.emailVerified && (
+              <div className="p-4 bg-amber-50 border border-amber-100 rounded-2xl text-amber-700 text-[10px] font-bold uppercase tracking-widest">
+                Your email is not verified. Verify to access the question bank.
               </div>
+            )}
+            <div className="flex flex-col md:flex-row gap-4">
+              <input
+                type="text"
+                placeholder="Search by subject, topic or question text..."
+                className="flex-1 p-5 bg-white border border-slate-100 rounded-2xl text-xs font-bold outline-none shadow-sm"
+                value={bankSearchQuery}
+                onChange={e => setBankSearchQuery(e.target.value)}
+              />
+              <button
+                onClick={() => runQuestionSearch(bankSearchQuery)}
+                className="px-6 py-5 bg-slate-950 text-amber-500 rounded-2xl text-[9px] font-bold uppercase tracking-widest hover:bg-slate-900 transition-all"
+              >
+                {isSearching ? 'Searching...' : 'Search'}
+              </button>
+              <button
+                onClick={openNewQuestionModal}
+                className="px-6 py-5 bg-amber-500 text-slate-950 rounded-2xl text-[9px] font-bold uppercase tracking-widest hover:bg-amber-600 transition-all"
+              >
+                Add Question
+              </button>
+              <button onClick={runBankCleanup} className="px-6 py-5 bg-white border border-red-100 text-red-500 rounded-2xl text-[9px] font-bold uppercase tracking-widest hover:bg-red-50 transition-all flex items-center gap-2">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                Clean Bank
+              </button>
             </div>
-            <div className="xl:col-span-3 space-y-6">
-               <div className="flex gap-4">
-                 <input type="text" placeholder="Quick search bank..." className="flex-1 p-5 bg-white border border-slate-100 rounded-2xl text-xs font-bold outline-none shadow-sm" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
-                 <button onClick={runBankCleanup} className="px-6 py-5 bg-white border border-red-100 text-red-500 rounded-2xl text-[9px] font-bold uppercase tracking-widest hover:bg-red-50 transition-all flex items-center gap-2">
-                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-                   Clean Bank
-                 </button>
-               </div>
-               <div className="space-y-4">
-                  {filteredQuestions.length === 0 && !loading && (
-                    <div className="bg-white p-20 rounded-[2rem] border border-dashed text-center text-slate-300 font-bold uppercase text-[10px] tracking-[0.2em]">
-                      {searchQuery ? "No search results" : "Bank is currently empty"}
-                    </div>
-                  )}
-                  {filteredQuestions.map(q => (
-                    <div key={q.id} className="bg-white p-6 rounded-[2rem] border border-slate-100 flex justify-between items-start gap-6 shadow-sm hover:border-amber-100 transition-all">
-                      <div className="flex-1">
-                        <p className="text-[10px] font-bold text-amber-600 mb-2 uppercase tracking-widest">{q.subject}</p>
-                        <p className="text-sm font-bold text-slate-800"><ScientificText text={q.text} /></p>
+
+            {!hasSearched && (
+              <div className="bg-white p-16 rounded-[2rem] border border-dashed text-center text-slate-300 font-bold uppercase text-[10px] tracking-[0.2em]">
+                Search to load questions
+              </div>
+            )}
+
+            {hasSearched && questions.length === 0 && !isSearching && (
+              <div className="bg-white p-16 rounded-[2rem] border border-dashed text-center text-slate-300 font-bold uppercase text-[10px] tracking-[0.2em]">
+                No results found
+              </div>
+            )}
+
+            <div className="space-y-4">
+              {Object.entries(groupedQuestions).map(([subject, list]) => {
+                const isCollapsed = collapsedSubjects[subject];
+                return (
+                  <div key={subject} className="bg-white rounded-[2rem] border border-slate-100 shadow-sm">
+                    <button onClick={() => toggleSubjectCollapse(subject)} className="w-full flex items-center justify-between p-6">
+                      <div className="flex items-center gap-3">
+                        <div className="w-2 h-2 rounded-full bg-amber-500"></div>
+                        <span className="text-[11px] font-bold text-slate-900 uppercase tracking-widest">{subject}</span>
+                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{list.length} item(s)</span>
                       </div>
-                      <div className="flex gap-2 shrink-0">
-                        <button onClick={() => { setEditingId(q.id); setQSubject(q.subject); setQText(q.text); setQOptions(q.options); setQCorrect(q.correctAnswerIndex); setQExplanation(q.explanation || ''); }} className="p-3 bg-slate-100 rounded-xl hover:bg-slate-200"><svg className="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg></button>
-                        <button onClick={() => { if(window.confirm('Delete this?')) deleteDoc(doc(db, 'questions', q.id)) }} className="p-3 bg-red-50 rounded-xl hover:bg-red-100"><svg className="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>
+                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{isCollapsed ? 'Expand' : 'Collapse'}</span>
+                    </button>
+                    {!isCollapsed && (
+                      <div className="px-6 pb-6 space-y-3">
+                        {list.map(q => (
+                          <div key={q.id} className="bg-slate-50 p-5 rounded-2xl border border-slate-100 flex justify-between items-start gap-6">
+                            <div className="flex-1">
+                              <p className="text-[9px] font-bold text-amber-600 mb-2 uppercase tracking-widest">{q.topic || 'General'}</p>
+                              <p className="text-sm font-bold text-slate-800"><ScientificText text={q.text} /></p>
+                            </div>
+                            <div className="flex gap-2 shrink-0">
+                              <button onClick={() => openEditModal(q)} className="p-3 bg-white rounded-xl border border-slate-100 hover:bg-slate-100"><svg className="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg></button>
+                              <button onClick={async () => { if(window.confirm('Delete this question?')) { await deleteDoc(doc(db, 'questions', q.id)); setQuestions(prev => prev.filter(item => item.id !== q.id)); } }} className="p-3 bg-red-50 rounded-xl hover:bg-red-100"><svg className="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    </div>
-                  ))}
-               </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
@@ -306,16 +510,40 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
             <div className="xl:col-span-1">
               <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-xl space-y-6">
-                <h3 className="text-lg font-bold">1. Parameters</h3>
-                <input placeholder="Unique Test Title" className="w-full p-4 bg-slate-50 border rounded-2xl text-xs font-bold" value={testName} onChange={e => setTestName(e.target.value)} />
-                <textarea placeholder="Instructions for candidates..." className="w-full p-4 bg-slate-50 border rounded-2xl text-xs h-20" value={testDesc} onChange={e => setTestDesc(e.target.value)} />
+                <h3 className="text-lg font-bold">Test Setup</h3>
+                <input placeholder="Test name" className="w-full p-4 bg-slate-50 border rounded-2xl text-xs font-bold" value={testName} onChange={e => setTestName(e.target.value)} />
+                <textarea placeholder="Instructions shown to students" className="w-full p-4 bg-slate-50 border rounded-2xl text-xs h-20" value={testDesc} onChange={e => setTestDesc(e.target.value)} />
                 <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl">
-                   <span className="text-[10px] font-bold uppercase text-slate-400">Time (Mins)</span>
-                   <input type="number" className="bg-transparent font-bold w-full text-center text-xl outline-none" value={testDuration} onChange={e => setTestDuration(parseInt(e.target.value))} />
+                   <span className="text-[10px] font-bold uppercase text-slate-400">Time (mins)</span>
+                   <input type="number" className="bg-transparent font-bold w-full text-center text-xl outline-none" value={testDuration} onChange={e => setTestDuration(parseInt(e.target.value) || 0)} />
+                </div>
+
+                <div className="flex items-center justify-between bg-slate-50 p-4 rounded-2xl">
+                  <span className="text-[10px] font-bold uppercase text-slate-400">Allow Retake</span>
+                  <button
+                    type="button"
+                    onClick={() => setAllowRetake(!allowRetake)}
+                    className={`px-4 py-2 rounded-xl text-[9px] font-bold uppercase tracking-widest ${allowRetake ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-600'}`}
+                  >
+                    {allowRetake ? 'Yes' : 'No'}
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl">
+                  <span className="text-[10px] font-bold uppercase text-slate-400">Max Attempts</span>
+                  <input
+                    type="number"
+                    min={1}
+                    disabled={!allowRetake}
+                    className="bg-transparent font-bold w-full text-center text-xl outline-none disabled:text-slate-300"
+                    value={maxAttempts}
+                    onChange={e => setMaxAttempts(e.target.value === '' ? '' : Number(e.target.value))}
+                    placeholder="Unlimited"
+                  />
                 </div>
                 
                 <div className="space-y-3">
-                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">2. Logical Sections</p>
+                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Sections</p>
                    {sections.map((s, idx) => (
                      <button key={s.id} onClick={() => setActiveBuilderSection(idx)} className={`w-full p-4 rounded-2xl border-2 text-left flex justify-between items-center transition-all ${activeBuilderSection === idx ? 'border-amber-500 bg-amber-50' : 'border-slate-50 bg-white'}`}>
                         <div>
@@ -329,7 +557,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
                             }}
                             onClick={(e) => e.stopPropagation()}
                           />
-                          <p className="text-[9px] text-slate-400 mt-1">{s.questionIds.length} items linked</p>
+                          <p className="text-[9px] text-slate-400 mt-1">{s.questionIds.length} question(s)</p>
                         </div>
                         {activeBuilderSection === idx && <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></div>}
                      </button>
@@ -345,13 +573,18 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
                <div className="bg-slate-900 text-white p-6 rounded-[2rem] flex justify-between items-center shadow-lg">
                   <div>
                     <h4 className="text-sm font-bold uppercase tracking-widest text-amber-500">Selecting for: {sections[activeBuilderSection].name}</h4>
-                    <p className="text-[9px] text-slate-400 mt-1">Tap an entry to link it to this section</p>
-                  </div>
-                  <input type="text" placeholder="Filter current view..." className="bg-slate-800 border-none p-3 rounded-xl text-xs font-bold w-48 outline-none" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+                  <p className="text-[9px] text-slate-400 mt-1">Tap a question to add/remove from this section</p>
+                </div>
+                  <input type="text" placeholder="Filter loaded questions..." className="bg-slate-800 border-none p-3 rounded-xl text-xs font-bold w-56 outline-none" value={builderSearchQuery} onChange={e => setBuilderSearchQuery(e.target.value)} />
                </div>
                
                <div className="flex-1 overflow-y-auto pr-2 space-y-3 no-scrollbar pb-10">
-                  {filteredQuestions.map(q => {
+                  {questions.length === 0 && (
+                    <div className="bg-white p-16 rounded-[2rem] border border-dashed text-center text-slate-300 font-bold uppercase text-[10px] tracking-[0.2em]">
+                      Search the bank to load questions
+                    </div>
+                  )}
+                  {builderQuestions.map(q => {
                     const isSelected = sections[activeBuilderSection].questionIds.includes(q.id);
                     return (
                       <div key={q.id} onClick={() => toggleQuestionInActiveSection(q.id)} className={`p-5 border-2 rounded-2xl cursor-pointer transition-all flex justify-between items-center gap-6 shadow-sm ${isSelected ? 'border-amber-500 bg-amber-50 shadow-md ring-2 ring-amber-500/10' : 'border-white bg-white hover:border-slate-200'}`}>
@@ -376,48 +609,155 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
                   <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center mx-auto mb-6 group-hover:bg-amber-50 transition-colors">
                     <svg className="w-8 h-8 text-slate-400 group-hover:text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
                   </div>
-                  <h3 className="text-xl font-bold mb-4 uppercase text-slate-900">Medical Data Import</h3>
-                  <p className="text-xs text-slate-400 font-medium">Feed AI a PDF to generate structured MCQ datasets.</p>
+                  <h3 className="text-xl font-bold mb-4 uppercase text-slate-900">Extract Questions From PDF</h3>
+                  <p className="text-xs text-slate-400 font-medium">Upload a PDF and review questions before adding.</p>
                 </div>
               ) : importStatus === 'parsing' ? (
                 <div className="py-20 flex flex-col items-center">
-                  <div className="w-12 h-12 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mb-6 shadow-lg"></div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest animate-pulse">Scanning clinical records...</p>
+                  <div className="w-72 h-2 bg-slate-100 rounded-full overflow-hidden mb-6">
+                    <div className="h-full bg-amber-500 animate-pulse w-1/2"></div>
+                  </div>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest animate-pulse">Reading PDF...</p>
                 </div>
               ) : (
                 <div className="space-y-6 text-left animate-in slide-in-from-bottom-10">
-                  <div className="flex justify-between items-center bg-slate-950 p-6 rounded-3xl text-white shadow-2xl">
+                  <div className="flex flex-col md:flex-row gap-4 md:items-center justify-between bg-slate-950 p-6 rounded-3xl text-white shadow-2xl">
                     <div>
-                      <p className="text-sm font-bold uppercase text-amber-500">{stagedQuestions.length} Items Parsed</p>
-                      <p className="text-[9px] text-slate-400 uppercase font-bold mt-1">Review validation results</p>
+                      <p className="text-sm font-bold uppercase text-amber-500">{stagedQuestions.filter(q => q.selected).length} Selected</p>
+                      <p className="text-[9px] text-slate-400 uppercase font-bold mt-1">Review and edit before adding</p>
                     </div>
-                    <button onClick={async () => {
-                       setLoading(true);
-                       try {
-                         const batch = writeBatch(db);
-                         stagedQuestions.forEach(q => {
-                           const ref = doc(collection(db, 'questions'));
-                           batch.set(ref, { ...q, createdBy: user.id, createdAt: new Date().toISOString() });
-                         });
-                         await batch.commit();
-                         setImportStatus('idle');
-                         alert("Bank updated successfully.");
-                       } catch (e) { alert("Import sync failed."); }
-                       finally { setLoading(false); }
-                    }} className="px-8 py-3 bg-amber-500 text-slate-950 rounded-xl font-bold uppercase text-[10px] hover:bg-amber-600">Commit to Bank</button>
+                    <div className="flex gap-2">
+                      <button onClick={commitImportedQuestions} className="px-6 py-3 bg-amber-500 text-slate-950 rounded-xl font-bold uppercase text-[10px] hover:bg-amber-600">Add to Bank</button>
+                      <button onClick={() => setImportStatus('idle')} className="px-6 py-3 bg-slate-800 text-white rounded-xl font-bold uppercase text-[10px]">Cancel</button>
+                    </div>
                   </div>
-                  {stagedQuestions.map((q, i) => (
-                    <div key={i} className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
-                      <p className="text-[9px] font-bold text-amber-600 uppercase mb-2 tracking-widest">{q.subject}</p>
-                      <p className="text-sm font-bold text-slate-800 leading-relaxed"><ScientificText text={q.text} /></p>
-                    </div>
-                  ))}
-                  <button onClick={() => setImportStatus('idle')} className="w-full py-4 text-slate-400 text-[9px] font-bold uppercase tracking-widest hover:text-red-500">Abort Import</button>
+
+                  <div className="space-y-4">
+                    {stagedQuestions.map((q, i) => (
+                      <div key={i} className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm space-y-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <input
+                              type="checkbox"
+                              checked={!!q.selected}
+                              onChange={(e) => {
+                                const next = [...stagedQuestions];
+                                next[i].selected = e.target.checked;
+                                setStagedQuestions(next);
+                              }}
+                              className="w-4 h-4 accent-amber-500"
+                            />
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Include</span>
+                          </div>
+                          <span className="text-[9px] font-bold text-amber-600 uppercase tracking-widest">{q.subject || 'General'}</span>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <input
+                            value={q.subject}
+                            onChange={(e) => {
+                              const next = [...stagedQuestions];
+                              next[i].subject = e.target.value;
+                              setStagedQuestions(next);
+                            }}
+                            className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold"
+                            placeholder="Subject"
+                          />
+                          <input
+                            value={q.topic}
+                            onChange={(e) => {
+                              const next = [...stagedQuestions];
+                              next[i].topic = e.target.value;
+                              setStagedQuestions(next);
+                            }}
+                            className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold"
+                            placeholder="Topic"
+                          />
+                        </div>
+
+                        <textarea
+                          value={q.text}
+                          onChange={(e) => {
+                            const next = [...stagedQuestions];
+                            next[i].text = e.target.value;
+                            setStagedQuestions(next);
+                          }}
+                          className="w-full p-4 bg-slate-50 border rounded-xl text-sm"
+                          rows={4}
+                          placeholder="Question text"
+                        />
+
+                        <div className="space-y-2">
+                          {q.options.map((opt, idx) => (
+                            <div key={idx} className="flex gap-2 items-center">
+                              <input
+                                type="radio"
+                                checked={q.correctAnswerIndex === idx}
+                                onChange={() => {
+                                  const next = [...stagedQuestions];
+                                  next[i].correctAnswerIndex = idx;
+                                  setStagedQuestions(next);
+                                }}
+                                className="accent-amber-500 w-4"
+                              />
+                              <input
+                                value={opt}
+                                onChange={(e) => {
+                                  const next = [...stagedQuestions];
+                                  next[i].options[idx] = e.target.value;
+                                  setStagedQuestions(next);
+                                }}
+                                className="w-full p-3 bg-slate-50 border rounded-xl text-xs"
+                                placeholder={`Option ${String.fromCharCode(65 + idx)}`}
+                              />
+                            </div>
+                          ))}
+                        </div>
+
+                        <textarea
+                          value={q.explanation || ''}
+                          onChange={(e) => {
+                            const next = [...stagedQuestions];
+                            next[i].explanation = e.target.value;
+                            setStagedQuestions(next);
+                          }}
+                          className="w-full p-4 bg-slate-50 border rounded-xl text-xs"
+                          rows={3}
+                          placeholder="Explanation (optional)"
+                        />
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
            </div>
         )}
       </div>
+      {isQuestionModalOpen && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm safe-top safe-bottom">
+          <div className="w-full max-w-2xl bg-white rounded-[2rem] shadow-2xl overflow-hidden border border-slate-100">
+            <div className="bg-slate-950 px-6 py-5 text-white flex justify-between items-center">
+              <h3 className="text-sm font-bold uppercase tracking-widest">{editingId ? 'Edit Question' : 'Add Question'}</h3>
+              <button onClick={() => { setIsQuestionModalOpen(false); resetForm(); }} className="text-slate-300 hover:text-white">Close</button>
+            </div>
+            <form onSubmit={handleSaveQuestion} className="p-6 space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <input placeholder="Subject" className="w-full p-4 bg-slate-50 border rounded-2xl text-xs font-bold outline-none" value={qSubject} onChange={e => setQSubject(e.target.value)} required />
+                <input placeholder="Topic" className="w-full p-4 bg-slate-50 border rounded-2xl text-xs font-bold outline-none" value={qTopic} onChange={e => setQTopic(e.target.value)} />
+              </div>
+              <textarea placeholder="Question text" className="w-full p-5 bg-slate-50 border rounded-2xl text-sm h-32 outline-none" value={qText} onChange={e => setQText(e.target.value)} required />
+              {qOptions.map((o, i) => (
+                <div key={i} className="flex gap-2">
+                   <input type="radio" checked={qCorrect === i} onChange={() => setQCorrect(i)} className="accent-amber-500 w-4" name="correct" />
+                   <input className="w-full p-3 bg-slate-50 border rounded-xl text-xs" value={o} placeholder={`Option ${String.fromCharCode(65+i)}`} onChange={e => { const n = [...qOptions]; n[i] = e.target.value; setQOptions(n); }} required />
+                </div>
+              ))}
+              <textarea placeholder="Explanation (optional)" className="w-full p-4 bg-slate-50 border rounded-2xl text-xs h-20 outline-none" value={qExplanation} onChange={e => setQExplanation(e.target.value)} />
+              <button disabled={loading} className="w-full py-4 bg-slate-950 text-amber-500 rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-xl active:scale-95 transition-all">{editingId ? 'Save Changes' : 'Add Question'}</button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

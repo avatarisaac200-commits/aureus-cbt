@@ -176,8 +176,7 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, onFinish, onE
                 );
               })}
             </div>
-            <div className="mt-12 pt-8 border-t border-slate-50 flex flex-col md:flex-row gap-6 justify-between items-center">
-              <button onClick={() => { if(window.confirm('Quit the test? Your progress will be lost.')) onExit(); }} className="text-[10px] font-bold text-slate-400 hover:text-red-500 uppercase tracking-widest transition-colors">Exit Test</button>
+            <div className="mt-12 pt-8 border-t border-slate-50 flex flex-col md:flex-row gap-6 justify-end items-center">
               <button onClick={finalSubmit} disabled={completedSections.length < test.sections.length || isFinishing} className="w-full md:w-auto px-10 py-4 bg-slate-950 text-amber-500 rounded-2xl text-[10px] font-bold uppercase tracking-widest shadow-xl hover:bg-slate-900 transition-all disabled:opacity-30">Submit Final Test</button>
             </div>
           </div>
@@ -245,7 +244,7 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, onFinish, onE
       </div>
 
       <footer className="bg-white border-t border-slate-100 p-6 flex flex-col sm:flex-row gap-4 justify-between items-center z-20 shrink-0 safe-bottom">
-         <button onClick={() => setView('lobby')} className="text-[10px] font-bold text-slate-400 uppercase tracking-widest hover:text-amber-600 transition-colors">Menu</button>
+         <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Finish section to return to lobby</div>
          <div className="flex gap-2 w-full sm:w-auto">
            <button onClick={() => setCurrentQuestionIndex(prev => Math.max(0, prev - 1))} disabled={currentQuestionIndex === 0} className="flex-1 sm:flex-none px-6 py-3 border-2 border-slate-100 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-slate-50 disabled:opacity-30">Back</button>
            <button onClick={() => setCurrentQuestionIndex(prev => Math.min(activeSection.questionIds.length - 1, prev + 1))} disabled={currentQuestionIndex === activeSection.questionIds.length - 1} className="flex-1 sm:flex-none px-6 py-3 border-2 border-slate-100 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-slate-50 disabled:opacity-30">Next</button>

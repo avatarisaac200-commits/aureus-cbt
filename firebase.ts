@@ -6,7 +6,7 @@ import { getFirestore, enableIndexedDbPersistence } from 'https://www.gstatic.co
 /**
  * Firebase configuration for Aureus Medicos CBT.
  */
-const firebaseConfig = {
+export const firebaseConfig = {
   apiKey: "AIzaSyCw9TAxS-fsJSpyXUI7z3GiuU_EGP24cus",
   authDomain: "aureus-medicos-cbt.firebaseapp.com",
   projectId: "aureus-medicos-cbt",

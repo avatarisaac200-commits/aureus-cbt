@@ -19,6 +19,7 @@ export interface Question {
   options: string[];
   correctAnswerIndex: number;
   explanation?: string;
+  normalizedText?: string;
   createdBy: string;
   createdAt: string;
 }
@@ -37,6 +38,7 @@ export interface MockTest {
   sections: TestSection[];
   totalDurationSeconds: number;
   allowRetake: boolean;
+  maxAttempts?: number | null;
   createdBy: string;
   creatorName: string;
   isApproved: boolean;

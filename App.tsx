@@ -57,7 +57,7 @@ const App: React.FC = () => {
         setCurrentView('auth');
       }
     } catch (error) {
-      console.error("Critical Registry Error:", error);
+      console.error("Account check error:", error);
       setCurrentView('auth');
     } finally {
       setIsLoading(false);
@@ -87,9 +87,9 @@ const App: React.FC = () => {
   if (isLoading) {
     return (
       <div className="h-full w-full flex flex-col items-center justify-center bg-slate-950">
-        <img src={logo} className="w-20 h-20 animate-pulse mb-6" alt="Aureus Logo" />
+        <img src={logo} className="w-20 h-20 animate-pulse mb-6" alt="Aureus Medicos CBT Logo" />
         <div className="flex flex-col items-center">
-          <p className="text-amber-500 text-[10px] font-black uppercase tracking-[0.5em] mb-2">Aureus Registry</p>
+          <p className="text-amber-500 text-[10px] font-black uppercase tracking-[0.5em] mb-2">Aureus Medicos CBT</p>
           <div className="w-32 h-1 bg-slate-900 rounded-full overflow-hidden">
             <div className="h-full bg-amber-500 w-1/2 animate-shimmer"></div>
           </div>
@@ -102,12 +102,12 @@ const App: React.FC = () => {
     return (
       <div className="h-full w-full flex flex-col items-center justify-center bg-slate-50 p-6 text-center">
         <img src={logo} className="w-16 h-16 mb-6" alt="Logo" />
-        <h2 className="text-2xl font-black text-slate-950 uppercase tracking-tight mb-2">Verification Required</h2>
+        <h2 className="text-2xl font-black text-slate-950 uppercase tracking-tight mb-2">Verify Your Email</h2>
         <p className="text-slate-500 text-sm max-w-sm mb-8 leading-relaxed">
-          Check your inbox. A clinical activation link has been sent to your email to verify your registry access.
+          We sent a verification link to your email. Open it to activate your account.
         </p>
         <div className="flex flex-col gap-3 w-full max-w-xs">
-          <button onClick={handleManualVerifyCheck} className="w-full py-4 bg-slate-950 text-amber-500 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-lg">Refresh Status</button>
+          <button onClick={handleManualVerifyCheck} className="w-full py-4 bg-slate-950 text-amber-500 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-lg">I Verified</button>
           <button onClick={() => auth.currentUser && sendEmailVerification(auth.currentUser).then(() => alert('Verification email resent!'))} className="w-full py-4 bg-white text-slate-600 border border-slate-200 rounded-2xl font-black uppercase text-[10px] tracking-widest">Resend Link</button>
           <button onClick={() => auth.signOut()} className="mt-4 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-red-500">Log Out</button>
         </div>

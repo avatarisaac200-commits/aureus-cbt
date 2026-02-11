@@ -46,11 +46,22 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
   const userAnswer = result.userAnswers[currentQuestionId!];
   const isCorrect = userAnswer === currentQuestion?.correctAnswerIndex;
 
-  if (loading || !test) {
+  if (loading) {
     return (
       <div className="h-full w-full flex flex-col items-center justify-center bg-slate-950 safe-top safe-bottom">
-        <img src={logo} className="w-16 h-16 animate-spin mb-6" alt="Aureus Logo" />
-        <p className="text-[11px] font-black uppercase tracking-[0.4em] text-amber-500">Recalibrating Transcript...</p>
+        <img src={logo} className="w-16 h-16 animate-spin mb-6" alt="Aureus Medicos CBT Logo" />
+        <p className="text-[11px] font-black uppercase tracking-[0.4em] text-amber-500">Loading Review...</p>
+      </div>
+    );
+  }
+
+  if (!test) {
+    return (
+      <div className="h-full w-full flex flex-col items-center justify-center bg-slate-50 p-6 text-center safe-top safe-bottom">
+        <img src={logo} className="w-16 h-16 mb-6" alt="Aureus Medicos CBT Logo" />
+        <h2 className="text-xl font-bold text-slate-900 mb-2 uppercase">Review Unavailable</h2>
+        <p className="text-slate-500 text-sm mb-6">We could not load this test.</p>
+        <button onClick={onExit} className="px-8 py-3 bg-slate-950 text-amber-500 rounded-xl font-bold uppercase tracking-widest text-[10px]">Back</button>
       </div>
     );
   }
@@ -59,9 +70,9 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
     <div className="flex flex-col h-full bg-slate-50 select-none overflow-hidden safe-top">
       <header className="bg-slate-950 text-white px-6 py-5 flex justify-between items-center border-b-4 border-amber-500 z-30 shrink-0">
         <div className="flex items-center gap-4">
-          <img src={logo} className="w-10 h-10" alt="Aureus Logo" />
+          <img src={logo} className="w-10 h-10" alt="Aureus Medicos CBT Logo" />
           <div>
-            <h1 className="text-[11px] font-black uppercase tracking-[0.4em] text-amber-500 leading-none">Aureus Review</h1>
+            <h1 className="text-[11px] font-black uppercase tracking-[0.4em] text-amber-500 leading-none">Review Mode</h1>
             <p className="text-[9px] text-slate-400 font-bold uppercase truncate max-w-[200px] mt-1">{test.name}</p>
           </div>
         </div>
@@ -76,7 +87,7 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
       <div className="flex-1 flex overflow-hidden relative">
         <aside className="hidden md:flex md:flex-col w-80 bg-white border-r border-slate-100 shrink-0">
            <div className="p-6 border-b border-slate-50 bg-slate-50/50">
-              <h3 className="text-[10px] font-black text-slate-950 uppercase tracking-[0.3em]">Transcript Matrix</h3>
+              <h3 className="text-[10px] font-black text-slate-950 uppercase tracking-[0.3em]">Question List</h3>
            </div>
            <div className="flex-1 overflow-y-auto p-6 space-y-8 no-scrollbar">
               {test.sections.map((section, sIdx) => (
@@ -133,7 +144,7 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
             </div>
 
             <div className="text-xl md:text-3xl font-bold text-slate-900 mb-16 leading-tight tracking-tight">
-              <ScientificText text={currentQuestion?.text || "Recalibrating clinical dataset..."} />
+              <ScientificText text={currentQuestion?.text || "Loading question..."} />
             </div>
 
             <div className="space-y-5">
@@ -167,7 +178,7 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
             
             {currentQuestion?.explanation && (
               <div className="mt-16 p-10 bg-slate-950 rounded-[2.5rem] border-t-8 border-amber-500 text-white shadow-2xl relative overflow-hidden">
-                <h4 className="text-[11px] font-black text-amber-500 uppercase tracking-[0.4em] mb-6">Expert Rationale</h4>
+                <h4 className="text-[11px] font-black text-amber-500 uppercase tracking-[0.4em] mb-6">Explanation</h4>
                 <div className="text-base text-slate-300 leading-relaxed relative z-10 italic">
                   <ScientificText text={currentQuestion.explanation!} />
                 </div>
@@ -181,8 +192,8 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
       </div>
 
       <footer className="bg-white border-t border-slate-100 p-6 md:p-10 px-10 md:px-20 flex justify-between items-center z-20 shrink-0 safe-bottom">
-         <div className="hidden sm:block text-[10px] font-black text-slate-400 uppercase tracking-[0.4em]">
-           Aureus Medicos Clinical Dataset
+        <div className="hidden sm:block text-[10px] font-black text-slate-400 uppercase tracking-[0.4em]">
+           Aureus Medicos CBT Review
          </div>
          
          <div className="flex gap-4 w-full sm:w-auto">
