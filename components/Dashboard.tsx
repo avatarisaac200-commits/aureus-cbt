@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, MockTest, ExamResult } from '../types';
 import { db } from '../firebase';
-import { collection, query, where, onSnapshot, getDocs, orderBy, limit } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+import { collection, query, where, onSnapshot, getDocs, limit } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import logo from '../assets/logo.png';
 
 interface DashboardProps {
@@ -20,9 +20,11 @@ const LeaderboardModal: React.FC<{ test: MockTest, onClose: () => void }> = ({ t
     const fetchTop = async () => {
       setLoading(true);
       try {
-        const q = query(collection(db, 'results'), where('testId', '==', test.id), orderBy('completedAt', 'asc'), limit(500));
+        const q = query(collection(db, 'results'), where('testId', '==', test.id), limit(1000));
         const snap = await getDocs(q);
-        const results = snap.docs.map(d => ({ ...d.data(), id: d.id } as ExamResult));
+        const results = snap.docs
+          .map(d => ({ ...d.data(), id: d.id } as ExamResult))
+          .sort((a, b) => new Date(a.completedAt).getTime() - new Date(b.completedAt).getTime());
 
         const firstAttempts: Record<string, ExamResult> = {};
         results.forEach(res => {
@@ -93,13 +95,17 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onStartTest, onRe
       }
     );
     const unsubHistory = onSnapshot(
-      query(collection(db, 'results'), where('userId', '==', user.id), orderBy('completedAt', 'desc'), limit(50)),
+      query(collection(db, 'results'), where('userId', '==', user.id), limit(100)),
       (snap) => {
-        setHistory(snap.docs.map(d => ({ ...d.data(), id: d.id } as ExamResult)));
+        const sorted = snap.docs
+          .map(d => ({ ...d.data(), id: d.id } as ExamResult))
+          .sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime())
+          .slice(0, 50);
+        setHistory(sorted);
       },
       (err) => {
         console.error('History load error:', err);
-        setErrors('Unable to load history. Please check your connection.');
+        setErrors('Unable to load history right now.');
       }
     );
     return () => { unsubTests(); unsubHistory(); };
@@ -187,9 +193,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onStartTest, onRe
                          <button onClick={() => setShowLeaderboard(test)} className="text-[9px] font-bold text-amber-600 uppercase tracking-widest hover:underline flex items-center gap-1">
                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>Leaderboard
                          </button>
-                         <div className="text-[9px] font-bold uppercase tracking-widest text-slate-400">
-                           Attempts: {attempts}{maxAttempts ? ` / ${maxAttempts}` : ''}
-                         </div>
                          <button onClick={() => onStartTest(test)} disabled={isBlocked} className="px-8 py-3 bg-amber-500 text-slate-950 rounded-xl font-bold uppercase tracking-widest text-[9px] shadow-lg active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed">
                            {isBlocked ? 'Not Available' : 'Start Test'}
                          </button>

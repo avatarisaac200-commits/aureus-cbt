@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useMemo } from 'react';
 import { User, Question, TestSection } from '../types';
-import { db, auth } from '../firebase';
+import { db } from '../firebase';
 import { collection, addDoc, getDocs, deleteDoc, doc, query, updateDoc, writeBatch, limit, where } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import { GoogleGenAI } from '@google/genai';
 import ScientificText from './ScientificText';
@@ -427,11 +427,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
 
         {activeTab === 'questions' && (
           <div className="space-y-6">
-            {!auth.currentUser?.emailVerified && (
-              <div className="p-4 bg-amber-50 border border-amber-100 rounded-2xl text-amber-700 text-[10px] font-bold uppercase tracking-widest">
-                Your email is not verified. Verify to access the question bank.
-              </div>
-            )}
             <div className="flex flex-col md:flex-row gap-4">
               <input
                 type="text"
