@@ -15,10 +15,12 @@ interface DashboardProps {
 const LeaderboardModal: React.FC<{ test: MockTest, onClose: () => void }> = ({ test, onClose }) => {
   const [topScores, setTopScores] = useState<ExamResult[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchTop = async () => {
       setLoading(true);
+      setLoadError(null);
       try {
         const q = query(collection(db, 'results'), where('testId', '==', test.id), limit(1000));
         const snap = await getDocs(q);
@@ -36,7 +38,14 @@ const LeaderboardModal: React.FC<{ test: MockTest, onClose: () => void }> = ({ t
           .slice(0, 10);
 
         setTopScores(sorted);
-      } catch (err) { console.error(err); }
+      } catch (err: any) {
+        console.error(err);
+        if (err?.code === 'permission-denied') {
+          setLoadError('Leaderboard unavailable for this account.');
+        } else {
+          setLoadError('Could not load leaderboard.');
+        }
+      }
       finally { setLoading(false); }
     };
     fetchTop();
@@ -54,6 +63,8 @@ const LeaderboardModal: React.FC<{ test: MockTest, onClose: () => void }> = ({ t
         <div className="p-6 max-h-[60vh] overflow-y-auto no-scrollbar">
           {loading ? (
             <div className="flex flex-col items-center py-20"><div className="w-8 h-8 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mb-4"></div><p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Loading...</p></div>
+          ) : loadError ? (
+            <div className="text-center py-20 text-red-500 font-bold uppercase text-[10px]">{loadError}</div>
           ) : topScores.length === 0 ? (
             <div className="text-center py-20 text-slate-400 font-bold uppercase text-[10px]">No attempts yet.</div>
           ) : (
@@ -85,7 +96,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onStartTest, onRe
     const unsubTests = onSnapshot(
       query(collection(db, 'tests'), where('isApproved', '==', true), limit(30)),
       (snap) => {
-        setTests(snap.docs.map(d => ({ ...d.data(), id: d.id } as MockTest)));
+        const loaded = snap.docs
+          .map(d => ({ ...d.data(), id: d.id } as MockTest))
+          .filter(t => !(t as any).isPaused);
+        setTests(loaded);
         setLoading(false);
       },
       (err) => {
@@ -121,9 +135,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onStartTest, onRe
           const unique = new Set<string>();
           snap.docs.forEach(d => unique.add((d.data() as ExamResult).userId));
           counts[test.id] = unique.size;
-        } catch (err) {
+        } catch (err: any) {
           console.error('Count error:', err);
-          counts[test.id] = 0;
+          counts[test.id] = (test as any).attemptCount || 0;
         }
       }
       setTestCounts(counts);

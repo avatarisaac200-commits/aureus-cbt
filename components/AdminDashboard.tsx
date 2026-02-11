@@ -1,6 +1,6 @@
 
-import React, { useState, useRef, useMemo } from 'react';
-import { User, Question, TestSection } from '../types';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
+import { User, Question, TestSection, MockTest } from '../types';
 import { db } from '../firebase';
 import { collection, addDoc, getDocs, deleteDoc, doc, query, updateDoc, writeBatch, limit, where } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import { GoogleGenAI } from '@google/genai';
@@ -14,7 +14,7 @@ interface AdminDashboardProps {
   onSwitchToStudent: () => void;
 }
 
-type AdminTab = 'questions' | 'tests' | 'import';
+type AdminTab = 'questions' | 'create-test' | 'tests' | 'import';
 type StagedQuestion = Omit<Question, 'id' | 'createdAt' | 'createdBy'> & { selected?: boolean };
 
 const normalizeText = (text: string) => text.toLowerCase().trim().replace(/\s+/g, ' ');
@@ -35,6 +35,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
   const [hasSearched, setHasSearched] = useState(false);
   const [collapsedSubjects, setCollapsedSubjects] = useState<Record<string, boolean>>({});
   const [isQuestionModalOpen, setIsQuestionModalOpen] = useState(false);
+  const [managedTests, setManagedTests] = useState<MockTest[]>([]);
+  const [managedTestsLoading, setManagedTestsLoading] = useState(false);
+  const [editingTestId, setEditingTestId] = useState<string | null>(null);
+  const [editTestName, setEditTestName] = useState('');
+  const [editTestDesc, setEditTestDesc] = useState('');
+  const [editTestDuration, setEditTestDuration] = useState(60);
   
   // Test Builder State
   const [testName, setTestName] = useState('');
@@ -81,6 +87,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
     );
   }, [questions, builderSearchQuery]);
 
+  useEffect(() => {
+    if (activeTab === 'tests') {
+      loadManagedTests();
+    }
+  }, [activeTab]);
+
   const runQuestionSearch = async (rawQuery: string) => {
     const q = rawQuery.trim();
     setBankSearchQuery(rawQuery);
@@ -113,6 +125,21 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
       }
     } finally {
       setIsSearching(false);
+    }
+  };
+
+  const loadManagedTests = async () => {
+    setManagedTestsLoading(true);
+    try {
+      const snap = await getDocs(query(collection(db, 'tests'), limit(300)));
+      const data = snap.docs
+        .map(d => ({ ...d.data(), id: d.id } as MockTest))
+        .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+      setManagedTests(data);
+    } catch (err: any) {
+      alert('Unable to load tests. ' + (err?.message || ''));
+    } finally {
+      setManagedTestsLoading(false);
     }
   };
 
@@ -392,6 +419,58 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
     }
   };
 
+  const startEditTest = (test: MockTest) => {
+    setEditingTestId(test.id);
+    setEditTestName(test.name || '');
+    setEditTestDesc(test.description || '');
+    setEditTestDuration(Math.max(1, Math.floor((test.totalDurationSeconds || 3600) / 60)));
+  };
+
+  const cancelEditTest = () => {
+    setEditingTestId(null);
+    setEditTestName('');
+    setEditTestDesc('');
+    setEditTestDuration(60);
+  };
+
+  const saveEditedTest = async (testId: string) => {
+    try {
+      await updateDoc(doc(db, 'tests', testId), {
+        name: editTestName.trim(),
+        description: editTestDesc.trim(),
+        totalDurationSeconds: Math.max(1, editTestDuration) * 60,
+        updatedAt: new Date().toISOString()
+      });
+      await loadManagedTests();
+      cancelEditTest();
+    } catch (err: any) {
+      alert('Failed to update test. ' + (err?.message || ''));
+    }
+  };
+
+  const togglePauseTest = async (test: MockTest) => {
+    try {
+      const nextPaused = !(test as any).isPaused;
+      await updateDoc(doc(db, 'tests', test.id), {
+        isPaused: nextPaused,
+        updatedAt: new Date().toISOString()
+      });
+      await loadManagedTests();
+    } catch (err: any) {
+      alert('Failed to update test status. ' + (err?.message || ''));
+    }
+  };
+
+  const removeTest = async (test: MockTest) => {
+    if (!window.confirm(`Delete test "${test.name}"? This cannot be undone.`)) return;
+    try {
+      await deleteDoc(doc(db, 'tests', test.id));
+      setManagedTests(prev => prev.filter(item => item.id !== test.id));
+    } catch (err: any) {
+      alert('Failed to delete test. ' + (err?.message || ''));
+    }
+  };
+
   return (
     <div className="flex-1 w-full bg-slate-50 flex flex-col overflow-hidden">
       <div className="bg-white border-b border-slate-100 p-6 flex justify-between items-center shrink-0 safe-top shadow-sm z-10">
@@ -413,7 +492,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
 
       <nav className="flex bg-white px-6 border-b border-slate-100 shrink-0">
         <button onClick={() => setActiveTab('questions')} className={`px-8 py-4 text-[10px] font-bold uppercase tracking-widest transition-all ${activeTab === 'questions' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50' : 'text-slate-400'}`}>Question Bank</button>
-        <button onClick={() => setActiveTab('tests')} className={`px-8 py-4 text-[10px] font-bold uppercase tracking-widest transition-all ${activeTab === 'tests' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50' : 'text-slate-400'}`}>Create Test</button>
+        <button onClick={() => setActiveTab('create-test')} className={`px-8 py-4 text-[10px] font-bold uppercase tracking-widest transition-all ${activeTab === 'create-test' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50' : 'text-slate-400'}`}>Create Test</button>
+        <button onClick={() => setActiveTab('tests')} className={`px-8 py-4 text-[10px] font-bold uppercase tracking-widest transition-all ${activeTab === 'tests' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50' : 'text-slate-400'}`}>Tests</button>
         <button onClick={() => setActiveTab('import')} className={`px-8 py-4 text-[10px] font-bold uppercase tracking-widest transition-all ${activeTab === 'import' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50' : 'text-slate-400'}`}>Extract PDF</button>
       </nav>
 
@@ -501,7 +581,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
           </div>
         )}
 
-        {activeTab === 'tests' && (
+        {activeTab === 'create-test' && (
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
             <div className="xl:col-span-1">
               <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-xl space-y-6">
@@ -592,6 +672,74 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
                     );
                   })}
                </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'tests' && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold text-slate-900">Manage Tests</h3>
+              <button onClick={loadManagedTests} className="px-5 py-2 bg-white border border-slate-200 rounded-xl text-[10px] font-bold uppercase tracking-widest text-slate-600 hover:bg-slate-50">
+                Refresh
+              </button>
+            </div>
+
+            {managedTestsLoading && (
+              <div className="bg-white p-12 rounded-[2rem] border border-slate-100 text-center text-slate-400 text-[10px] font-bold uppercase tracking-widest">
+                Loading tests...
+              </div>
+            )}
+
+            {!managedTestsLoading && managedTests.length === 0 && (
+              <div className="bg-white p-12 rounded-[2rem] border border-dashed text-center text-slate-300 text-[10px] font-bold uppercase tracking-widest">
+                No tests found
+              </div>
+            )}
+
+            <div className="space-y-4">
+              {managedTests.map(test => {
+                const isPaused = Boolean((test as any).isPaused);
+                const isEditing = editingTestId === test.id;
+                return (
+                  <div key={test.id} className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
+                    {!isEditing ? (
+                      <div className="space-y-4">
+                        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                          <div>
+                            <h4 className="text-base font-bold text-slate-900 uppercase">{test.name}</h4>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+                              {Math.round((test.totalDurationSeconds || 0) / 60)} mins - {test.sections?.length || 0} section(s)
+                            </p>
+                          </div>
+                          <span className={`px-3 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-widest ${isPaused ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                            {isPaused ? 'Paused' : 'Live'}
+                          </span>
+                        </div>
+                        <p className="text-sm text-slate-500">{test.description || 'No instructions set.'}</p>
+                        <div className="flex flex-wrap gap-2">
+                          <button onClick={() => startEditTest(test)} className="px-5 py-2 bg-slate-100 rounded-xl text-[10px] font-bold uppercase tracking-widest text-slate-700 hover:bg-slate-200">Edit</button>
+                          <button onClick={() => togglePauseTest(test)} className="px-5 py-2 bg-amber-100 rounded-xl text-[10px] font-bold uppercase tracking-widest text-amber-700 hover:bg-amber-200">{isPaused ? 'Resume' : 'Pause'}</button>
+                          <button onClick={() => removeTest(test)} className="px-5 py-2 bg-red-50 rounded-xl text-[10px] font-bold uppercase tracking-widest text-red-600 hover:bg-red-100">Delete</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        <input value={editTestName} onChange={(e) => setEditTestName(e.target.value)} className="w-full p-4 bg-slate-50 border rounded-2xl text-xs font-bold" placeholder="Test name" />
+                        <textarea value={editTestDesc} onChange={(e) => setEditTestDesc(e.target.value)} className="w-full p-4 bg-slate-50 border rounded-2xl text-xs h-24" placeholder="Instructions" />
+                        <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl">
+                          <span className="text-[10px] font-bold uppercase text-slate-400">Time (mins)</span>
+                          <input type="number" min={1} value={editTestDuration} onChange={(e) => setEditTestDuration(parseInt(e.target.value) || 1)} className="bg-transparent font-bold w-full text-center text-xl outline-none" />
+                        </div>
+                        <div className="flex gap-2">
+                          <button onClick={() => saveEditedTest(test.id)} className="px-6 py-3 bg-slate-950 text-amber-500 rounded-xl text-[10px] font-bold uppercase tracking-widest">Save</button>
+                          <button onClick={cancelEditTest} className="px-6 py-3 bg-slate-100 text-slate-700 rounded-xl text-[10px] font-bold uppercase tracking-widest">Cancel</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
