@@ -148,12 +148,19 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, packagedQuest
     setView('testing');
   };
 
+  const returnToLobby = () => {
+    setView('lobby');
+    setActiveSectionIndex(null);
+    setShowNav(false);
+  };
+
   const handleSectionSubmit = () => {
     if (activeSectionIndex === null) return;
     if (window.confirm("Finish this section? You cannot change your answers after this.")) {
-      setCompletedSections(prev => [...prev, activeSectionIndex]);
-      setView('lobby');
-      setActiveSectionIndex(null);
+      setCompletedSections(prev => (
+        prev.includes(activeSectionIndex) ? prev : [...prev, activeSectionIndex]
+      ));
+      returnToLobby();
     }
   };
 
@@ -210,12 +217,12 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, packagedQuest
         <main className="flex-1 overflow-y-auto p-6 md:p-12 no-scrollbar safe-bottom">
           <div className="max-w-4xl mx-auto bg-white rounded-[2rem] shadow-xl border border-slate-100 p-8 md:p-12">
             <h2 className="text-2xl font-bold text-slate-950 mb-2 uppercase tracking-tight">Test Instructions</h2>
-            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-10">Please finish all parts to submit your test.</p>
+            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-10">You can move between sections anytime from the lobby.</p>
             <div className="space-y-4">
               {test.sections.map((section, idx) => {
                 const isCompleted = completedSections.includes(idx);
                 return (
-                  <button key={idx} onClick={() => enterSection(idx)} disabled={isCompleted} className={`w-full flex justify-between items-center p-6 rounded-2xl border-2 transition-all ${isCompleted ? 'bg-slate-50 border-slate-100 opacity-50' : 'bg-white border-slate-100 hover:border-amber-500'}`}>
+                  <button key={idx} onClick={() => enterSection(idx)} className={`w-full flex justify-between items-center p-6 rounded-2xl border-2 transition-all ${isCompleted ? 'bg-slate-50 border-slate-100' : 'bg-white border-slate-100 hover:border-amber-500'}`}>
                     <div className="flex items-center gap-4">
                       <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm ${isCompleted ? 'bg-slate-200 text-slate-400' : 'bg-slate-950 text-amber-500'}`}>{idx + 1}</div>
                       <div className="text-left">
@@ -223,13 +230,13 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, packagedQuest
                         <p className="text-[9px] text-slate-400 font-bold uppercase">{section.questionIds.length} Questions</p>
                       </div>
                     </div>
-                    <span className={`text-[9px] font-bold px-4 py-2 rounded-xl uppercase tracking-widest transition-all ${isCompleted ? 'bg-slate-100 text-slate-400' : 'bg-amber-100 text-amber-600'}`}>{isCompleted ? 'Finished' : 'Start'}</span>
+                    <span className={`text-[9px] font-bold px-4 py-2 rounded-xl uppercase tracking-widest transition-all ${isCompleted ? 'bg-slate-100 text-slate-400' : 'bg-amber-100 text-amber-600'}`}>{isCompleted ? 'Review' : 'Start'}</span>
                   </button>
                 );
               })}
             </div>
             <div className="mt-12 pt-8 border-t border-slate-50 flex flex-col md:flex-row gap-6 justify-end items-center">
-              <button onClick={finalSubmit} disabled={completedSections.length < test.sections.length || isFinishing} className="w-full md:w-auto px-10 py-4 bg-slate-950 text-amber-500 rounded-2xl text-[10px] font-bold uppercase tracking-widest shadow-xl hover:bg-slate-900 transition-all disabled:opacity-30">Submit Final Test</button>
+              <button onClick={finalSubmit} disabled={!hasStarted || isFinishing} className="w-full md:w-auto px-10 py-4 bg-slate-950 text-amber-500 rounded-2xl text-[10px] font-bold uppercase tracking-widest shadow-xl hover:bg-slate-900 transition-all disabled:opacity-30">Submit Final Test</button>
             </div>
           </div>
         </main>
@@ -296,11 +303,12 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, packagedQuest
       </div>
 
       <footer className="bg-white border-t border-slate-100 p-6 flex flex-col sm:flex-row gap-4 justify-between items-center z-20 shrink-0 safe-bottom">
-         <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Finish section to return to lobby</div>
+         <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">You can return to lobby anytime</div>
          <div className="flex gap-2 w-full sm:w-auto">
+           <button onClick={returnToLobby} className="flex-1 sm:flex-none px-6 py-3 border-2 border-slate-100 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-slate-50">Lobby</button>
            <button onClick={() => setCurrentQuestionIndex(prev => Math.max(0, prev - 1))} disabled={currentQuestionIndex === 0} className="flex-1 sm:flex-none px-6 py-3 border-2 border-slate-100 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-slate-50 disabled:opacity-30">Back</button>
            <button onClick={() => setCurrentQuestionIndex(prev => Math.min(activeSection.questionIds.length - 1, prev + 1))} disabled={currentQuestionIndex === activeSection.questionIds.length - 1} className="flex-1 sm:flex-none px-6 py-3 border-2 border-slate-100 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-slate-50 disabled:opacity-30">Next</button>
-           <button onClick={handleSectionSubmit} className="flex-1 sm:flex-none px-8 py-3 bg-amber-500 text-slate-950 rounded-xl text-[10px] font-bold uppercase tracking-widest shadow-md">Done</button>
+           <button onClick={handleSectionSubmit} className="flex-1 sm:flex-none px-8 py-3 bg-amber-500 text-slate-950 rounded-xl text-[10px] font-bold uppercase tracking-widest shadow-md">Mark Done</button>
          </div>
       </footer>
 
