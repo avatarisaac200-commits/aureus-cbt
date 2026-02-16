@@ -136,17 +136,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
     }
   };
 
-  const recalculateScoresForQuestion = async (questionId: string) => {
-    const testsSnap = await getDocs(collection(db, 'tests'));
-    const tests = testsSnap.docs.map(d => ({ ...d.data(), id: d.id } as MockTest));
-    const affectedTests = tests.filter(test =>
-      test.sections.some(section => section.questionIds.includes(questionId))
-    );
-
-    if (affectedTests.length === 0) return 0;
+  const recalculateResultsForTests = async (tests: MockTest[]) => {
+    if (tests.length === 0) return 0;
 
     const affectedQuestionIds = new Set<string>();
-    affectedTests.forEach(test => {
+    tests.forEach(test => {
       test.sections.forEach(section => {
         section.questionIds.forEach(id => affectedQuestionIds.add(id));
       });
@@ -164,7 +158,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
     let changedResults = 0;
     const pendingUpdates: { id: string; score: number; maxScore: number; sectionBreakdown: ExamResult['sectionBreakdown'] }[] = [];
 
-    for (const test of affectedTests) {
+    for (const test of tests) {
       const resultsSnap = await getDocs(query(collection(db, 'results'), where('testId', '==', test.id)));
 
       resultsSnap.docs.forEach(resultDoc => {
@@ -224,6 +218,30 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
     }
 
     return changedResults;
+  };
+
+  const recalculateScoresForQuestion = async (questionId: string) => {
+    const testsSnap = await getDocs(collection(db, 'tests'));
+    const tests = testsSnap.docs.map(d => ({ ...d.data(), id: d.id } as MockTest));
+    const affectedTests = tests.filter(test =>
+      test.sections.some(section => section.questionIds.includes(questionId))
+    );
+    return recalculateResultsForTests(affectedTests);
+  };
+
+  const recalculateAllScores = async () => {
+    if (!window.confirm('Recalculate all stored results using current question answers? This may take some time.')) return;
+    setLoading(true);
+    try {
+      const testsSnap = await getDocs(collection(db, 'tests'));
+      const tests = testsSnap.docs.map(d => ({ ...d.data(), id: d.id } as MockTest));
+      const changedResults = await recalculateResultsForTests(tests);
+      alert(`Recalculation complete. Updated ${changedResults} result(s).`);
+    } catch (err: any) {
+      alert('Score recalculation failed. ' + (err?.message || ''));
+    } finally {
+      setLoading(false);
+    }
   };
 
   const loadManagedTests = async () => {
@@ -739,6 +757,13 @@ Rules:
               <button onClick={runBankCleanup} className="px-6 py-5 bg-white border border-red-100 text-red-500 rounded-2xl text-[9px] font-bold uppercase tracking-widest hover:bg-red-50 transition-all flex items-center gap-2">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                 Clean Bank
+              </button>
+              <button
+                onClick={recalculateAllScores}
+                disabled={loading}
+                className="px-6 py-5 bg-white border border-amber-200 text-amber-700 rounded-2xl text-[9px] font-bold uppercase tracking-widest hover:bg-amber-50 transition-all disabled:opacity-50"
+              >
+                {loading ? 'Working...' : 'Recalculate Scores'}
               </button>
             </div>
 
