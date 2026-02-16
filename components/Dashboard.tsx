@@ -92,6 +92,25 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onStartTest, onRe
   const [errors, setErrors] = useState<string | null>(null);
   const [showLeaderboard, setShowLeaderboard] = useState<MockTest | null>(null);
 
+  const copyTestLink = async (test: MockTest) => {
+    const link = `${window.location.origin}/test/${test.id}`;
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(link);
+      } else {
+        const temp = document.createElement('input');
+        temp.value = link;
+        document.body.appendChild(temp);
+        temp.select();
+        document.execCommand('copy');
+        document.body.removeChild(temp);
+      }
+      alert('Test link copied.');
+    } catch {
+      alert('Could not copy link. Link: ' + link);
+    }
+  };
+
   useEffect(() => {
     const unsubTests = onSnapshot(
       query(collection(db, 'tests'), where('isApproved', '==', true), limit(30)),
@@ -203,13 +222,18 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onStartTest, onRe
                       <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-6">
                         Taken by {testCounts[test.id] ?? 0} people
                       </div>
-                      <div className="mt-auto flex justify-between items-center">
-                         <button onClick={() => setShowLeaderboard(test)} className="text-[9px] font-bold text-amber-600 uppercase tracking-widest hover:underline flex items-center gap-1">
-                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>Leaderboard
-                         </button>
-                         <button onClick={() => onStartTest(test)} disabled={isBlocked} className="px-8 py-3 bg-amber-500 text-slate-950 rounded-xl font-bold uppercase tracking-widest text-[9px] shadow-lg active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed">
-                           {isBlocked ? 'Not Available' : 'Start Test'}
-                         </button>
+                      <div className="mt-auto flex justify-between items-center gap-2">
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => setShowLeaderboard(test)} className="text-[9px] font-bold text-amber-600 uppercase tracking-widest hover:underline flex items-center gap-1">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>Leaderboard
+                          </button>
+                          <button onClick={() => copyTestLink(test)} className="px-3 py-2 bg-emerald-50 rounded-xl text-[9px] font-bold uppercase tracking-widest text-emerald-700 hover:bg-emerald-100">
+                            Copy Link
+                          </button>
+                        </div>
+                        <button onClick={() => onStartTest(test)} disabled={isBlocked} className="px-8 py-3 bg-amber-500 text-slate-950 rounded-xl font-bold uppercase tracking-widest text-[9px] shadow-lg active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed">
+                          {isBlocked ? 'Not Available' : 'Start Test'}
+                        </button>
                       </div>
                     </div>
                       );

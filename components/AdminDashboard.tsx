@@ -24,223 +24,6 @@ const chunkArray = <T,>(arr: T[], size: number) => {
   return chunks;
 };
 
-const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-const normalizeExtractedQuestions = (input: any): StagedQuestion[] => {
-  if (!Array.isArray(input)) return [];
-  return input
-    .map((item: any) => {
-      const options = Array.isArray(item?.options) ? item.options.slice(0, 4).map((opt: any) => String(opt ?? '').trim()) : [];
-      while (options.length < 4) options.push('');
-      const correct = Number.isInteger(item?.correctAnswerIndex) ? item.correctAnswerIndex : 0;
-      return {
-        subject: String(item?.subject ?? 'General').trim() || 'General',
-        topic: String(item?.topic ?? 'General').trim() || 'General',
-        text: String(item?.text ?? '').trim(),
-        options,
-        correctAnswerIndex: Math.min(3, Math.max(0, correct)),
-        explanation: String(item?.explanation ?? '').trim(),
-        selected: true
-      } as StagedQuestion;
-    })
-    .filter(q => q.text.length > 0 && q.options.every(opt => opt.length > 0));
-};
-
-const decodePdfBase64ToText = (base64Data: string): string => {
-  try {
-    const binary = atob(base64Data);
-    let text = '';
-    for (let i = 0; i < binary.length; i++) {
-      text += String.fromCharCode(binary.charCodeAt(i) & 0xff);
-    }
-    return text;
-  } catch {
-    return '';
-  }
-};
-
-const extractQuestionsFromPdfTextFallback = (pdfText: string): StagedQuestion[] => {
-  if (!pdfText) return [];
-
-  // Extract likely readable fragments from the PDF byte stream.
-  const rawFragments = pdfText.match(/[A-Za-z0-9][A-Za-z0-9\s.,;:()\-_/+%'"!?]{4,}/g) || [];
-  const normalizedText = rawFragments
-    .join('\n')
-    .replace(/\r/g, '\n')
-    .replace(/[ \t]+/g, ' ')
-    .replace(/\n{3,}/g, '\n\n');
-
-  const lines = normalizedText
-    .split('\n')
-    .map(line => line.trim())
-    .filter(Boolean);
-
-  const questions: StagedQuestion[] = [];
-  let currentQuestion = '';
-  let options: string[] = [];
-  let answerIndex = 0;
-  let collecting = false;
-
-  const pushCurrent = () => {
-    if (!currentQuestion || options.length < 4) return;
-    questions.push({
-      subject: 'General',
-      topic: 'General',
-      text: currentQuestion.trim(),
-      options: options.slice(0, 4),
-      correctAnswerIndex: Math.min(3, Math.max(0, answerIndex)),
-      explanation: '',
-      selected: true
-    });
-  };
-
-  for (const line of lines) {
-    const qMatch = line.match(/^(\d{1,3})[\).\]]\s+(.+)/);
-    const optMatch = line.match(/^([A-Da-d])[\).\]]\s+(.+)/);
-    const ansMatch = line.match(/^(ans|answer)\s*[:\-]\s*([A-Da-d])/);
-
-    if (qMatch) {
-      if (collecting) pushCurrent();
-      collecting = true;
-      currentQuestion = qMatch[2];
-      options = [];
-      answerIndex = 0;
-      continue;
-    }
-
-    if (!collecting) continue;
-
-    if (optMatch) {
-      const idx = optMatch[1].toUpperCase().charCodeAt(0) - 65;
-      const text = optMatch[2].trim();
-      while (options.length < idx) options.push('');
-      options[idx] = text;
-      continue;
-    }
-
-    if (ansMatch) {
-      answerIndex = ansMatch[2].toUpperCase().charCodeAt(0) - 65;
-      continue;
-    }
-
-    // Continue question stem until options begin.
-    if (options.length === 0 && line.length > 1) {
-      currentQuestion += ' ' + line;
-    }
-  }
-
-  if (collecting) pushCurrent();
-
-  return questions
-    .map(q => ({
-      ...q,
-      options: q.options.filter(Boolean)
-    }))
-    .filter(q => q.text.length > 0 && q.options.length >= 4)
-    .map(q => ({
-      ...q,
-      options: q.options.slice(0, 4)
-    }));
-};
-
-const renderPdfPagesToBase64Images = async (base64Data: string, maxPages = 8): Promise<string[]> => {
-  const pdfjsLib: any = await import(/* @vite-ignore */ 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/+esm');
-  const bytes = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
-
-  if (pdfjsLib?.GlobalWorkerOptions) {
-    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs';
-  }
-
-  const loadingTask = pdfjsLib.getDocument({ data: bytes });
-  const pdf = await loadingTask.promise;
-  const pageCount = Math.min(pdf.numPages, maxPages);
-  const images: string[] = [];
-
-  for (let i = 1; i <= pageCount; i++) {
-    const page = await pdf.getPage(i);
-    const viewport = page.getViewport({ scale: 1.5 });
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    if (!ctx) continue;
-    canvas.width = viewport.width;
-    canvas.height = viewport.height;
-    await page.render({ canvasContext: ctx, viewport }).promise;
-    const jpegBase64 = canvas.toDataURL('image/jpeg', 0.86).split(',')[1];
-    images.push(jpegBase64);
-  }
-
-  return images;
-};
-
-const extractQuestionsFromImagesWithGemini = async (
-  ai: GoogleGenAI,
-  imageBase64List: string[]
-): Promise<StagedQuestion[]> => {
-  const prompt = `
-You are extracting CBT multiple-choice questions from page images.
-Return ONLY a JSON array.
-Each item must be:
-{
-  "subject": "string",
-  "topic": "string",
-  "text": "string",
-  "options": ["string","string","string","string"],
-  "correctAnswerIndex": 0,
-  "explanation": "string"
-}
-Rules:
-- exactly 4 options
-- correctAnswerIndex in [0,1,2,3]
-- skip incomplete or ambiguous items
-  `.trim();
-
-  const collected: StagedQuestion[] = [];
-  const seen = new Set<string>();
-
-  for (const image of imageBase64List) {
-    let pageQuestions: StagedQuestion[] = [];
-    for (let attempt = 0; attempt < 2; attempt++) {
-      try {
-        const response = await ai.models.generateContent({
-          model: 'gemini-1.5-flash',
-          contents: {
-            parts: [
-              { inlineData: { mimeType: 'image/jpeg', data: image } },
-              { text: prompt }
-            ]
-          },
-          config: { responseMimeType: 'application/json' }
-        });
-
-        const raw = (response.text || '').trim();
-        if (!raw) throw new Error('EMPTY_RESPONSE');
-        const cleaned = raw.startsWith('```')
-          ? raw.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```$/i, '').trim()
-          : raw;
-
-        pageQuestions = normalizeExtractedQuestions(JSON.parse(cleaned));
-        break;
-      } catch (err: any) {
-        const isRateLimited = String(err?.message || '').includes('429') || String(err?.status || '') === '429';
-        if (isRateLimited && attempt < 1) {
-          await wait(1800);
-          continue;
-        }
-      }
-    }
-
-    pageQuestions.forEach(q => {
-      const key = normalizeText(q.text);
-      if (!seen.has(key)) {
-        seen.add(key);
-        collected.push(q);
-      }
-    });
-  }
-
-  return collected;
-};
-
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'questions', onLogout, onSwitchToStudent }) => {
   const [activeTab, setActiveTab] = useState<AdminTab>(initialTab);
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -967,7 +750,26 @@ Rules:
                     <h4 className="text-sm font-bold uppercase tracking-widest text-amber-500">Selecting for: {sections[activeBuilderSection].name}</h4>
                   <p className="text-[9px] text-slate-400 mt-1">Tap a question to add/remove from this section</p>
                 </div>
-                  <input type="text" placeholder="Filter loaded questions..." className="bg-slate-800 border-none p-3 rounded-xl text-xs font-bold w-56 outline-none" value={builderSearchQuery} onChange={e => setBuilderSearchQuery(e.target.value)} />
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      placeholder="Search question bank..."
+                      className="bg-slate-800 border-none p-3 rounded-xl text-xs font-bold w-56 outline-none"
+                      value={builderSearchQuery}
+                      onChange={e => setBuilderSearchQuery(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          runQuestionSearch(builderSearchQuery);
+                        }
+                      }}
+                    />
+                    <button
+                      onClick={() => runQuestionSearch(builderSearchQuery)}
+                      className="px-4 py-3 bg-amber-500 text-slate-950 rounded-xl text-[9px] font-bold uppercase tracking-widest hover:bg-amber-400 transition-all"
+                    >
+                      {isSearching ? 'Searching...' : 'Search'}
+                    </button>
+                  </div>
                </div>
                
                <div className="flex-1 overflow-y-auto pr-2 space-y-3 no-scrollbar pb-10">
