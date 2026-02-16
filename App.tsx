@@ -192,7 +192,7 @@ const App: React.FC = () => {
   const isAuthLikeView = currentView === 'auth' || currentView === 'verify-email';
 
   return (
-    <div className={isAuthLikeView ? 'min-h-[100dvh] w-full overflow-x-hidden flex flex-col' : 'h-full w-full overflow-hidden flex flex-col'}>
+    <div className={isAuthLikeView ? 'min-h-[100dvh] w-full overflow-x-hidden flex flex-col' : 'h-[100dvh] w-full overflow-hidden flex flex-col'}>
       {currentView === 'auth' && <Auth onLogin={checkUserStatus} />}
       {currentView === 'dashboard' && currentUser && (
         <Dashboard 
