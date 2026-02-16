@@ -60,7 +60,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
   };
 
   return (
-    <div className="flex-1 bg-slate-50 flex flex-col justify-center items-center p-6 overflow-y-auto no-scrollbar safe-top safe-bottom">
+    <div className="flex-1 min-h-[100dvh] bg-slate-50 flex flex-col justify-start md:justify-center items-center p-6 overflow-y-auto no-scrollbar safe-top safe-bottom">
       <div className="mb-10 flex flex-col items-center shrink-0 animate-in fade-in slide-in-from-bottom-4 duration-700">
         <img src={logo} alt="Aureus Medicos CBT Logo" className="w-28 h-28 mb-6 drop-shadow-2xl" />
         <h1 className="text-slate-900 font-black text-3xl tracking-tighter uppercase text-center leading-none">Aureus Medicos CBT</h1>
