@@ -321,6 +321,7 @@ const App: React.FC = () => {
           onSwitchToStudent={() => setCurrentView('dashboard')}
           onSwitchToAdmin={() => { setAdminDefaultTab('questions'); setCurrentView('admin'); }}
           onGoToImport={() => { setAdminDefaultTab('import'); setCurrentView('admin'); }}
+          onGoToAnalytics={() => { setAdminDefaultTab('analytics'); setCurrentView('admin'); }}
         />
       )}
       {currentView === 'exam' && activeTest && currentUser && (

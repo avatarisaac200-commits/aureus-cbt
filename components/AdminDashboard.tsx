@@ -5,6 +5,7 @@ import { db } from '../firebase';
 import { collection, addDoc, getDocs, deleteDoc, doc, query, updateDoc, writeBatch, limit, where, documentId } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import { GoogleGenAI } from '@google/genai';
 import ScientificText from './ScientificText';
+import AdminAnalytics from './AdminAnalytics';
 import logo from '../assets/logo.png';
 
 interface AdminDashboardProps {
@@ -14,7 +15,7 @@ interface AdminDashboardProps {
   onSwitchToStudent: () => void;
 }
 
-type AdminTab = 'questions' | 'create-test' | 'tests' | 'import';
+type AdminTab = 'questions' | 'create-test' | 'tests' | 'import' | 'analytics';
 type StagedQuestion = Omit<Question, 'id' | 'createdAt' | 'createdBy'> & { selected?: boolean };
 
 const normalizeText = (text: string) => text.toLowerCase().trim().replace(/\s+/g, ' ');
@@ -718,6 +719,7 @@ Rules:
       </div>
 
       <nav className="flex bg-white px-6 border-b border-slate-100 shrink-0">
+        <button onClick={() => setActiveTab('analytics')} className={`px-8 py-4 text-[10px] font-bold uppercase tracking-widest transition-all ${activeTab === 'analytics' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50' : 'text-slate-400'}`}>Analytics</button>
         <button onClick={() => setActiveTab('questions')} className={`px-8 py-4 text-[10px] font-bold uppercase tracking-widest transition-all ${activeTab === 'questions' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50' : 'text-slate-400'}`}>Question Bank</button>
         <button onClick={() => setActiveTab('create-test')} className={`px-8 py-4 text-[10px] font-bold uppercase tracking-widest transition-all ${activeTab === 'create-test' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50' : 'text-slate-400'}`}>Create Test</button>
         <button onClick={() => setActiveTab('tests')} className={`px-8 py-4 text-[10px] font-bold uppercase tracking-widest transition-all ${activeTab === 'tests' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50' : 'text-slate-400'}`}>Tests</button>
@@ -731,6 +733,8 @@ Rules:
             {dbError}
           </div>
         )}
+
+        {activeTab === 'analytics' && <AdminAnalytics />}
 
         {activeTab === 'questions' && (
           <div className="space-y-6">

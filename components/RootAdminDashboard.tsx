@@ -13,9 +13,10 @@ interface RootAdminDashboardProps {
   onSwitchToStudent: () => void;
   onSwitchToAdmin: () => void;
   onGoToImport: () => void;
+  onGoToAnalytics: () => void;
 }
 
-const RootAdminDashboard: React.FC<RootAdminDashboardProps> = ({ user, onLogout, onSwitchToStudent, onSwitchToAdmin, onGoToImport }) => {
+const RootAdminDashboard: React.FC<RootAdminDashboardProps> = ({ user, onLogout, onSwitchToStudent, onSwitchToAdmin, onGoToImport, onGoToAnalytics }) => {
   const [admins, setAdmins] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
   const [activeView, setActiveView] = useState<'staff' | 'tools'>('staff');
@@ -100,13 +101,23 @@ const RootAdminDashboard: React.FC<RootAdminDashboardProps> = ({ user, onLogout,
       <div className="flex-1 p-6 md:p-10 overflow-y-auto no-scrollbar safe-bottom">
         {activeView === 'tools' ? (
           <div className="max-w-4xl mx-auto">
-             <div className="bg-white p-10 rounded-[2rem] border border-slate-100 shadow-xl flex flex-col group hover:border-amber-500 transition-all cursor-pointer" onClick={onGoToImport}>
-                <div className="w-16 h-16 bg-amber-50 rounded-2xl flex items-center justify-center mb-8">
-                   <svg className="w-8 h-8 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="bg-white p-10 rounded-[2rem] border border-slate-100 shadow-xl flex flex-col group hover:border-amber-500 transition-all cursor-pointer" onClick={onGoToAnalytics}>
+                   <div className="w-16 h-16 bg-emerald-50 rounded-2xl flex items-center justify-center mb-8">
+                      <svg className="w-8 h-8 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 3v18h18M8 14l3-3 3 2 4-5"></path></svg>
+                   </div>
+                   <h3 className="text-xl font-bold text-slate-950 mb-3 uppercase tracking-tight">Analytics Center</h3>
+                   <p className="text-xs text-slate-400 mb-10 italic">Performance trends, outcomes, and question insights.</p>
+                   <button className="w-full py-5 bg-slate-950 text-amber-500 rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-2xl hover:bg-slate-900 transition-all">Open Analytics</button>
                 </div>
-                <h3 className="text-xl font-bold text-slate-950 mb-3 uppercase tracking-tight">AI PDF Uploader</h3>
-                <p className="text-xs text-slate-400 mb-10 italic">Automatically parse questions from PDFs.</p>
-                <button className="w-full py-5 bg-slate-950 text-amber-500 rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-2xl hover:bg-slate-900 transition-all">Open PDF Tool</button>
+                <div className="bg-white p-10 rounded-[2rem] border border-slate-100 shadow-xl flex flex-col group hover:border-amber-500 transition-all cursor-pointer" onClick={onGoToImport}>
+                   <div className="w-16 h-16 bg-amber-50 rounded-2xl flex items-center justify-center mb-8">
+                      <svg className="w-8 h-8 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                   </div>
+                   <h3 className="text-xl font-bold text-slate-950 mb-3 uppercase tracking-tight">AI PDF Uploader</h3>
+                   <p className="text-xs text-slate-400 mb-10 italic">Automatically parse questions from PDFs.</p>
+                   <button className="w-full py-5 bg-slate-950 text-amber-500 rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-2xl hover:bg-slate-900 transition-all">Open PDF Tool</button>
+                </div>
              </div>
           </div>
         ) : (
