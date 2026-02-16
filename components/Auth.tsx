@@ -66,12 +66,12 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
         <h1 className="text-slate-900 font-black text-3xl tracking-tighter uppercase text-center leading-none">Aureus Medicos CBT</h1>
         <p className="text-amber-600 font-black text-[10px] tracking-[0.4em] uppercase mt-2">Exam Practice Portal</p>
       </div>
-      <div className="w-full max-w-md bg-white rounded-[2.5rem] shadow-2xl overflow-hidden border border-slate-100">
-        <div className="bg-slate-950 px-8 py-10 text-center border-b-4 border-amber-500">
+      <div className="w-full max-w-md bg-white rounded-[2.5rem] shadow-2xl overflow-hidden border border-slate-100 max-h-[calc(100dvh-9rem)] flex flex-col">
+        <div className="bg-slate-950 px-8 py-10 text-center border-b-4 border-amber-500 shrink-0">
            <h1 className="text-xl font-black text-white tracking-widest mb-1 uppercase">{isLogin ? 'Sign In' : 'Create Account'}</h1>
            <p className="text-amber-400 text-[9px] font-bold uppercase tracking-[0.2em]">Aureus Medicos CBT</p>
         </div>
-        <div className="p-8 md:p-12">
+        <div className="p-8 md:p-12 overflow-y-auto">
           <form onSubmit={handleSubmit} className="space-y-4">
             {!isLogin && (
               <input type="text" value={name} onChange={e => setName(e.target.value)} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-sm focus:ring-2 focus:ring-amber-500 outline-none" placeholder="Full Name" required />
