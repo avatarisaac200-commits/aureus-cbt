@@ -18,37 +18,36 @@ const LeaderboardModal: React.FC<{ test: MockTest, onClose: () => void }> = ({ t
   const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchTop = async () => {
-      setLoading(true);
-      setLoadError(null);
-      try {
-        const q = query(collection(db, 'results'), where('testId', '==', test.id), limit(1000));
-        const snap = await getDocs(q);
-        const results = snap.docs
-          .map(d => ({ ...d.data(), id: d.id } as ExamResult))
-          .sort((a, b) => new Date(a.completedAt).getTime() - new Date(b.completedAt).getTime());
+    setLoading(true);
+    setLoadError(null);
+    const q = query(collection(db, 'results'), where('testId', '==', test.id), limit(1000));
+    const unsub = onSnapshot(q, (snap) => {
+      const results = snap.docs
+        .map(d => ({ ...d.data(), id: d.id } as ExamResult))
+        .sort((a, b) => new Date(a.completedAt).getTime() - new Date(b.completedAt).getTime());
 
-        const firstAttempts: Record<string, ExamResult> = {};
-        results.forEach(res => {
-          if (!firstAttempts[res.userId]) firstAttempts[res.userId] = res;
-        });
+      const firstAttempts: Record<string, ExamResult> = {};
+      results.forEach(res => {
+        if (!firstAttempts[res.userId]) firstAttempts[res.userId] = res;
+      });
 
-        const sorted = Object.values(firstAttempts)
-          .sort((a, b) => b.score - a.score)
-          .slice(0, 10);
+      const sorted = Object.values(firstAttempts)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 10);
 
-        setTopScores(sorted);
-      } catch (err: any) {
-        console.error(err);
-        if (err?.code === 'permission-denied') {
-          setLoadError('Leaderboard unavailable for this account.');
-        } else {
-          setLoadError('Could not load leaderboard.');
-        }
+      setTopScores(sorted);
+      setLoading(false);
+    }, (err: any) => {
+      console.error(err);
+      if (err?.code === 'permission-denied') {
+        setLoadError('Leaderboard unavailable for this account.');
+      } else {
+        setLoadError('Could not load leaderboard.');
       }
-      finally { setLoading(false); }
-    };
-    fetchTop();
+      setLoading(false);
+    });
+
+    return () => unsub();
   }, [test.id]);
 
   return (

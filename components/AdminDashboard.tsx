@@ -1,8 +1,8 @@
 
 import React, { useState, useRef, useMemo, useEffect } from 'react';
-import { User, Question, TestSection, MockTest } from '../types';
+import { User, Question, TestSection, MockTest, ExamResult } from '../types';
 import { db } from '../firebase';
-import { collection, addDoc, getDocs, deleteDoc, doc, query, updateDoc, writeBatch, limit, where } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+import { collection, addDoc, getDocs, deleteDoc, doc, query, updateDoc, writeBatch, limit, where, documentId } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import { GoogleGenAI } from '@google/genai';
 import ScientificText from './ScientificText';
 import logo from '../assets/logo.png';
@@ -18,6 +18,14 @@ type AdminTab = 'questions' | 'create-test' | 'tests' | 'import';
 type StagedQuestion = Omit<Question, 'id' | 'createdAt' | 'createdBy'> & { selected?: boolean };
 
 const normalizeText = (text: string) => text.toLowerCase().trim().replace(/\s+/g, ' ');
+const normalizeOptions = (options: string[]) => options.map(opt => opt.trim());
+const areOptionsChanged = (prev: string[], next: string[]) => {
+  if (prev.length !== next.length) return true;
+  for (let i = 0; i < prev.length; i++) {
+    if (prev[i].trim() !== next[i].trim()) return true;
+  }
+  return false;
+};
 const chunkArray = <T,>(arr: T[], size: number) => {
   const chunks: T[][] = [];
   for (let i = 0; i < arr.length; i += size) chunks.push(arr.slice(i, i + size));
@@ -126,6 +134,96 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
     } finally {
       setIsSearching(false);
     }
+  };
+
+  const recalculateScoresForQuestion = async (questionId: string) => {
+    const testsSnap = await getDocs(collection(db, 'tests'));
+    const tests = testsSnap.docs.map(d => ({ ...d.data(), id: d.id } as MockTest));
+    const affectedTests = tests.filter(test =>
+      test.sections.some(section => section.questionIds.includes(questionId))
+    );
+
+    if (affectedTests.length === 0) return 0;
+
+    const affectedQuestionIds = new Set<string>();
+    affectedTests.forEach(test => {
+      test.sections.forEach(section => {
+        section.questionIds.forEach(id => affectedQuestionIds.add(id));
+      });
+    });
+
+    const questionMap: Record<string, Question> = {};
+    const ids = Array.from(affectedQuestionIds);
+    for (const chunk of chunkArray(ids, 10)) {
+      const qSnap = await getDocs(query(collection(db, 'questions'), where(documentId(), 'in', chunk)));
+      qSnap.docs.forEach(d => {
+        questionMap[d.id] = { ...d.data(), id: d.id } as Question;
+      });
+    }
+
+    let changedResults = 0;
+    const pendingUpdates: { id: string; score: number; maxScore: number; sectionBreakdown: ExamResult['sectionBreakdown'] }[] = [];
+
+    for (const test of affectedTests) {
+      const resultsSnap = await getDocs(query(collection(db, 'results'), where('testId', '==', test.id)));
+
+      resultsSnap.docs.forEach(resultDoc => {
+        const result = { ...resultDoc.data(), id: resultDoc.id } as ExamResult;
+
+        const sectionBreakdown = test.sections.map(section => {
+          let sectionScore = 0;
+          section.questionIds.forEach(qId => {
+            const question = questionMap[qId];
+            if (!question) return;
+            if (result.userAnswers?.[qId] === question.correctAnswerIndex) {
+              sectionScore += section.marksPerQuestion;
+            }
+          });
+          return {
+            sectionName: section.name,
+            score: sectionScore,
+            total: section.questionIds.length * section.marksPerQuestion
+          };
+        });
+
+        const totalScore = sectionBreakdown.reduce((sum, section) => sum + section.score, 0);
+        const maxScore = sectionBreakdown.reduce((sum, section) => sum + section.total, 0);
+        const breakdownChanged = JSON.stringify(result.sectionBreakdown || []) !== JSON.stringify(sectionBreakdown);
+
+        if (result.score !== totalScore || result.maxScore !== maxScore || breakdownChanged) {
+          pendingUpdates.push({
+            id: result.id,
+            score: totalScore,
+            maxScore,
+            sectionBreakdown
+          });
+          changedResults++;
+        }
+      });
+    }
+
+    let batch = writeBatch(db);
+    let writes = 0;
+    for (const update of pendingUpdates) {
+      batch.update(doc(db, 'results', update.id), {
+        score: update.score,
+        maxScore: update.maxScore,
+        sectionBreakdown: update.sectionBreakdown,
+        scoreRecalculatedAt: new Date().toISOString()
+      });
+      writes++;
+      if (writes >= 450) {
+        await batch.commit();
+        batch = writeBatch(db);
+        writes = 0;
+      }
+    }
+
+    if (writes > 0) {
+      await batch.commit();
+    }
+
+    return changedResults;
   };
 
   const loadManagedTests = async () => {
@@ -328,7 +426,7 @@ Rules:
       subject: qSubject || 'General',
       topic: qTopic || 'General',
       text: qText.trim(),
-      options: qOptions.map(o => o.trim()),
+      options: normalizeOptions(qOptions),
       correctAnswerIndex: qCorrect,
       explanation: qExplanation.trim(),
       normalizedText: normalizeText(qText)
@@ -341,7 +439,18 @@ Rules:
         return;
       }
       if (editingId) {
+        const existingQuestion = questions.find(q => q.id === editingId);
+        const optionsChanged = existingQuestion
+          ? areOptionsChanged(existingQuestion.options || [], data.options) || existingQuestion.correctAnswerIndex !== data.correctAnswerIndex
+          : true;
+
         await updateDoc(doc(db, 'questions', editingId), { ...data, updatedAt: new Date().toISOString() });
+        if (optionsChanged) {
+          const updatedCount = await recalculateScoresForQuestion(editingId);
+          if (updatedCount > 0) {
+            alert(`Question updated. ${updatedCount} result(s) were recalculated.`);
+          }
+        }
       } else {
         await addDoc(collection(db, 'questions'), { ...data, createdBy: user.id, createdAt: new Date().toISOString() });
       }
