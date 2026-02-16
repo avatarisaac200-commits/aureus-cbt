@@ -8,8 +8,14 @@ type StatusFilter = 'all' | ExamResult['status'];
 
 const fmtPct = (value: number) => `${Math.round(Number.isFinite(value) ? value : 0)}%`;
 const safePct = (num: number, den: number) => (den > 0 ? (num / den) * 100 : 0);
+const getMs = (value?: string) => {
+  const ms = Date.parse(value || '');
+  return Number.isFinite(ms) ? ms : null;
+};
 const startOfUtcDay = (iso: string) => {
-  const date = new Date(iso);
+  const ms = getMs(iso);
+  if (ms === null) return 'Unknown date';
+  const date = new Date(ms);
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())).toISOString().slice(0, 10);
 };
 
@@ -41,8 +47,8 @@ const AdminAnalytics: React.FC = () => {
       const loadedTests = testsSnap.docs.map(d => ({ ...d.data(), id: d.id } as MockTest));
       const loadedQuestions = questionsSnap.docs.map(d => ({ ...d.data(), id: d.id } as Question));
 
-      loadedResults.sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime());
-      loadedTests.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+      loadedResults.sort((a, b) => (getMs(b.completedAt) || 0) - (getMs(a.completedAt) || 0));
+      loadedTests.sort((a, b) => (getMs(b.createdAt) || 0) - (getMs(a.createdAt) || 0));
 
       setResults(loadedResults);
       setTests(loadedTests);
@@ -79,8 +85,8 @@ const AdminAnalytics: React.FC = () => {
     const map: Record<string, Set<string>> = {};
     tests.forEach(test => {
       const subjects = new Set<string>();
-      test.sections.forEach(section => {
-        section.questionIds.forEach(qId => {
+      (test.sections || []).forEach(section => {
+        (section.questionIds || []).forEach(qId => {
           const subject = questionsById[qId]?.subject?.trim() || 'General';
           subjects.add(subject);
         });
@@ -93,7 +99,7 @@ const AdminAnalytics: React.FC = () => {
   const userOptions = useMemo(() => {
     const map = new Map<string, string>();
     results.forEach(result => {
-      if (!map.has(result.userId)) map.set(result.userId, result.userName);
+      if (!map.has(result.userId)) map.set(result.userId, result.userName || 'Unknown');
     });
     return Array.from(map.entries())
       .map(([id, name]) => ({ id, name }))
@@ -114,7 +120,8 @@ const AdminAnalytics: React.FC = () => {
     if (rangeFilter === '90d') minMs = now - (90 * 24 * 60 * 60 * 1000);
 
     return results.filter(result => {
-      const completedMs = new Date(result.completedAt).getTime();
+      const completedMs = getMs(result.completedAt);
+      if (completedMs === null) return false;
       if (minMs && completedMs < minMs) return false;
       if (statusFilter !== 'all' && result.status !== statusFilter) return false;
       if (testFilter !== 'all' && result.testId !== testFilter) return false;
@@ -185,9 +192,11 @@ const AdminAnalytics: React.FC = () => {
       rows.forEach(item => attemptsByUser.set(item.userId, (attemptsByUser.get(item.userId) || 0) + 1));
       const retakeUsers = Array.from(attemptsByUser.values()).filter(value => value > 1).length;
 
-      const lastActivity = rows.reduce((latest, row) => (
-        new Date(row.completedAt).getTime() > new Date(latest).getTime() ? row.completedAt : latest
-      ), rows[0].completedAt);
+      const lastActivity = rows.reduce((latest, row) => {
+        const latestMs = getMs(latest) || 0;
+        const rowMs = getMs(row.completedAt) || 0;
+        return rowMs > latestMs ? row.completedAt : latest;
+      }, rows[0].completedAt);
 
       return {
         testId,
@@ -205,8 +214,8 @@ const AdminAnalytics: React.FC = () => {
   const sectionRows = useMemo(() => {
     const grouped: Record<string, { totalPct: number; count: number }> = {};
     filteredResults.forEach(result => {
-      result.sectionBreakdown.forEach(section => {
-        const key = section.sectionName;
+      (result.sectionBreakdown || []).forEach(section => {
+        const key = section.sectionName || 'Untitled Section';
         if (!grouped[key]) grouped[key] = { totalPct: 0, count: 0 };
         grouped[key].totalPct += safePct(section.score, section.total || 1);
         grouped[key].count += 1;
@@ -235,8 +244,8 @@ const AdminAnalytics: React.FC = () => {
       const test = testsById[result.testId];
       if (!test) return;
 
-      test.sections.forEach(section => {
-        section.questionIds.forEach(qId => {
+      (test.sections || []).forEach(section => {
+        (section.questionIds || []).forEach(qId => {
           const q = questionsById[qId];
           if (!q) return;
           if (subjectFilter !== 'all' && (q.subject?.trim() || 'General') !== subjectFilter) return;
@@ -294,7 +303,7 @@ const AdminAnalytics: React.FC = () => {
     });
 
     Object.entries(byUser).forEach(([userId, rows]) => {
-      const sorted = [...rows].sort((a, b) => new Date(a.completedAt).getTime() - new Date(b.completedAt).getTime());
+      const sorted = [...rows].sort((a, b) => (getMs(a.completedAt) || 0) - (getMs(b.completedAt) || 0));
       const first = safePct(sorted[0].score, sorted[0].maxScore || 1);
       const best = sorted.reduce((max, item) => Math.max(max, safePct(item.score, item.maxScore || 1)), 0);
       const last = safePct(sorted[sorted.length - 1].score, sorted[sorted.length - 1].maxScore || 1);
@@ -337,7 +346,8 @@ const AdminAnalytics: React.FC = () => {
     const recalculated = results.filter(item => Boolean((item as any).scoreRecalculatedAt)).length;
 
     const questionsLast30d = questions.filter(question => {
-      const ms = new Date(question.createdAt).getTime();
+      const ms = getMs(question.createdAt);
+      if (ms === null) return false;
       return ms >= Date.now() - (30 * 24 * 60 * 60 * 1000);
     }).length;
 
@@ -506,7 +516,7 @@ const AdminAnalytics: React.FC = () => {
                       <td className="py-3 pr-4">{fmtPct(row.avgScore)}</td>
                       <td className="py-3 pr-4">{fmtPct(row.passRate)}</td>
                       <td className="py-3 pr-4">{fmtPct(row.retakeRate)}</td>
-                      <td className="py-3 pr-4">{new Date(row.lastActivity).toLocaleDateString()}</td>
+                      <td className="py-3 pr-4">{getMs(row.lastActivity) ? new Date(row.lastActivity).toLocaleDateString() : '-'}</td>
                     </tr>
                   ))}
                   {testRows.length === 0 && (
