@@ -1,8 +1,8 @@
 
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { MockTest, Question, ExamResult, User, TestSection } from '../types';
 import { db } from '../firebase';
-import { collection, getDocs, addDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+import { collection, getDocs, addDoc, query, where, documentId } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import Calculator from './Calculator';
 import ScientificText from './ScientificText';
 import logo from '../assets/logo.png';
@@ -10,11 +10,12 @@ import logo from '../assets/logo.png';
 interface ExamInterfaceProps {
   test: MockTest;
   user: User;
+  packagedQuestions?: Record<string, Question>;
   onFinish: (result: ExamResult) => void;
   onExit: () => void;
 }
 
-const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, onFinish, onExit }) => {
+const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, packagedQuestions, onFinish, onExit }) => {
   const [view, setView] = useState<'lobby' | 'testing'>('lobby');
   const [activeSectionIndex, setActiveSectionIndex] = useState<number | null>(null);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -25,6 +26,8 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, onFinish, onE
   const [showCalculator, setShowCalculator] = useState(false);
   const [showNav, setShowNav] = useState(false);
   const [allQuestions, setAllQuestions] = useState<Record<string, Question>>({});
+  const [questionLoadError, setQuestionLoadError] = useState<string | null>(null);
+  const [isPreparingQuestions, setIsPreparingQuestions] = useState(true);
   const [isFinishing, setIsFinishing] = useState(false);
 
   // Store the shuffled order of question IDs for each section
@@ -44,10 +47,38 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, onFinish, onE
 
   useEffect(() => {
     const fetchQuestions = async () => {
-      const qSnap = await getDocs(collection(db, 'questions'));
-      const qMap: Record<string, Question> = {};
-      qSnap.docs.forEach(d => { qMap[d.id] = { ...d.data(), id: d.id } as Question; });
-      setAllQuestions(qMap);
+      setIsPreparingQuestions(true);
+      setQuestionLoadError(null);
+      try {
+        if (packagedQuestions && Object.keys(packagedQuestions).length > 0) {
+          setAllQuestions(packagedQuestions);
+          return;
+        }
+
+        const ids = Array.from(new Set(test.sections.flatMap(section => section.questionIds)));
+        if (ids.length === 0) {
+          throw new Error('This test has no questions configured.');
+        }
+
+        const chunkSize = 10;
+        const qMap: Record<string, Question> = {};
+        for (let i = 0; i < ids.length; i += chunkSize) {
+          const chunk = ids.slice(i, i + chunkSize);
+          const qSnap = await getDocs(query(collection(db, 'questions'), where(documentId(), 'in', chunk)));
+          qSnap.docs.forEach(d => { qMap[d.id] = { ...d.data(), id: d.id } as Question; });
+        }
+
+        const missing = ids.filter(id => !qMap[id]);
+        if (missing.length > 0) {
+          throw new Error('Some questions could not be loaded for this test.');
+        }
+        setAllQuestions(qMap);
+      } catch (err: any) {
+        console.error('Exam question load error:', err);
+        setQuestionLoadError(err?.message || 'Unable to prepare this test.');
+      } finally {
+        setIsPreparingQuestions(false);
+      }
     };
     fetchQuestions();
 
@@ -57,7 +88,7 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, onFinish, onE
       questionIds: shuffleArray(section.questionIds)
     }));
     setShuffledSections(randomized);
-  }, [test]);
+  }, [test, packagedQuestions]);
 
   const calculateResult = useCallback(async (status: ExamResult['status']) => {
     const sectionBreakdown = test.sections.map((section) => {
@@ -138,6 +169,27 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, onFinish, onE
     const s = seconds % 60;
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
+
+  if (isPreparingQuestions) {
+    return (
+      <div className="h-full w-full flex flex-col items-center justify-center bg-slate-950 p-8 text-center">
+        <img src={logo} className="w-12 h-12 animate-pulse mb-5" alt="Aureus Medicos CBT Logo" />
+        <p className="text-amber-500 text-[10px] font-black uppercase tracking-[0.3em] mb-2">Preparing Question Package</p>
+        <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">Please wait...</p>
+      </div>
+    );
+  }
+
+  if (questionLoadError) {
+    return (
+      <div className="h-full w-full flex flex-col items-center justify-center bg-slate-50 p-8 text-center">
+        <img src={logo} className="w-14 h-14 mb-6" alt="Aureus Medicos CBT Logo" />
+        <p className="text-red-600 text-[10px] font-black uppercase tracking-[0.2em] mb-3">Could Not Open Test</p>
+        <p className="text-slate-500 text-sm max-w-md mb-8">{questionLoadError}</p>
+        <button onClick={onExit} className="px-8 py-3 bg-slate-950 text-amber-500 rounded-xl text-[10px] font-bold uppercase tracking-widest">Back to Dashboard</button>
+      </div>
+    );
+  }
 
   if (view === 'lobby') {
     return (
