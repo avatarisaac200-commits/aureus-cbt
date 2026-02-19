@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { User, MockTest, ExamResult, Question } from './types';
 import { auth, db } from './firebase';
 import { onAuthStateChanged, sendEmailVerification } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
-import { doc, getDoc, collection, getDocs, query, where, limit, documentId } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+import { doc, getDoc, collection, getDocs, query, where, limit, documentId, updateDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import Auth from './components/Auth';
 import Dashboard from './components/Dashboard';
 import AdminDashboard from './components/AdminDashboard';
@@ -12,6 +12,122 @@ import ExamInterface from './components/ExamInterface';
 import ResultScreen from './components/ResultScreen';
 import ReviewInterface from './components/ReviewInterface';
 import logo from './assets/logo.png';
+
+const FREE_ACCESS_ENDS_AT_ISO = '2026-04-02T22:59:59.000Z'; // April 2, 2026 11:59 PM WAT
+const LICENSE_PROMPT_SNOOZE_HOURS = 24;
+const WHATSAPP_PHONE = '2348145807650';
+const WHATSAPP_URL = `https://wa.me/${WHATSAPP_PHONE}?text=${encodeURIComponent('Hello, I want to purchase my CBT annual license key.')}`;
+
+type MonetizationMode = 'pre-deadline' | 'post-deadline';
+
+interface MonetizationModalProps {
+  mode: MonetizationMode;
+  isLocked: boolean;
+  activationKey: string;
+  onActivationKeyChange: (value: string) => void;
+  onActivateKey: () => void;
+  isActivatingKey: boolean;
+  onOpenWhatsApp: () => void;
+  onContinueFree?: () => void;
+  onClose?: () => void;
+  onLogout?: () => void;
+}
+
+const MonetizationModal: React.FC<MonetizationModalProps> = ({
+  mode,
+  isLocked,
+  activationKey,
+  onActivationKeyChange,
+  onActivateKey,
+  isActivatingKey,
+  onOpenWhatsApp,
+  onContinueFree,
+  onClose,
+  onLogout
+}) => {
+  const isPreDeadline = mode === 'pre-deadline';
+
+  return (
+    <div className="fixed inset-0 z-[200] bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="w-full max-w-xl bg-white rounded-[2rem] border border-slate-100 shadow-2xl overflow-hidden">
+        <div className="bg-slate-950 border-b-4 border-amber-500 px-8 py-7">
+          <p className="text-amber-500 text-[10px] font-black uppercase tracking-[0.3em] mb-2">Platform Update</p>
+          <h2 className="text-white text-xl font-black uppercase tracking-tight">
+            {isPreDeadline ? 'Free Access Is Ending Soon' : 'Free Access Has Ended'}
+          </h2>
+        </div>
+        <div className="p-8 space-y-5">
+          {isPreDeadline ? (
+            <p className="text-slate-600 text-sm leading-relaxed">
+              This CBT platform has been running on free resources. To keep service stable for growing usage, free access
+              ends on <strong>April 2, 2026 (11:59 PM WAT)</strong>. Buy your annual activation key before this date to
+              avoid interruption.
+            </p>
+          ) : (
+            <p className="text-slate-600 text-sm leading-relaxed">
+              Free access ended on <strong>April 2, 2026 (11:59 PM WAT)</strong>. To continue using the CBT simulator,
+              activate your annual license key.
+            </p>
+          )}
+
+          <div className="p-4 rounded-2xl border border-slate-200 bg-slate-50">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-3">Activation Key</p>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <input
+                value={activationKey}
+                onChange={(e) => onActivationKeyChange(e.target.value.toUpperCase())}
+                placeholder="Enter license key"
+                className="flex-1 px-4 py-3 rounded-xl border border-slate-200 bg-white font-bold text-xs uppercase tracking-wide outline-none"
+              />
+              <button
+                onClick={onActivateKey}
+                disabled={isActivatingKey}
+                className="px-5 py-3 bg-slate-950 text-amber-500 rounded-xl font-black uppercase text-[10px] tracking-widest disabled:opacity-40"
+              >
+                {isActivatingKey ? 'Activating...' : 'Activate'}
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <button
+              onClick={onOpenWhatsApp}
+              className="w-full py-4 bg-slate-950 text-amber-500 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-lg"
+            >
+              DM +2348145807650
+            </button>
+            {isPreDeadline && onContinueFree && (
+              <button
+                onClick={onContinueFree}
+                className="w-full py-4 bg-white text-slate-600 border border-slate-200 rounded-2xl font-black uppercase text-[10px] tracking-widest"
+              >
+                Continue Free For Now
+              </button>
+            )}
+          </div>
+
+          {!isLocked && onClose && (
+            <button
+              onClick={onClose}
+              className="w-full py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-slate-600"
+            >
+              Continue
+            </button>
+          )}
+
+          {isLocked && onLogout && (
+            <button
+              onClick={onLogout}
+              className="w-full py-3 text-[10px] font-black text-red-500 uppercase tracking-widest hover:text-red-600"
+            >
+              Log Out
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -23,6 +139,11 @@ const App: React.FC = () => {
   const [packagedQuestions, setPackagedQuestions] = useState<Record<string, Question> | null>(null);
   const [packagingState, setPackagingState] = useState<{ message: string; progress: number } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [showMonetizationModal, setShowMonetizationModal] = useState(false);
+  const [monetizationMode, setMonetizationMode] = useState<MonetizationMode>('pre-deadline');
+  const [isMonetizationLocked, setIsMonetizationLocked] = useState(false);
+  const [activationKey, setActivationKey] = useState('');
+  const [isActivatingKey, setIsActivatingKey] = useState(false);
 
   const getDefaultViewForRole = (role: User['role']) => {
     if (role === 'root-admin') return 'root-admin';
@@ -47,6 +168,27 @@ const App: React.FC = () => {
     if (window.location.pathname.startsWith('/test/')) {
       window.history.replaceState({}, '', '/');
     }
+  };
+
+  const isStaffUser = (user: User | null) => {
+    if (!user) return false;
+    return user.role === 'root-admin';
+  };
+
+  const hasActiveSubscription = (user: User | null) => {
+    if (!user) return false;
+    if (isStaffUser(user)) return true;
+    if (user.subscriptionStatus !== 'active') return false;
+    if (!user.subscriptionEndsAt) return true;
+    const endsAt = Date.parse(user.subscriptionEndsAt);
+    return Number.isFinite(endsAt) && endsAt > Date.now();
+  };
+
+  const getPromptDeferredUntil = (): number | null => {
+    const raw = typeof window !== 'undefined' ? window.localStorage.getItem('licensePromptDeferredUntil') : null;
+    if (!raw) return null;
+    const ms = Date.parse(raw);
+    return Number.isFinite(ms) ? ms : null;
   };
 
   const getPackageSignature = (test: MockTest) => {
@@ -234,6 +376,126 @@ const App: React.FC = () => {
     return () => unsubscribe();
   }, []);
 
+  useEffect(() => {
+    if (isLoading) return;
+    if (!currentUser) {
+      setShowMonetizationModal(false);
+      setIsMonetizationLocked(false);
+      return;
+    }
+
+    const now = Date.now();
+    const deadlineMs = Date.parse(FREE_ACCESS_ENDS_AT_ISO);
+    const isAfterDeadline = Number.isFinite(deadlineMs) && now > deadlineMs;
+    const staff = isStaffUser(currentUser);
+    const paid = hasActiveSubscription(currentUser);
+
+    if (isAfterDeadline) {
+      setMonetizationMode('post-deadline');
+      if (!staff && !paid) {
+        setIsMonetizationLocked(true);
+        setShowMonetizationModal(true);
+      } else {
+        setIsMonetizationLocked(false);
+        setShowMonetizationModal(false);
+      }
+      return;
+    }
+
+    setMonetizationMode('pre-deadline');
+    if (staff || paid) {
+      setIsMonetizationLocked(false);
+      setShowMonetizationModal(false);
+      return;
+    }
+
+    const deferredUntil = getPromptDeferredUntil();
+    if (deferredUntil && deferredUntil > now) {
+      setIsMonetizationLocked(false);
+      setShowMonetizationModal(false);
+      return;
+    }
+
+    setIsMonetizationLocked(false);
+    setShowMonetizationModal(true);
+  }, [currentUser, isLoading]);
+
+  const handleOpenWhatsApp = () => {
+    window.open(WHATSAPP_URL, '_blank', 'noopener,noreferrer');
+  };
+
+  const handleContinueFree = () => {
+    if (typeof window !== 'undefined') {
+      const deferUntil = new Date(Date.now() + LICENSE_PROMPT_SNOOZE_HOURS * 60 * 60 * 1000).toISOString();
+      window.localStorage.setItem('licensePromptDeferredUntil', deferUntil);
+    }
+    setShowMonetizationModal(false);
+  };
+
+  const handleActivateKey = async () => {
+    if (!currentUser) return;
+    const key = activationKey.trim().toUpperCase();
+    if (!key) {
+      alert('Enter your activation key.');
+      return;
+    }
+
+    setIsActivatingKey(true);
+    try {
+      const keyDocRef = doc(db, 'licenseKeys', key);
+      const keyDoc = await getDoc(keyDocRef);
+      if (!keyDoc.exists()) {
+        alert('Invalid activation key.');
+        return;
+      }
+
+      const keyData = keyDoc.data() as any;
+      const alreadyUsed = Boolean(keyData?.isUsed) || keyData?.status === 'used' || Boolean(keyData?.redeemedBy);
+      if (alreadyUsed) {
+        alert('This activation key has already been used.');
+        return;
+      }
+
+      const keyExpiryMs = Date.parse(keyData?.expiresAt || '');
+      if (Number.isFinite(keyExpiryMs) && keyExpiryMs < Date.now()) {
+        alert('This activation key has expired.');
+        return;
+      }
+
+      const durationDays = Number(keyData?.durationDays) > 0 ? Number(keyData.durationDays) : 365;
+      const currentEndsMs = Date.parse(currentUser.subscriptionEndsAt || '');
+      const baseMs = Number.isFinite(currentEndsMs) && currentEndsMs > Date.now() ? currentEndsMs : Date.now();
+      const nextEndsAt = new Date(baseMs + durationDays * 24 * 60 * 60 * 1000).toISOString();
+      const nowIso = new Date().toISOString();
+
+      await updateDoc(doc(db, 'users', currentUser.id), {
+        subscriptionStatus: 'active',
+        subscriptionEndsAt: nextEndsAt,
+        activatedKey: key,
+        activatedAt: nowIso
+      });
+
+      await updateDoc(keyDocRef, {
+        isUsed: true,
+        status: 'used',
+        redeemedBy: currentUser.id,
+        redeemedByEmail: currentUser.email,
+        redeemedAt: nowIso
+      });
+
+      setCurrentUser(prev => (prev ? { ...prev, subscriptionStatus: 'active', subscriptionEndsAt: nextEndsAt } : prev));
+      setActivationKey('');
+      setShowMonetizationModal(false);
+      setIsMonetizationLocked(false);
+      alert('License activated successfully.');
+    } catch (err) {
+      console.error('Activation failed:', err);
+      alert('Activation failed. Please contact admin on WhatsApp.');
+    } finally {
+      setIsActivatingKey(false);
+    }
+  };
+
   const handleManualVerifyCheck = async () => {
     if (auth.currentUser) {
       setIsLoading(true);
@@ -338,6 +600,20 @@ const App: React.FC = () => {
       )}
       {currentView === 'review' && reviewResult && (
         <ReviewInterface result={reviewResult} onExit={() => setCurrentView('dashboard')} />
+      )}
+      {showMonetizationModal && (
+        <MonetizationModal
+          mode={monetizationMode}
+          isLocked={isMonetizationLocked}
+          activationKey={activationKey}
+          onActivationKeyChange={setActivationKey}
+          onActivateKey={handleActivateKey}
+          isActivatingKey={isActivatingKey}
+          onOpenWhatsApp={handleOpenWhatsApp}
+          onContinueFree={monetizationMode === 'pre-deadline' ? handleContinueFree : undefined}
+          onClose={monetizationMode === 'post-deadline' && !isMonetizationLocked ? () => setShowMonetizationModal(false) : undefined}
+          onLogout={isMonetizationLocked ? () => auth.signOut() : undefined}
+        />
       )}
     </div>
   );

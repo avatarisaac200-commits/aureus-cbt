@@ -9,6 +9,8 @@ export interface User {
   role: UserRole;
   title?: string;
   emailVerified?: boolean;
+  subscriptionStatus?: 'inactive' | 'active' | 'expired' | 'pending';
+  subscriptionEndsAt?: string;
 }
 
 export interface Question {

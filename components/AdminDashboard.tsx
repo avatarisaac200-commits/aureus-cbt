@@ -15,7 +15,7 @@ interface AdminDashboardProps {
   onSwitchToStudent: () => void;
 }
 
-type AdminTab = 'questions' | 'create-test' | 'tests' | 'import' | 'analytics';
+type AdminTab = 'questions' | 'create-test' | 'tests' | 'import' | 'analytics' | 'license-keys';
 type StagedQuestion = Omit<Question, 'id' | 'createdAt' | 'createdBy'> & { selected?: boolean };
 
 const normalizeText = (text: string) => text.toLowerCase().trim().replace(/\s+/g, ' ');
@@ -32,9 +32,15 @@ const chunkArray = <T,>(arr: T[], size: number) => {
   for (let i = 0; i < arr.length; i += size) chunks.push(arr.slice(i, i + size));
   return chunks;
 };
+const makeLicenseKey = () => {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const part = () => Array.from({ length: 4 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join('');
+  return `${part()}-${part()}-${part()}`;
+};
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'questions', onLogout, onSwitchToStudent }) => {
-  const [activeTab, setActiveTab] = useState<AdminTab>(initialTab);
+  const canManageKeys = user.role === 'root-admin';
+  const [activeTab, setActiveTab] = useState<AdminTab>(canManageKeys || initialTab !== 'license-keys' ? initialTab : 'questions');
   const [questions, setQuestions] = useState<Question[]>([]);
   const [loading, setLoading] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
@@ -75,6 +81,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
   const [importStatus, setImportStatus] = useState<'idle' | 'parsing' | 'review'>('idle');
   const [stagedQuestions, setStagedQuestions] = useState<StagedQuestion[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [singleKeyDurationDays, setSingleKeyDurationDays] = useState(365);
+  const [bulkKeyCount, setBulkKeyCount] = useState(10);
+  const [bulkKeyDurationDays, setBulkKeyDurationDays] = useState(365);
+  const [generatedKeys, setGeneratedKeys] = useState<string[]>([]);
+  const [keyToolLoading, setKeyToolLoading] = useState(false);
 
   const groupedQuestions = useMemo(() => {
     const groups: Record<string, Question[]> = {};
@@ -101,6 +112,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
       loadManagedTests();
     }
   }, [activeTab]);
+
+  useEffect(() => {
+    if (!canManageKeys && activeTab === 'license-keys') {
+      setActiveTab('questions');
+    }
+  }, [activeTab, canManageKeys]);
 
   const runQuestionSearch = async (rawQuery: string) => {
     const q = rawQuery.trim();
@@ -699,6 +716,71 @@ Rules:
     }
   };
 
+  const saveGeneratedKeyDocs = async (codes: string[], durationDays: number) => {
+    const nowIso = new Date().toISOString();
+    const batch = writeBatch(db);
+    const normalizedDays = Math.max(1, Math.floor(durationDays || 365));
+    codes.forEach((code) => {
+      const ref = doc(db, 'licenseKeys', code);
+      batch.set(ref, {
+        code,
+        status: 'new',
+        isUsed: false,
+        durationDays: normalizedDays,
+        createdBy: user.id,
+        createdByName: user.name,
+        createdAt: nowIso
+      });
+    });
+    await batch.commit();
+  };
+
+  const handleGenerateSingleKey = async () => {
+    if (!canManageKeys) return;
+    setKeyToolLoading(true);
+    try {
+      const code = makeLicenseKey();
+      await saveGeneratedKeyDocs([code], singleKeyDurationDays);
+      setGeneratedKeys([code]);
+      alert('Single activation key generated.');
+    } catch (err: any) {
+      alert('Failed to generate key. ' + (err?.message || ''));
+    } finally {
+      setKeyToolLoading(false);
+    }
+  };
+
+  const handleGenerateBulkKeys = async () => {
+    if (!canManageKeys) return;
+    const count = Math.max(1, Math.min(500, Math.floor(bulkKeyCount || 1)));
+    setKeyToolLoading(true);
+    try {
+      const codeSet = new Set<string>();
+      while (codeSet.size < count) {
+        codeSet.add(makeLicenseKey());
+      }
+      const codes = Array.from(codeSet);
+      await saveGeneratedKeyDocs(codes, bulkKeyDurationDays);
+      setGeneratedKeys(codes);
+      alert(`Generated ${codes.length} activation keys.`);
+    } catch (err: any) {
+      alert('Bulk generation failed. ' + (err?.message || ''));
+    } finally {
+      setKeyToolLoading(false);
+    }
+  };
+
+  const copyGeneratedKeys = async () => {
+    if (generatedKeys.length === 0) return;
+    const text = generatedKeys.join('\n');
+    try {
+      await navigator.clipboard.writeText(text);
+      alert('Generated keys copied.');
+    } catch {
+      alert('Could not copy keys. Please copy manually from the list.');
+    }
+  };
+
   return (
     <div className="flex-1 w-full bg-slate-50 flex flex-col overflow-hidden">
       <div className="bg-white border-b border-slate-100 p-6 flex justify-between items-center shrink-0 safe-top shadow-sm z-10">
@@ -724,6 +806,9 @@ Rules:
         <button onClick={() => setActiveTab('create-test')} className={`px-8 py-4 text-[10px] font-bold uppercase tracking-widest transition-all ${activeTab === 'create-test' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50' : 'text-slate-400'}`}>Create Test</button>
         <button onClick={() => setActiveTab('tests')} className={`px-8 py-4 text-[10px] font-bold uppercase tracking-widest transition-all ${activeTab === 'tests' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50' : 'text-slate-400'}`}>Tests</button>
         <button onClick={() => setActiveTab('import')} className={`px-8 py-4 text-[10px] font-bold uppercase tracking-widest transition-all ${activeTab === 'import' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50' : 'text-slate-400'}`}>Extract PDF</button>
+        {canManageKeys && (
+          <button onClick={() => setActiveTab('license-keys')} className={`px-8 py-4 text-[10px] font-bold uppercase tracking-widest transition-all ${activeTab === 'license-keys' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50' : 'text-slate-400'}`}>License Keys</button>
+        )}
       </nav>
 
       <div className="flex-1 overflow-y-auto p-6 md:p-10 no-scrollbar safe-bottom">
@@ -1132,6 +1217,96 @@ Rules:
                 </div>
               )}
            </div>
+        )}
+
+        {activeTab === 'license-keys' && canManageKeys && (
+          <div className="max-w-5xl mx-auto space-y-6">
+            <div className="bg-white border border-slate-100 rounded-[2rem] p-8 shadow-sm">
+              <h3 className="text-lg font-bold text-slate-900 mb-2">Activation Key Generator</h3>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                Root admin only. Generated keys are stored in <code>licenseKeys</code>.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+              <div className="bg-white border border-slate-100 rounded-[2rem] p-8 shadow-sm space-y-4">
+                <h4 className="text-sm font-bold uppercase tracking-widest text-slate-900">Single Key</h4>
+                <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl">
+                  <span className="text-[10px] font-bold uppercase text-slate-400">Duration (days)</span>
+                  <input
+                    type="number"
+                    min={1}
+                    value={singleKeyDurationDays}
+                    onChange={(e) => setSingleKeyDurationDays(Math.max(1, Number(e.target.value) || 365))}
+                    className="bg-transparent font-bold w-full text-center text-xl outline-none"
+                  />
+                </div>
+                <button
+                  onClick={handleGenerateSingleKey}
+                  disabled={keyToolLoading}
+                  className="w-full py-4 bg-slate-950 text-amber-500 rounded-2xl font-bold uppercase text-[10px] tracking-widest disabled:opacity-40"
+                >
+                  {keyToolLoading ? 'Working...' : 'Generate One Key'}
+                </button>
+              </div>
+
+              <div className="bg-white border border-slate-100 rounded-[2rem] p-8 shadow-sm space-y-4">
+                <h4 className="text-sm font-bold uppercase tracking-widest text-slate-900">Bulk Keys</h4>
+                <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl">
+                  <span className="text-[10px] font-bold uppercase text-slate-400">How Many</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={500}
+                    value={bulkKeyCount}
+                    onChange={(e) => setBulkKeyCount(Math.max(1, Math.min(500, Number(e.target.value) || 1)))}
+                    className="bg-transparent font-bold w-full text-center text-xl outline-none"
+                  />
+                </div>
+                <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl">
+                  <span className="text-[10px] font-bold uppercase text-slate-400">Duration (days)</span>
+                  <input
+                    type="number"
+                    min={1}
+                    value={bulkKeyDurationDays}
+                    onChange={(e) => setBulkKeyDurationDays(Math.max(1, Number(e.target.value) || 365))}
+                    className="bg-transparent font-bold w-full text-center text-xl outline-none"
+                  />
+                </div>
+                <button
+                  onClick={handleGenerateBulkKeys}
+                  disabled={keyToolLoading}
+                  className="w-full py-4 bg-amber-500 text-slate-950 rounded-2xl font-bold uppercase text-[10px] tracking-widest disabled:opacity-40"
+                >
+                  {keyToolLoading ? 'Working...' : 'Generate Bulk Keys'}
+                </button>
+              </div>
+            </div>
+
+            <div className="bg-white border border-slate-100 rounded-[2rem] p-8 shadow-sm">
+              <div className="flex flex-col md:flex-row gap-3 md:items-center md:justify-between mb-4">
+                <h4 className="text-sm font-bold uppercase tracking-widest text-slate-900">Latest Generated Keys</h4>
+                <button
+                  onClick={copyGeneratedKeys}
+                  disabled={generatedKeys.length === 0}
+                  className="px-5 py-2 bg-slate-950 text-amber-500 rounded-xl text-[10px] font-bold uppercase tracking-widest disabled:opacity-30"
+                >
+                  Copy All
+                </button>
+              </div>
+              {generatedKeys.length === 0 ? (
+                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">No new keys generated this session.</p>
+              ) : (
+                <div className="max-h-72 overflow-y-auto no-scrollbar space-y-2">
+                  {generatedKeys.map((key) => (
+                    <div key={key} className="px-4 py-3 rounded-xl border border-slate-100 bg-slate-50 font-mono text-sm font-bold tracking-wide text-slate-900">
+                      {key}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         )}
       </div>
       {isQuestionModalOpen && (
