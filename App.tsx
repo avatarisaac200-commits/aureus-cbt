@@ -1,9 +1,9 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { User, MockTest, ExamResult, Question } from './types';
 import { auth, db } from './firebase';
 import { onAuthStateChanged, sendEmailVerification } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
-import { doc, getDoc, collection, getDocs, query, where, limit, documentId, updateDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+import { doc, getDoc, collection, getDocs, query, where, limit, documentId, updateDoc, addDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import Auth from './components/Auth';
 import Dashboard from './components/Dashboard';
 import AdminDashboard from './components/AdminDashboard';
@@ -18,6 +18,8 @@ const DEADLINE_CONFIG_DOC_ID = 'deadline_config';
 const LICENSE_PROMPT_SNOOZE_HOURS = 24;
 const WHATSAPP_PHONE = '2348145807650';
 const WHATSAPP_URL = `https://wa.me/${WHATSAPP_PHONE}?text=${encodeURIComponent('Hello, I want to purchase my CBT annual license key.')}`;
+const OFFLINE_PACKAGE_KEY_PREFIX = 'testpkg:offline:';
+const PENDING_RESULTS_QUEUE_KEY = 'pendingResultsQueue';
 
 type MonetizationMode = 'pre-deadline' | 'post-deadline';
 
@@ -150,6 +152,7 @@ const App: React.FC = () => {
   const [activationKey, setActivationKey] = useState('');
   const [isActivatingKey, setIsActivatingKey] = useState(false);
   const [freeAccessEndsAtIso, setFreeAccessEndsAtIso] = useState(DEFAULT_FREE_ACCESS_ENDS_AT_ISO);
+  const isFlushingQueueRef = useRef(false);
 
   const getDefaultViewForRole = (role: User['role']) => {
     if (role === 'root-admin') return 'root-admin';
@@ -228,10 +231,17 @@ const App: React.FC = () => {
     if (typeof window === 'undefined') return null;
     try {
       const raw = window.sessionStorage.getItem(`testpkg:${test.id}`);
-      if (!raw) return null;
-      const parsed = JSON.parse(raw) as { signature: string; questions: Record<string, Question> };
-      if (parsed.signature !== getPackageSignature(test)) return null;
-      return parsed.questions || null;
+      if (raw) {
+        const parsed = JSON.parse(raw) as { signature: string; questions: Record<string, Question> };
+        if (parsed.signature === getPackageSignature(test)) {
+          return parsed.questions || null;
+        }
+      }
+      const offlineRaw = window.localStorage.getItem(`${OFFLINE_PACKAGE_KEY_PREFIX}${test.id}`);
+      if (!offlineRaw) return null;
+      const offlineParsed = JSON.parse(offlineRaw) as { signature: string; questions: Record<string, Question> };
+      if (offlineParsed.signature !== getPackageSignature(test)) return null;
+      return offlineParsed.questions || null;
     } catch {
       return null;
     }
@@ -246,6 +256,18 @@ const App: React.FC = () => {
       );
     } catch {
       // Ignore cache write failures (quota/private mode restrictions).
+    }
+  };
+
+  const setOfflinePackage = (test: MockTest, questions: Record<string, Question>) => {
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(
+        `${OFFLINE_PACKAGE_KEY_PREFIX}${test.id}`,
+        JSON.stringify({ signature: getPackageSignature(test), questions, createdAt: Date.now() })
+      );
+    } catch {
+      alert('Could not save this test for offline use on this device.');
     }
   };
 
@@ -298,6 +320,16 @@ const App: React.FC = () => {
       setCurrentView('exam');
     } finally {
       setPackagingState(null);
+    }
+  };
+
+  const saveTestForOffline = async (test: MockTest) => {
+    try {
+      const pkg = await packageQuestionsForTest(test);
+      setOfflinePackage(test, pkg);
+      alert(`"${test.name}" saved for offline use on this device.`);
+    } catch (err: any) {
+      alert(err?.message || 'Could not save this test offline right now.');
     }
   };
 
@@ -421,6 +453,39 @@ const App: React.FC = () => {
     });
     return () => unsubscribe();
   }, []);
+
+  useEffect(() => {
+    const flushPendingResults = async () => {
+      if (typeof window === 'undefined' || !currentUser || !navigator.onLine || isFlushingQueueRef.current) return;
+      const raw = window.localStorage.getItem(PENDING_RESULTS_QUEUE_KEY);
+      if (!raw) return;
+
+      let queue: Array<{ payload: any; createdAt: string }> = [];
+      try {
+        queue = JSON.parse(raw);
+        if (!Array.isArray(queue) || queue.length === 0) return;
+      } catch {
+        return;
+      }
+
+      isFlushingQueueRef.current = true;
+      const remaining: Array<{ payload: any; createdAt: string }> = [];
+      for (const item of queue) {
+        try {
+          await addDoc(collection(db, 'results'), item.payload);
+        } catch {
+          remaining.push(item);
+        }
+      }
+      window.localStorage.setItem(PENDING_RESULTS_QUEUE_KEY, JSON.stringify(remaining));
+      isFlushingQueueRef.current = false;
+    };
+
+    const onOnline = () => { flushPendingResults(); };
+    window.addEventListener('online', onOnline);
+    flushPendingResults();
+    return () => window.removeEventListener('online', onOnline);
+  }, [currentUser]);
 
   useEffect(() => {
     if (isLoading) return;
@@ -637,6 +702,7 @@ const App: React.FC = () => {
             setCurrentView('review');
           }}
           onReturnToAdmin={() => setCurrentView(currentUser.role === 'root-admin' ? 'root-admin' : 'admin')}
+          onSaveOfflineTest={saveTestForOffline}
           isReadOnly={isReadOnlyForUnactivatedUser(currentUser)}
           deadlineLabel={deadlineLabel}
           isActivatingLicense={isActivatingKey}

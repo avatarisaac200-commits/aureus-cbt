@@ -9,6 +9,7 @@ interface DashboardProps {
   onLogout: () => void;
   onStartTest: (test: MockTest) => void;
   onReviewResult: (result: ExamResult) => void;
+  onSaveOfflineTest?: (test: MockTest) => void;
   onReturnToAdmin?: () => void;
   isReadOnly?: boolean;
   deadlineLabel?: string;
@@ -93,6 +94,7 @@ const Dashboard: React.FC<DashboardProps> = ({
   onLogout,
   onStartTest,
   onReviewResult,
+  onSaveOfflineTest,
   onReturnToAdmin,
   isReadOnly = false,
   deadlineLabel,
@@ -109,6 +111,7 @@ const Dashboard: React.FC<DashboardProps> = ({
   const [activeTab, setActiveTab] = useState<'dashboard' | 'settings'>('dashboard');
   const [activationInput, setActivationInput] = useState('');
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [lowDataMode, setLowDataMode] = useState(false);
   const isStudent = user.role === 'student';
   const licenseEndsMs = Date.parse(user.subscriptionEndsAt || '');
   const licenseEndsLabel = Number.isFinite(licenseEndsMs)
@@ -122,6 +125,8 @@ const Dashboard: React.FC<DashboardProps> = ({
     if (typeof window === 'undefined') return;
     const stored = window.localStorage.getItem(`notifications:${user.id}`);
     setNotificationsEnabled(stored !== 'off');
+    const lowDataStored = window.localStorage.getItem(`lowDataMode:${user.id}`);
+    setLowDataMode(lowDataStored === 'on');
   }, [user.id]);
 
   const copyTestLink = async (test: MockTest) => {
@@ -152,6 +157,14 @@ const Dashboard: React.FC<DashboardProps> = ({
     }
   };
 
+  const handleToggleLowDataMode = () => {
+    const next = !lowDataMode;
+    setLowDataMode(next);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(`lowDataMode:${user.id}`, next ? 'on' : 'off');
+    }
+  };
+
   const handleActivateFromSettings = async () => {
     const key = activationInput.trim().toUpperCase();
     if (!key) {
@@ -164,8 +177,10 @@ const Dashboard: React.FC<DashboardProps> = ({
   };
 
   useEffect(() => {
+    const testsLimit = lowDataMode ? 12 : 30;
+    const historyLimit = lowDataMode ? 25 : 100;
     const unsubTests = onSnapshot(
-      query(collection(db, 'tests'), where('isApproved', '==', true), limit(30)),
+      query(collection(db, 'tests'), where('isApproved', '==', true), limit(testsLimit)),
       (snap) => {
         const loaded = snap.docs
           .map(d => ({ ...d.data(), id: d.id } as MockTest))
@@ -180,12 +195,12 @@ const Dashboard: React.FC<DashboardProps> = ({
       }
     );
     const unsubHistory = onSnapshot(
-      query(collection(db, 'results'), where('userId', '==', user.id), limit(100)),
+      query(collection(db, 'results'), where('userId', '==', user.id), limit(historyLimit)),
       (snap) => {
         const sorted = snap.docs
           .map(d => ({ ...d.data(), id: d.id } as ExamResult))
           .sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime())
-          .slice(0, 50);
+          .slice(0, lowDataMode ? 20 : 50);
         setHistory(sorted);
       },
       (err) => {
@@ -194,10 +209,18 @@ const Dashboard: React.FC<DashboardProps> = ({
       }
     );
     return () => { unsubTests(); unsubHistory(); };
-  }, [user.id]);
+  }, [user.id, lowDataMode]);
 
   useEffect(() => {
     const fetchCounts = async () => {
+      if (lowDataMode) {
+        const fallbackCounts: Record<string, number> = {};
+        tests.forEach((test) => {
+          fallbackCounts[test.id] = (test as any).attemptCount || 0;
+        });
+        setTestCounts(fallbackCounts);
+        return;
+      }
       const counts: Record<string, number> = {};
       for (const test of tests) {
         try {
@@ -214,7 +237,7 @@ const Dashboard: React.FC<DashboardProps> = ({
       setTestCounts(counts);
     };
     if (tests.length > 0) fetchCounts();
-  }, [tests]);
+  }, [tests, lowDataMode]);
 
   if (loading) {
     return (
@@ -239,6 +262,11 @@ const Dashboard: React.FC<DashboardProps> = ({
       {isReadOnly && (
         <div className="mx-6 mt-6 p-4 bg-amber-50 border border-amber-200 rounded-2xl text-amber-700 font-bold text-[10px] uppercase tracking-widest">
           License required. You can browse the app, but actions are disabled until activation.{deadlineLabel ? ` Deadline passed: ${deadlineLabel}.` : ''}
+        </div>
+      )}
+      {lowDataMode && (
+        <div className="mx-6 mt-6 p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-emerald-700 font-bold text-[10px] uppercase tracking-widest">
+          Low-data mode is ON. Reduced sync and lighter queries are active.
         </div>
       )}
 
@@ -301,11 +329,14 @@ const Dashboard: React.FC<DashboardProps> = ({
                         </div>
                         <div className="mt-auto flex justify-between items-center gap-2">
                           <div className="flex items-center gap-2">
-                            <button disabled={isReadOnly} onClick={() => setShowLeaderboard(test)} className="disabled:opacity-40 text-[9px] font-bold text-amber-600 uppercase tracking-widest hover:underline flex items-center gap-1">
+                            <button disabled={isReadOnly || lowDataMode} onClick={() => setShowLeaderboard(test)} className="disabled:opacity-40 text-[9px] font-bold text-amber-600 uppercase tracking-widest hover:underline flex items-center gap-1">
                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>Leaderboard
                             </button>
                             <button disabled={isReadOnly} onClick={() => copyTestLink(test)} className="disabled:opacity-40 px-3 py-2 bg-emerald-50 rounded-xl text-[9px] font-bold uppercase tracking-widest text-emerald-700 hover:bg-emerald-100">
                               Copy Link
+                            </button>
+                            <button disabled={isReadOnly} onClick={() => onSaveOfflineTest && onSaveOfflineTest(test)} className="disabled:opacity-40 px-3 py-2 bg-sky-50 rounded-xl text-[9px] font-bold uppercase tracking-widest text-sky-700 hover:bg-sky-100">
+                              Save Offline
                             </button>
                           </div>
                           <button onClick={() => onStartTest(test)} disabled={isBlocked} className="px-8 py-3 bg-amber-500 text-slate-950 rounded-xl font-bold uppercase tracking-widest text-[9px] shadow-lg active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed">
@@ -380,11 +411,19 @@ const Dashboard: React.FC<DashboardProps> = ({
 
               <section className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
                 <h2 className="text-lg font-bold text-slate-950 uppercase mb-5">Preferences</h2>
-                <div className="flex items-center justify-between bg-slate-50 border border-slate-100 rounded-2xl p-4">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Email Alerts</span>
-                  <button onClick={handleToggleNotifications} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest ${notificationsEnabled ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-700'}`}>
-                    {notificationsEnabled ? 'On' : 'Off'}
-                  </button>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between bg-slate-50 border border-slate-100 rounded-2xl p-4">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Email Alerts</span>
+                    <button onClick={handleToggleNotifications} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest ${notificationsEnabled ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-700'}`}>
+                      {notificationsEnabled ? 'On' : 'Off'}
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between bg-slate-50 border border-slate-100 rounded-2xl p-4">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Low-data Mode</span>
+                    <button onClick={handleToggleLowDataMode} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest ${lowDataMode ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-700'}`}>
+                      {lowDataMode ? 'On' : 'Off'}
+                    </button>
+                  </div>
                 </div>
               </section>
 

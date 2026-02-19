@@ -65,6 +65,144 @@ const makeLicenseKey = () => {
   return `${part()}-${part()}-${part()}`;
 };
 
+const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+const normalizeExtractedQuestions = (input: any): StagedQuestion[] => {
+  const arr = Array.isArray(input) ? input : [];
+  return arr
+    .map((item: any) => {
+      const optionsRaw = Array.isArray(item?.options) ? item.options : [];
+      const options = optionsRaw
+        .map((opt: any) => String(opt ?? '').trim())
+        .filter(Boolean)
+        .slice(0, 4);
+      while (options.length < 4) options.push('');
+
+      const correctAnswerIndex = Number(item?.correctAnswerIndex);
+      if (!Number.isFinite(correctAnswerIndex) || correctAnswerIndex < 0 || correctAnswerIndex > 3) return null;
+
+      const text = String(item?.text ?? '').trim();
+      if (!text || options.some((opt: string) => !opt)) return null;
+
+      return {
+        subject: String(item?.subject ?? 'General').trim() || 'General',
+        topic: String(item?.topic ?? 'General').trim() || 'General',
+        text,
+        options,
+        correctAnswerIndex,
+        explanation: String(item?.explanation ?? '').trim(),
+        selected: true
+      } as StagedQuestion;
+    })
+    .filter(Boolean) as StagedQuestion[];
+};
+
+const decodePdfBase64ToText = (base64Data: string) => {
+  try {
+    const binary = atob(base64Data);
+    const textFragments = binary.match(/[ -~\r\n\t]{4,}/g) || [];
+    return textFragments.join('\n');
+  } catch {
+    return '';
+  }
+};
+
+const extractQuestionsFromPdfTextFallback = (rawText: string): StagedQuestion[] => {
+  if (!rawText) return [];
+  const text = rawText.replace(/\r/g, '\n');
+  const blocks = text.split(/\n(?=\s*(?:\d+[\).\s]|Q(?:UESTION)?\s*\d+[:.]?))/i);
+  const results: StagedQuestion[] = [];
+
+  for (const block of blocks) {
+    const lines = block.split('\n').map(l => l.trim()).filter(Boolean);
+    if (lines.length < 5) continue;
+
+    const firstLine = lines[0];
+    const qMatch = firstLine.match(/^(?:\d+[\).\s-]*|Q(?:UESTION)?\s*\d+[:.]?\s*)(.+)$/i);
+    const questionText = (qMatch?.[1] || firstLine).trim();
+    if (!questionText || questionText.length < 10) continue;
+
+    const options: string[] = [];
+    let answerIndex = -1;
+
+    for (const line of lines.slice(1)) {
+      const optMatch = line.match(/^[\(\[]?([A-D])[\)\].:\s-]+(.+)$/i);
+      if (optMatch && options.length < 4) {
+        options.push(optMatch[2].trim());
+        continue;
+      }
+
+      const answerMatch = line.match(/^(?:ANS|ANSWER)[:\s]+([A-D])$/i);
+      if (answerMatch) {
+        answerIndex = answerMatch[1].toUpperCase().charCodeAt(0) - 65;
+      }
+    }
+
+    if (options.length === 4 && answerIndex >= 0 && answerIndex <= 3) {
+      results.push({
+        subject: 'General',
+        topic: 'General',
+        text: questionText,
+        options,
+        correctAnswerIndex: answerIndex,
+        explanation: '',
+        selected: true
+      });
+    }
+  }
+
+  return results;
+};
+
+const renderPdfPagesToBase64Images = async (_base64Data: string, _maxPages: number): Promise<string[]> => {
+  // Placeholder: browser-side PDF rasterization requires pdf.js, which is not currently bundled.
+  return [];
+};
+
+const extractQuestionsFromImagesWithGemini = async (ai: GoogleGenAI, pageImages: string[]): Promise<StagedQuestion[]> => {
+  if (pageImages.length === 0) return [];
+  const prompt = `
+Extract CBT multiple-choice questions from these page images.
+Return ONLY a JSON array in this exact shape:
+[
+  {
+    "subject": "string",
+    "topic": "string",
+    "text": "string",
+    "options": ["string","string","string","string"],
+    "correctAnswerIndex": 0,
+    "explanation": "string"
+  }
+]
+Rules:
+- Exactly 4 options per question.
+- correctAnswerIndex must be 0..3.
+- Skip incomplete questions.
+`.trim();
+
+  try {
+    const parts: any[] = pageImages.slice(0, 8).map((img) => ({
+      inlineData: { mimeType: 'image/png', data: img }
+    }));
+    parts.push({ text: prompt });
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-1.5-flash',
+      contents: { parts },
+      config: { responseMimeType: 'application/json' }
+    });
+
+    const raw = (response.text || '').trim();
+    if (!raw) return [];
+    const cleaned = raw.startsWith('```')
+      ? raw.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```$/i, '').trim()
+      : raw;
+    return normalizeExtractedQuestions(JSON.parse(cleaned));
+  } catch {
+    return [];
+  }
+};
+
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'questions', onLogout, onSwitchToStudent }) => {
   const canManageKeys = user.role === 'root-admin';
   const [activeTab, setActiveTab] = useState<AdminTab>(canManageKeys || initialTab !== 'license-keys' ? initialTab : 'questions');

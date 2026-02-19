@@ -15,6 +15,24 @@ interface ExamInterfaceProps {
   onExit: () => void;
 }
 
+const PENDING_RESULTS_QUEUE_KEY = 'pendingResultsQueue';
+
+const queuePendingResult = (payload: Omit<ExamResult, 'id'>) => {
+  if (typeof window === 'undefined') return;
+  try {
+    const raw = window.localStorage.getItem(PENDING_RESULTS_QUEUE_KEY);
+    const queue = raw ? JSON.parse(raw) : [];
+    const next = Array.isArray(queue) ? queue : [];
+    next.push({
+      payload: { ...payload, queuedOfflineAt: new Date().toISOString() },
+      createdAt: new Date().toISOString()
+    });
+    window.localStorage.setItem(PENDING_RESULTS_QUEUE_KEY, JSON.stringify(next));
+  } catch {
+    // Queueing failed; continue with local completion path.
+  }
+};
+
 const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, packagedQuestions, onFinish, onExit }) => {
   const [view, setView] = useState<'lobby' | 'testing'>('lobby');
   const [activeSectionIndex, setActiveSectionIndex] = useState<number | null>(null);
@@ -34,6 +52,8 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, packagedQuest
   const [shuffledSections, setShuffledSections] = useState<TestSection[]>([]);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const endTimeRef = useRef<number | null>(null);
+  const hasSubmittedRef = useRef(false);
 
   // Simple shuffle function (Fisher-Yates)
   const shuffleArray = <T,>(array: T[]): T[] => {
@@ -122,23 +142,46 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, packagedQuest
       const docRef = await addDoc(collection(db, 'results'), result);
       onFinish({ ...result, id: docRef.id } as ExamResult);
     } catch (e) {
+      queuePendingResult(result);
       onFinish({ ...result, id: 'temp-' + Date.now() } as ExamResult);
     }
   }, [allQuestions, answers, onFinish, test, user.id, user.name]);
 
   useEffect(() => {
     if (!hasStarted) return;
-    timerRef.current = setInterval(() => {
-      setTimeRemaining(prev => {
-        if (prev <= 1) {
-          if (timerRef.current) clearInterval(timerRef.current);
-          calculateResult('auto-submitted');
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+
+    if (endTimeRef.current === null) {
+      endTimeRef.current = Date.now() + (timeRemaining * 1000);
+    }
+
+    const syncTimerWithWallClock = () => {
+      if (endTimeRef.current === null || hasSubmittedRef.current) return;
+      const remainingMs = Math.max(0, endTimeRef.current - Date.now());
+      const nextSeconds = Math.ceil(remainingMs / 1000);
+      setTimeRemaining(nextSeconds);
+
+      if (remainingMs <= 0 && !hasSubmittedRef.current) {
+        hasSubmittedRef.current = true;
+        if (timerRef.current) clearInterval(timerRef.current);
+        calculateResult('auto-submitted');
+      }
+    };
+
+    syncTimerWithWallClock();
+    timerRef.current = setInterval(syncTimerWithWallClock, 1000);
+
+    const handleVisibilityOrFocus = () => {
+      syncTimerWithWallClock();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+    window.addEventListener('focus', handleVisibilityOrFocus);
+
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+      window.removeEventListener('focus', handleVisibilityOrFocus);
+    };
   }, [calculateResult, hasStarted]);
 
   const enterSection = (idx: number) => {
@@ -167,6 +210,8 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, packagedQuest
   const finalSubmit = () => {
     if (window.confirm("Submit your entire test?")) {
       setIsFinishing(true);
+      hasSubmittedRef.current = true;
+      if (timerRef.current) clearInterval(timerRef.current);
       calculateResult('completed');
     }
   };
