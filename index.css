@@ -12,3 +12,48 @@ body {
   display: flex;
   flex-direction: column;
 }
+
+@keyframes paywallPopIn {
+  0% {
+    opacity: 0;
+    transform: translateY(10px) scale(0.96);
+  }
+  70% {
+    transform: translateY(-2px) scale(1.01);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes paywallFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes paywallFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+@keyframes paywallFloatAlt {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(5px); }
+}
+
+.paywall-backdrop {
+  animation: paywallFadeIn 220ms ease-out;
+}
+
+.paywall-card {
+  animation: paywallPopIn 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.paywall-float {
+  animation: paywallFloat 2.2s ease-in-out infinite;
+}
+
+.paywall-float-alt {
+  animation: paywallFloatAlt 2.6s ease-in-out infinite;
+}

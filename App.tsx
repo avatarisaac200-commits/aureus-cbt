@@ -51,8 +51,10 @@ const MonetizationModal: React.FC<MonetizationModalProps> = ({
   const isPreDeadline = mode === 'pre-deadline';
 
   return (
-    <div className="fixed inset-0 z-[200] bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="w-full max-w-xl bg-white rounded-[2rem] border border-slate-100 shadow-2xl overflow-hidden">
+    <div className="fixed inset-0 z-[200] bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-4 paywall-backdrop">
+      <div className="relative w-full max-w-xl bg-white rounded-[2rem] border border-slate-100 shadow-2xl overflow-hidden paywall-card">
+        <div className="absolute -top-5 -left-4 w-8 h-8 bg-amber-300/70 rounded-full blur-sm paywall-float"></div>
+        <div className="absolute -bottom-4 -right-3 w-7 h-7 bg-emerald-300/60 rounded-full blur-sm paywall-float-alt"></div>
         <div className="bg-slate-950 border-b-4 border-amber-500 px-8 py-7">
           <p className="text-amber-500 text-[10px] font-black uppercase tracking-[0.3em] mb-2">Platform Update</p>
           <h2 className="text-white text-xl font-black uppercase tracking-tight">
