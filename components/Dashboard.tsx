@@ -110,6 +110,13 @@ const Dashboard: React.FC<DashboardProps> = ({
   const [activationInput, setActivationInput] = useState('');
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const isStudent = user.role === 'student';
+  const licenseEndsMs = Date.parse(user.subscriptionEndsAt || '');
+  const licenseEndsLabel = Number.isFinite(licenseEndsMs)
+    ? new Date(licenseEndsMs).toLocaleDateString()
+    : null;
+  const licenseStatusLabel = user.subscriptionStatus === 'active'
+    ? `Active${licenseEndsLabel ? ` (until: ${licenseEndsLabel})` : ''}`
+    : (user.subscriptionStatus || 'inactive');
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -341,7 +348,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                   <div className="flex justify-between"><span className="text-slate-400">Name</span><span className="font-bold text-slate-900">{user.name}</span></div>
                   <div className="flex justify-between"><span className="text-slate-400">Email</span><span className="font-bold text-slate-900">{user.email}</span></div>
                   <div className="flex justify-between"><span className="text-slate-400">Role</span><span className="font-bold uppercase text-slate-900">{user.role}</span></div>
-                  <div className="flex justify-between"><span className="text-slate-400">License</span><span className="font-bold uppercase text-slate-900">{user.subscriptionStatus || 'inactive'}</span></div>
+                  <div className="flex justify-between"><span className="text-slate-400">License</span><span className="font-bold text-slate-900">{licenseStatusLabel}</span></div>
                 </div>
               </section>
 
