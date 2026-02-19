@@ -190,6 +190,13 @@ const App: React.FC = () => {
     return Number.isFinite(endsAt) && endsAt > Date.now();
   };
 
+  const isReadOnlyForUnactivatedUser = (user: User | null) => {
+    if (!user) return false;
+    if (isStaffUser(user) || hasActiveSubscription(user)) return false;
+    const deadlineMs = Date.parse(freeAccessEndsAtIso);
+    return Number.isFinite(deadlineMs) && Date.now() > deadlineMs;
+  };
+
   const getPromptDeferredUntil = (): number | null => {
     const raw = typeof window !== 'undefined' ? window.localStorage.getItem('licensePromptDeferredUntil') : null;
     if (!raw) return null;
@@ -295,6 +302,12 @@ const App: React.FC = () => {
   };
 
   const tryStartTestFromLink = async (userObj: User, testId: string): Promise<boolean> => {
+    if (isReadOnlyForUnactivatedUser(userObj)) {
+      alert('Activate your license key to open shared tests.');
+      setShowMonetizationModal(true);
+      clearLinkedTestId();
+      return false;
+    }
     try {
       const testDoc = await getDoc(doc(db, 'tests', testId));
       if (!testDoc.exists()) {
@@ -426,7 +439,7 @@ const App: React.FC = () => {
     if (isAfterDeadline) {
       setMonetizationMode('post-deadline');
       if (!staff && !paid) {
-        setIsMonetizationLocked(true);
+        setIsMonetizationLocked(false);
         setShowMonetizationModal(true);
       } else {
         setIsMonetizationLocked(false);
@@ -465,12 +478,12 @@ const App: React.FC = () => {
     setShowMonetizationModal(false);
   };
 
-  const handleActivateKey = async () => {
-    if (!currentUser) return;
-    const key = activationKey.trim().toUpperCase();
+  const activateLicenseKey = async (rawKey: string): Promise<boolean> => {
+    if (!currentUser) return false;
+    const key = rawKey.trim().toUpperCase();
     if (!key) {
       alert('Enter your activation key.');
-      return;
+      return false;
     }
 
     setIsActivatingKey(true);
@@ -479,24 +492,24 @@ const App: React.FC = () => {
       const keyDoc = await getDoc(keyDocRef);
       if (!keyDoc.exists()) {
         alert('Invalid activation key.');
-        return;
+        return false;
       }
 
       const keyData = keyDoc.data() as any;
       if (keyData?.status !== 'new') {
         alert('Invalid activation key.');
-        return;
+        return false;
       }
       const alreadyUsed = Boolean(keyData?.isUsed) || keyData?.status === 'used' || Boolean(keyData?.redeemedBy);
       if (alreadyUsed) {
         alert('This activation key has already been used.');
-        return;
+        return false;
       }
 
       const keyExpiryMs = Date.parse(keyData?.expiresAt || '');
       if (Number.isFinite(keyExpiryMs) && keyExpiryMs < Date.now()) {
         alert('This activation key has expired.');
-        return;
+        return false;
       }
 
       const durationDays = Number(keyData?.durationDays) > 0 ? Number(keyData.durationDays) : 365;
@@ -521,15 +534,23 @@ const App: React.FC = () => {
       });
 
       setCurrentUser(prev => (prev ? { ...prev, subscriptionStatus: 'active', subscriptionEndsAt: nextEndsAt } : prev));
-      setActivationKey('');
       setShowMonetizationModal(false);
       setIsMonetizationLocked(false);
       alert('License activated successfully.');
+      return true;
     } catch (err) {
       console.error('Activation failed:', err);
       alert('Activation failed. Please contact admin on WhatsApp.');
+      return false;
     } finally {
       setIsActivatingKey(false);
+    }
+  };
+
+  const handleActivateKey = async () => {
+    const activated = await activateLicenseKey(activationKey);
+    if (activated) {
+      setActivationKey('');
     }
   };
 
@@ -594,6 +615,11 @@ const App: React.FC = () => {
           user={currentUser} 
           onLogout={() => auth.signOut()} 
           onStartTest={async (test) => {
+            if (isReadOnlyForUnactivatedUser(currentUser)) {
+              setShowMonetizationModal(true);
+              alert('Activate your license key in Settings before starting a test.');
+              return;
+            }
             try {
               await startExamWithPackaging(test);
             } catch (err: any) {
@@ -601,8 +627,26 @@ const App: React.FC = () => {
               alert(err?.message || 'Unable to prepare this test right now.');
             }
           }}
-          onReviewResult={(result) => { setReviewResult(result); setCurrentView('review'); }}
+          onReviewResult={(result) => {
+            if (isReadOnlyForUnactivatedUser(currentUser)) {
+              setShowMonetizationModal(true);
+              alert('Activate your license key in Settings before opening review.');
+              return;
+            }
+            setReviewResult(result);
+            setCurrentView('review');
+          }}
           onReturnToAdmin={() => setCurrentView(currentUser.role === 'root-admin' ? 'root-admin' : 'admin')}
+          isReadOnly={isReadOnlyForUnactivatedUser(currentUser)}
+          deadlineLabel={deadlineLabel}
+          isActivatingLicense={isActivatingKey}
+          onActivateLicense={async (key) => {
+            const activated = await activateLicenseKey(key);
+            if (activated) {
+              setActivationKey('');
+            }
+          }}
+          onOpenActivationSupport={handleOpenWhatsApp}
         />
       )}
       {currentView === 'admin' && currentUser && (

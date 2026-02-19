@@ -10,6 +10,11 @@ interface DashboardProps {
   onStartTest: (test: MockTest) => void;
   onReviewResult: (result: ExamResult) => void;
   onReturnToAdmin?: () => void;
+  isReadOnly?: boolean;
+  deadlineLabel?: string;
+  isActivatingLicense?: boolean;
+  onActivateLicense?: (key: string) => Promise<void>;
+  onOpenActivationSupport?: () => void;
 }
 
 const LeaderboardModal: React.FC<{ test: MockTest, onClose: () => void }> = ({ test, onClose }) => {
@@ -83,15 +88,37 @@ const LeaderboardModal: React.FC<{ test: MockTest, onClose: () => void }> = ({ t
   );
 };
 
-const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onStartTest, onReviewResult, onReturnToAdmin }) => {
+const Dashboard: React.FC<DashboardProps> = ({
+  user,
+  onLogout,
+  onStartTest,
+  onReviewResult,
+  onReturnToAdmin,
+  isReadOnly = false,
+  deadlineLabel,
+  isActivatingLicense = false,
+  onActivateLicense,
+  onOpenActivationSupport
+}) => {
   const [tests, setTests] = useState<MockTest[]>([]);
   const [history, setHistory] = useState<ExamResult[]>([]);
   const [loading, setLoading] = useState(true);
   const [testCounts, setTestCounts] = useState<Record<string, number>>({});
   const [errors, setErrors] = useState<string | null>(null);
   const [showLeaderboard, setShowLeaderboard] = useState<MockTest | null>(null);
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'settings'>('dashboard');
+  const [activationInput, setActivationInput] = useState('');
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const isStudent = user.role === 'student';
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const stored = window.localStorage.getItem(`notifications:${user.id}`);
+    setNotificationsEnabled(stored !== 'off');
+  }, [user.id]);
 
   const copyTestLink = async (test: MockTest) => {
+    if (isReadOnly) return;
     const link = `${window.location.origin}/test/${test.id}`;
     try {
       if (navigator.clipboard?.writeText) {
@@ -108,6 +135,25 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onStartTest, onRe
     } catch {
       alert('Could not copy link. Link: ' + link);
     }
+  };
+
+  const handleToggleNotifications = () => {
+    const next = !notificationsEnabled;
+    setNotificationsEnabled(next);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(`notifications:${user.id}`, next ? 'on' : 'off');
+    }
+  };
+
+  const handleActivateFromSettings = async () => {
+    const key = activationInput.trim().toUpperCase();
+    if (!key) {
+      alert('Enter your activation key.');
+      return;
+    }
+    if (!onActivateLicense) return;
+    await onActivateLicense(key);
+    setActivationInput('');
   };
 
   useEffect(() => {
@@ -182,11 +228,18 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onStartTest, onRe
           {errors}
         </div>
       )}
+
+      {isReadOnly && (
+        <div className="mx-6 mt-6 p-4 bg-amber-50 border border-amber-200 rounded-2xl text-amber-700 font-bold text-[10px] uppercase tracking-widest">
+          License required. You can browse the app, but actions are disabled until activation.{deadlineLabel ? ` Deadline passed: ${deadlineLabel}.` : ''}
+        </div>
+      )}
+
       {showLeaderboard && <LeaderboardModal test={showLeaderboard} onClose={() => setShowLeaderboard(null)} />}
 
       <div className="flex-1 overflow-y-auto p-6 md:p-12 pb-24 no-scrollbar safe-bottom">
         <div className="max-w-6xl mx-auto">
-          <div className="flex flex-col lg:flex-row justify-between items-center mb-10 gap-6 bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
+          <div className="flex flex-col lg:flex-row justify-between items-center mb-6 gap-6 bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
             <div className="flex items-center gap-6">
               <img src={logo} alt="Logo" className="w-16 h-16" />
               <div>
@@ -199,67 +252,151 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onStartTest, onRe
             )}
           </div>
 
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-10">
-            <div className="xl:col-span-2 space-y-10">
-              <section>
-                <div className="flex items-center justify-between mb-8"><h2 className="text-xl font-bold text-slate-950 uppercase">Active Tests</h2></div>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {tests.map(test => (
-                    (() => {
-                      const attempts = history.filter(h => h.testId === test.id).length;
-                      const maxAttempts = test.maxAttempts ?? null;
-                      const retakeBlocked = !test.allowRetake && attempts >= 1;
-                      const attemptsBlocked = maxAttempts !== null && maxAttempts > 0 && attempts >= maxAttempts;
-                      const isBlocked = retakeBlocked || attemptsBlocked;
-                      return (
-                    <div key={test.id} className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 hover:border-amber-400 transition-all flex flex-col h-full group">
-                      <div className="flex justify-between items-start mb-4">
-                        <h3 className="font-bold text-xl text-slate-950 uppercase truncate leading-tight mr-2">{test.name}</h3>
-                        <span className="bg-slate-50 text-slate-500 text-[8px] font-black px-3 py-1.5 rounded-lg uppercase whitespace-nowrap">{test.totalDurationSeconds / 60}m</span>
-                      </div>
-                      <p className="text-xs text-slate-400 mb-6 font-medium italic line-clamp-3 leading-relaxed">{test.description || 'Start this test.'}</p>
-                      <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-6">
-                        Taken by {testCounts[test.id] ?? 0} people
-                      </div>
-                      <div className="mt-auto flex justify-between items-center gap-2">
-                        <div className="flex items-center gap-2">
-                          <button onClick={() => setShowLeaderboard(test)} className="text-[9px] font-bold text-amber-600 uppercase tracking-widest hover:underline flex items-center gap-1">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>Leaderboard
-                          </button>
-                          <button onClick={() => copyTestLink(test)} className="px-3 py-2 bg-emerald-50 rounded-xl text-[9px] font-bold uppercase tracking-widest text-emerald-700 hover:bg-emerald-100">
-                            Copy Link
+          {isStudent && (
+            <div className="mb-8 bg-white rounded-2xl border border-slate-100 p-2 inline-flex gap-2">
+              <button
+                onClick={() => setActiveTab('dashboard')}
+                className={`px-5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest ${activeTab === 'dashboard' ? 'bg-slate-950 text-amber-500' : 'text-slate-500 bg-slate-50'}`}
+              >
+                Dashboard
+              </button>
+              <button
+                onClick={() => setActiveTab('settings')}
+                className={`px-5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest ${activeTab === 'settings' ? 'bg-slate-950 text-amber-500' : 'text-slate-500 bg-slate-50'}`}
+              >
+                Settings
+              </button>
+            </div>
+          )}
+
+          {(!isStudent || activeTab === 'dashboard') && (
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-10">
+              <div className="xl:col-span-2 space-y-10">
+                <section>
+                  <div className="flex items-center justify-between mb-8"><h2 className="text-xl font-bold text-slate-950 uppercase">Active Tests</h2></div>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {tests.map(test => (
+                      (() => {
+                        const attempts = history.filter(h => h.testId === test.id).length;
+                        const maxAttempts = test.maxAttempts ?? null;
+                        const retakeBlocked = !test.allowRetake && attempts >= 1;
+                        const attemptsBlocked = maxAttempts !== null && maxAttempts > 0 && attempts >= maxAttempts;
+                        const isBlocked = retakeBlocked || attemptsBlocked || isReadOnly;
+                        return (
+                      <div key={test.id} className={`bg-white p-8 rounded-[2.5rem] shadow-sm border transition-all flex flex-col h-full group ${isReadOnly ? 'border-slate-100 opacity-60' : 'border-slate-100 hover:border-amber-400'}`}>
+                        <div className="flex justify-between items-start mb-4">
+                          <h3 className="font-bold text-xl text-slate-950 uppercase truncate leading-tight mr-2">{test.name}</h3>
+                          <span className="bg-slate-50 text-slate-500 text-[8px] font-black px-3 py-1.5 rounded-lg uppercase whitespace-nowrap">{test.totalDurationSeconds / 60}m</span>
+                        </div>
+                        <p className="text-xs text-slate-400 mb-6 font-medium italic line-clamp-3 leading-relaxed">{test.description || 'Start this test.'}</p>
+                        <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-6">
+                          Taken by {testCounts[test.id] ?? 0} people
+                        </div>
+                        <div className="mt-auto flex justify-between items-center gap-2">
+                          <div className="flex items-center gap-2">
+                            <button disabled={isReadOnly} onClick={() => setShowLeaderboard(test)} className="disabled:opacity-40 text-[9px] font-bold text-amber-600 uppercase tracking-widest hover:underline flex items-center gap-1">
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>Leaderboard
+                            </button>
+                            <button disabled={isReadOnly} onClick={() => copyTestLink(test)} className="disabled:opacity-40 px-3 py-2 bg-emerald-50 rounded-xl text-[9px] font-bold uppercase tracking-widest text-emerald-700 hover:bg-emerald-100">
+                              Copy Link
+                            </button>
+                          </div>
+                          <button onClick={() => onStartTest(test)} disabled={isBlocked} className="px-8 py-3 bg-amber-500 text-slate-950 rounded-xl font-bold uppercase tracking-widest text-[9px] shadow-lg active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed">
+                            {isReadOnly ? 'Activate First' : isBlocked ? 'Not Available' : 'Start Test'}
                           </button>
                         </div>
-                        <button onClick={() => onStartTest(test)} disabled={isBlocked} className="px-8 py-3 bg-amber-500 text-slate-950 rounded-xl font-bold uppercase tracking-widest text-[9px] shadow-lg active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed">
-                          {isBlocked ? 'Not Available' : 'Start Test'}
-                        </button>
                       </div>
+                        );
+                      })()
+                    ))}
+                  </div>
+                </section>
+              </div>
+
+              <aside className={`bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-200 h-fit sticky top-12 transition-all ${isReadOnly ? 'opacity-60' : ''}`}>
+                <h2 className="text-lg font-bold mb-8 text-slate-950 uppercase text-center">Review Tests</h2>
+                <div className="space-y-3">
+                  {history.map(item => (
+                    <div key={item.id} className="p-5 bg-slate-50 rounded-2xl border border-slate-100 hover:border-amber-200 transition-all">
+                      <div className="flex justify-between items-start mb-2">
+                        <h4 className="text-[10px] font-bold text-slate-950 uppercase truncate max-w-[120px]">{item.testName}</h4>
+                        <span className="text-lg font-black text-slate-950">{Math.round((item.score / (item.maxScore || 1)) * 100)}%</span>
+                      </div>
+                      <button disabled={isReadOnly} onClick={() => onReviewResult(item)} className="disabled:opacity-40 text-[9px] font-bold text-amber-600 uppercase tracking-widest hover:underline transition-all">Review Test</button>
                     </div>
-                      );
-                    })()
                   ))}
+                  {history.length === 0 && (
+                    <div className="py-20 text-center italic text-slate-300 font-bold uppercase text-[10px] tracking-widest">No history yet.</div>
+                  )}
+                </div>
+              </aside>
+            </div>
+          )}
+
+          {isStudent && activeTab === 'settings' && (
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+              <section className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
+                <h2 className="text-lg font-bold text-slate-950 uppercase mb-5">Account</h2>
+                <div className="space-y-3 text-sm">
+                  <div className="flex justify-between"><span className="text-slate-400">Name</span><span className="font-bold text-slate-900">{user.name}</span></div>
+                  <div className="flex justify-between"><span className="text-slate-400">Email</span><span className="font-bold text-slate-900">{user.email}</span></div>
+                  <div className="flex justify-between"><span className="text-slate-400">Role</span><span className="font-bold uppercase text-slate-900">{user.role}</span></div>
+                  <div className="flex justify-between"><span className="text-slate-400">License</span><span className="font-bold uppercase text-slate-900">{user.subscriptionStatus || 'inactive'}</span></div>
                 </div>
               </section>
+
+              <section className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
+                <h2 className="text-lg font-bold text-slate-950 uppercase mb-5">Activate</h2>
+                <p className="text-xs text-slate-500 mb-5">Enter your license key to activate your account.</p>
+                <div className="flex flex-col sm:flex-row gap-2 mb-3">
+                  <input
+                    value={activationInput}
+                    onChange={(e) => setActivationInput(e.target.value.toUpperCase())}
+                    placeholder="Enter activation key"
+                    className="flex-1 p-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold outline-none uppercase"
+                  />
+                  <button
+                    onClick={handleActivateFromSettings}
+                    disabled={isActivatingLicense}
+                    className="px-6 py-4 bg-slate-950 text-amber-500 rounded-2xl text-[10px] font-black uppercase tracking-widest disabled:opacity-40"
+                  >
+                    {isActivatingLicense ? 'Activating...' : 'Activate'}
+                  </button>
+                </div>
+                <button
+                  onClick={onOpenActivationSupport}
+                  className="w-full py-3 bg-emerald-50 border border-emerald-100 text-emerald-700 rounded-2xl text-[10px] font-black uppercase tracking-widest"
+                >
+                  Contact Support on WhatsApp
+                </button>
+              </section>
+
+              <section className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
+                <h2 className="text-lg font-bold text-slate-950 uppercase mb-5">Preferences</h2>
+                <div className="flex items-center justify-between bg-slate-50 border border-slate-100 rounded-2xl p-4">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Email Alerts</span>
+                  <button onClick={handleToggleNotifications} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest ${notificationsEnabled ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-700'}`}>
+                    {notificationsEnabled ? 'On' : 'Off'}
+                  </button>
+                </div>
+              </section>
+
+              <section className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
+                <h2 className="text-lg font-bold text-slate-950 uppercase mb-5">App Data</h2>
+                <button
+                  onClick={() => {
+                    if (typeof window !== 'undefined') {
+                      window.sessionStorage.clear();
+                    }
+                    alert('Local cache cleared.');
+                  }}
+                  className="w-full py-4 bg-slate-50 border border-slate-200 text-slate-700 rounded-2xl text-[10px] font-black uppercase tracking-widest"
+                >
+                  Clear Local Cache
+                </button>
+              </section>
             </div>
-            
-            <aside className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-200 h-fit sticky top-12 transition-all">
-              <h2 className="text-lg font-bold mb-8 text-slate-950 uppercase text-center">Review Tests</h2>
-              <div className="space-y-3">
-                {history.map(item => (
-                  <div key={item.id} className="p-5 bg-slate-50 rounded-2xl border border-slate-100 hover:border-amber-200 transition-all">
-                    <div className="flex justify-between items-start mb-2">
-                      <h4 className="text-[10px] font-bold text-slate-950 uppercase truncate max-w-[120px]">{item.testName}</h4>
-                      <span className="text-lg font-black text-slate-950">{Math.round((item.score / (item.maxScore || 1)) * 100)}%</span>
-                    </div>
-                    <button onClick={() => onReviewResult(item)} className="text-[9px] font-bold text-amber-600 uppercase tracking-widest hover:underline transition-all">Review Test</button>
-                  </div>
-                ))}
-                {history.length === 0 && (
-                  <div className="py-20 text-center italic text-slate-300 font-bold uppercase text-[10px] tracking-widest">No history yet.</div>
-                )}
-              </div>
-            </aside>
-          </div>
+          )}
         </div>
       </div>
     </div>
