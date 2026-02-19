@@ -13,7 +13,8 @@ import ResultScreen from './components/ResultScreen';
 import ReviewInterface from './components/ReviewInterface';
 import logo from './assets/logo.png';
 
-const FREE_ACCESS_ENDS_AT_ISO = '2026-04-02T22:59:59.000Z'; // April 2, 2026 11:59 PM WAT
+const DEFAULT_FREE_ACCESS_ENDS_AT_ISO = '2026-04-01T23:00:00.000Z'; // April 2, 2026 00:00 WAT
+const DEADLINE_CONFIG_DOC_ID = '__deadline_config__';
 const LICENSE_PROMPT_SNOOZE_HOURS = 24;
 const WHATSAPP_PHONE = '2348145807650';
 const WHATSAPP_URL = `https://wa.me/${WHATSAPP_PHONE}?text=${encodeURIComponent('Hello, I want to purchase my CBT annual license key.')}`;
@@ -23,6 +24,7 @@ type MonetizationMode = 'pre-deadline' | 'post-deadline';
 interface MonetizationModalProps {
   mode: MonetizationMode;
   isLocked: boolean;
+  deadlineLabel: string;
   activationKey: string;
   onActivationKeyChange: (value: string) => void;
   onActivateKey: () => void;
@@ -36,6 +38,7 @@ interface MonetizationModalProps {
 const MonetizationModal: React.FC<MonetizationModalProps> = ({
   mode,
   isLocked,
+  deadlineLabel,
   activationKey,
   onActivationKeyChange,
   onActivateKey,
@@ -60,12 +63,12 @@ const MonetizationModal: React.FC<MonetizationModalProps> = ({
           {isPreDeadline ? (
             <p className="text-slate-600 text-sm leading-relaxed">
               This CBT platform has been running on free resources. To keep service stable for growing usage, free access
-              ends on <strong>April 2, 2026 (11:59 PM WAT)</strong>. Buy your annual activation key before this date to
+              ends on <strong>{deadlineLabel}</strong>. Buy your annual activation key before this date to
               avoid interruption.
             </p>
           ) : (
             <p className="text-slate-600 text-sm leading-relaxed">
-              Free access ended on <strong>April 2, 2026 (11:59 PM WAT)</strong>. To continue using the CBT simulator,
+              Free access ended on <strong>{deadlineLabel}</strong>. To continue using the CBT simulator,
               activate your annual license key.
             </p>
           )}
@@ -144,6 +147,7 @@ const App: React.FC = () => {
   const [isMonetizationLocked, setIsMonetizationLocked] = useState(false);
   const [activationKey, setActivationKey] = useState('');
   const [isActivatingKey, setIsActivatingKey] = useState(false);
+  const [freeAccessEndsAtIso, setFreeAccessEndsAtIso] = useState(DEFAULT_FREE_ACCESS_ENDS_AT_ISO);
 
   const getDefaultViewForRole = (role: User['role']) => {
     if (role === 'root-admin') return 'root-admin';
@@ -190,6 +194,21 @@ const App: React.FC = () => {
     const ms = Date.parse(raw);
     return Number.isFinite(ms) ? ms : null;
   };
+
+  const deadlineLabel = (() => {
+    const ms = Date.parse(freeAccessEndsAtIso);
+    if (!Number.isFinite(ms)) return 'April 2, 2026 00:00 WAT';
+    const formatted = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Africa/Lagos',
+      day: '2-digit',
+      month: 'long',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    }).format(new Date(ms));
+    return `${formatted} WAT`;
+  })();
 
   const getPackageSignature = (test: MockTest) => {
     const ids = Array.from(new Set(test.sections.flatMap(section => section.questionIds))).sort();
@@ -367,10 +386,22 @@ const App: React.FC = () => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         await checkUserStatus(firebaseUser);
+        try {
+          const configSnap = await getDoc(doc(db, 'licenseKeys', DEADLINE_CONFIG_DOC_ID));
+          const configured = configSnap.exists() ? (configSnap.data() as any)?.freeAccessEndsAt : null;
+          if (typeof configured === 'string' && Number.isFinite(Date.parse(configured))) {
+            setFreeAccessEndsAtIso(configured);
+          } else {
+            setFreeAccessEndsAtIso(DEFAULT_FREE_ACCESS_ENDS_AT_ISO);
+          }
+        } catch {
+          setFreeAccessEndsAtIso(DEFAULT_FREE_ACCESS_ENDS_AT_ISO);
+        }
       } else {
         setCurrentUser(null);
         setCurrentView('auth');
         setIsLoading(false);
+        setFreeAccessEndsAtIso(DEFAULT_FREE_ACCESS_ENDS_AT_ISO);
       }
     });
     return () => unsubscribe();
@@ -385,7 +416,7 @@ const App: React.FC = () => {
     }
 
     const now = Date.now();
-    const deadlineMs = Date.parse(FREE_ACCESS_ENDS_AT_ISO);
+    const deadlineMs = Date.parse(freeAccessEndsAtIso);
     const isAfterDeadline = Number.isFinite(deadlineMs) && now > deadlineMs;
     const staff = isStaffUser(currentUser);
     const paid = hasActiveSubscription(currentUser);
@@ -418,7 +449,7 @@ const App: React.FC = () => {
 
     setIsMonetizationLocked(false);
     setShowMonetizationModal(true);
-  }, [currentUser, isLoading]);
+  }, [currentUser, isLoading, freeAccessEndsAtIso]);
 
   const handleOpenWhatsApp = () => {
     window.open(WHATSAPP_URL, '_blank', 'noopener,noreferrer');
@@ -450,6 +481,10 @@ const App: React.FC = () => {
       }
 
       const keyData = keyDoc.data() as any;
+      if (keyData?.status !== 'new') {
+        alert('Invalid activation key.');
+        return;
+      }
       const alreadyUsed = Boolean(keyData?.isUsed) || keyData?.status === 'used' || Boolean(keyData?.redeemedBy);
       if (alreadyUsed) {
         alert('This activation key has already been used.');
@@ -605,6 +640,7 @@ const App: React.FC = () => {
         <MonetizationModal
           mode={monetizationMode}
           isLocked={isMonetizationLocked}
+          deadlineLabel={deadlineLabel}
           activationKey={activationKey}
           onActivationKeyChange={setActivationKey}
           onActivateKey={handleActivateKey}

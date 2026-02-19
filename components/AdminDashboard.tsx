@@ -2,7 +2,7 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { User, Question, TestSection, MockTest, ExamResult } from '../types';
 import { db } from '../firebase';
-import { collection, addDoc, getDocs, deleteDoc, doc, query, updateDoc, writeBatch, limit, where, documentId } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+import { collection, addDoc, getDocs, getDoc, deleteDoc, doc, query, updateDoc, setDoc, writeBatch, limit, where, documentId } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import { GoogleGenAI } from '@google/genai';
 import ScientificText from './ScientificText';
 import AdminAnalytics from './AdminAnalytics';
@@ -32,6 +32,33 @@ const chunkArray = <T,>(arr: T[], size: number) => {
   for (let i = 0; i < arr.length; i += size) chunks.push(arr.slice(i, i + size));
   return chunks;
 };
+const DEADLINE_CONFIG_DOC_ID = '__deadline_config__';
+const DEFAULT_FREE_ACCESS_ENDS_AT_ISO = '2026-04-01T23:00:00.000Z'; // April 2, 2026 00:00 WAT
+
+const toWatInputValue = (iso: string) => {
+  const ms = Date.parse(iso);
+  const safeMs = Number.isFinite(ms) ? ms : Date.parse(DEFAULT_FREE_ACCESS_ENDS_AT_ISO);
+  const wat = new Date(safeMs + 60 * 60 * 1000);
+  const y = wat.getUTCFullYear();
+  const m = String(wat.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(wat.getUTCDate()).padStart(2, '0');
+  const h = String(wat.getUTCHours()).padStart(2, '0');
+  const min = String(wat.getUTCMinutes()).padStart(2, '0');
+  return `${y}-${m}-${d}T${h}:${min}`;
+};
+
+const watInputToIso = (value: string): string | null => {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
+  if (!match) return null;
+  const y = Number(match[1]);
+  const m = Number(match[2]);
+  const d = Number(match[3]);
+  const h = Number(match[4]);
+  const min = Number(match[5]);
+  if ([y, m, d, h, min].some(v => !Number.isFinite(v))) return null;
+  return new Date(Date.UTC(y, m - 1, d, h - 1, min, 0, 0)).toISOString();
+};
+
 const makeLicenseKey = () => {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   const part = () => Array.from({ length: 4 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join('');
@@ -86,6 +113,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
   const [bulkKeyDurationDays, setBulkKeyDurationDays] = useState(365);
   const [generatedKeys, setGeneratedKeys] = useState<string[]>([]);
   const [keyToolLoading, setKeyToolLoading] = useState(false);
+  const [deadlineInput, setDeadlineInput] = useState(toWatInputValue(DEFAULT_FREE_ACCESS_ENDS_AT_ISO));
+  const [deadlineSaving, setDeadlineSaving] = useState(false);
 
   const groupedQuestions = useMemo(() => {
     const groups: Record<string, Question[]> = {};
@@ -117,6 +146,24 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
     if (!canManageKeys && activeTab === 'license-keys') {
       setActiveTab('questions');
     }
+  }, [activeTab, canManageKeys]);
+
+  useEffect(() => {
+    const loadDeadline = async () => {
+      if (!canManageKeys || activeTab !== 'license-keys') return;
+      try {
+        const snap = await getDoc(doc(db, 'licenseKeys', DEADLINE_CONFIG_DOC_ID));
+        const configured = snap.exists() ? (snap.data() as any)?.freeAccessEndsAt : null;
+        if (typeof configured === 'string' && Number.isFinite(Date.parse(configured))) {
+          setDeadlineInput(toWatInputValue(configured));
+        } else {
+          setDeadlineInput(toWatInputValue(DEFAULT_FREE_ACCESS_ENDS_AT_ISO));
+        }
+      } catch {
+        setDeadlineInput(toWatInputValue(DEFAULT_FREE_ACCESS_ENDS_AT_ISO));
+      }
+    };
+    loadDeadline();
   }, [activeTab, canManageKeys]);
 
   const runQuestionSearch = async (rawQuery: string) => {
@@ -781,6 +828,31 @@ Rules:
     }
   };
 
+  const handleSaveDeadline = async () => {
+    if (!canManageKeys) return;
+    const iso = watInputToIso(deadlineInput);
+    if (!iso) {
+      alert('Invalid deadline value. Use a valid date and time.');
+      return;
+    }
+
+    setDeadlineSaving(true);
+    try {
+      await setDoc(doc(db, 'licenseKeys', DEADLINE_CONFIG_DOC_ID), {
+        status: 'config',
+        freeAccessEndsAt: iso,
+        updatedBy: user.id,
+        updatedByName: user.name,
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+      alert('Deadline updated successfully.');
+    } catch (err: any) {
+      alert('Failed to update deadline. ' + (err?.message || ''));
+    } finally {
+      setDeadlineSaving(false);
+    }
+  };
+
   return (
     <div className="flex-1 w-full bg-slate-50 flex flex-col overflow-hidden">
       <div className="bg-white border-b border-slate-100 p-6 flex justify-between items-center shrink-0 safe-top shadow-sm z-10">
@@ -1225,6 +1297,31 @@ Rules:
               <h3 className="text-lg font-bold text-slate-900 mb-2">Activation Key Generator</h3>
               <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
                 Root admin only. Generated keys are stored in <code>licenseKeys</code>.
+              </p>
+            </div>
+
+            <div className="bg-white border border-slate-100 rounded-[2rem] p-8 shadow-sm space-y-4">
+              <h4 className="text-sm font-bold uppercase tracking-widest text-slate-900">Free Access Deadline (WAT)</h4>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                This controls when paywall lock starts for unpaid users.
+              </p>
+              <div className="flex flex-col md:flex-row gap-3">
+                <input
+                  type="datetime-local"
+                  value={deadlineInput}
+                  onChange={(e) => setDeadlineInput(e.target.value)}
+                  className="flex-1 p-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold outline-none"
+                />
+                <button
+                  onClick={handleSaveDeadline}
+                  disabled={deadlineSaving}
+                  className="px-6 py-4 bg-slate-950 text-amber-500 rounded-2xl text-[10px] font-bold uppercase tracking-widest disabled:opacity-40"
+                >
+                  {deadlineSaving ? 'Saving...' : 'Save Deadline'}
+                </button>
+              </div>
+              <p className="text-[10px] text-slate-500">
+                Default reference: April 2, 2026 at 00:00 WAT.
               </p>
             </div>
 
