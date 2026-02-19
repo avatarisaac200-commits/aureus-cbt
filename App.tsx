@@ -14,7 +14,7 @@ import ReviewInterface from './components/ReviewInterface';
 import logo from './assets/logo.png';
 
 const DEFAULT_FREE_ACCESS_ENDS_AT_ISO = '2026-04-01T23:00:00.000Z'; // April 2, 2026 00:00 WAT
-const DEADLINE_CONFIG_DOC_ID = '__deadline_config__';
+const DEADLINE_CONFIG_DOC_ID = 'deadline_config';
 const LICENSE_PROMPT_SNOOZE_HOURS = 24;
 const WHATSAPP_PHONE = '2348145807650';
 const WHATSAPP_URL = `https://wa.me/${WHATSAPP_PHONE}?text=${encodeURIComponent('Hello, I want to purchase my CBT annual license key.')}`;

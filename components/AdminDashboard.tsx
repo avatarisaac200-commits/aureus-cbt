@@ -32,7 +32,7 @@ const chunkArray = <T,>(arr: T[], size: number) => {
   for (let i = 0; i < arr.length; i += size) chunks.push(arr.slice(i, i + size));
   return chunks;
 };
-const DEADLINE_CONFIG_DOC_ID = '__deadline_config__';
+const DEADLINE_CONFIG_DOC_ID = 'deadline_config';
 const DEFAULT_FREE_ACCESS_ENDS_AT_ISO = '2026-04-01T23:00:00.000Z'; // April 2, 2026 00:00 WAT
 
 const toWatInputValue = (iso: string) => {
