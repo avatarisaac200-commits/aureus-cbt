@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useMemo, useEffect } from 'react';
-import { User, Question, TestSection, MockTest, ExamResult } from '../types';
+import { User, Question, TestSection, MockTest, ExamResult, DifficultyLevel, TestGenerationMode } from '../types';
 import { db } from '../firebase';
 import { collection, addDoc, getDocs, getDoc, deleteDoc, doc, query, updateDoc, setDoc, writeBatch, limit, where, documentId } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import { GoogleGenAI } from '@google/genai';
@@ -66,6 +66,71 @@ const makeLicenseKey = () => {
 };
 
 const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+const DEFAULT_DIFFICULTY: DifficultyLevel = 'medium';
+
+const parseList = (value: string) => value.split(',').map(item => item.trim()).filter(Boolean);
+const normalizeDifficulty = (value: string): DifficultyLevel => {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'easy' || normalized === 'hard') return normalized;
+  return 'medium';
+};
+const toBoolean = (value: string, fallback = true) => {
+  const v = value.trim().toLowerCase();
+  if (!v) return fallback;
+  if (['false', '0', 'no', 'n', 'off'].includes(v)) return false;
+  if (['true', '1', 'yes', 'y', 'on'].includes(v)) return true;
+  return fallback;
+};
+const parseCsvRows = (text: string): Array<Record<string, string>> => {
+  const rowsRaw: string[][] = [];
+  let row: string[] = [];
+  let cell = '';
+  let inQuotes = false;
+  const normalized = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+
+  for (let i = 0; i < normalized.length; i++) {
+    const ch = normalized[i];
+    if (ch === '"') {
+      if (inQuotes && normalized[i + 1] === '"') {
+        cell += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+    if (ch === ',' && !inQuotes) {
+      row.push(cell.trim());
+      cell = '';
+      continue;
+    }
+    if (ch === '\n' && !inQuotes) {
+      row.push(cell.trim());
+      if (row.some(v => v.length > 0)) rowsRaw.push(row);
+      row = [];
+      cell = '';
+      continue;
+    }
+    cell += ch;
+  }
+  if (cell.length > 0 || row.length > 0) {
+    row.push(cell.trim());
+    if (row.some(v => v.length > 0)) rowsRaw.push(row);
+  }
+
+  if (rowsRaw.length < 2) return [];
+  const headers = rowsRaw[0].map(h => h.trim().toLowerCase());
+  const rows: Array<Record<string, string>> = [];
+  for (let i = 1; i < rowsRaw.length; i++) {
+    const values = rowsRaw[i];
+    const row: Record<string, string> = {};
+    headers.forEach((h, idx) => {
+      row[h] = values[idx] ?? '';
+    });
+    rows.push(row);
+  }
+  return rows;
+};
 
 const normalizeExtractedQuestions = (input: any): StagedQuestion[] => {
   const arr = Array.isArray(input) ? input : [];
@@ -91,6 +156,10 @@ const normalizeExtractedQuestions = (input: any): StagedQuestion[] => {
         options,
         correctAnswerIndex,
         explanation: String(item?.explanation ?? '').trim(),
+        difficulty: normalizeDifficulty(String(item?.difficulty ?? DEFAULT_DIFFICULTY)),
+        tags: Array.isArray(item?.tags) ? item.tags.map((t: any) => String(t).trim()).filter(Boolean) : [],
+        status: 'approved',
+        isActive: true,
         selected: true
       } as StagedQuestion;
     })
@@ -146,6 +215,10 @@ const extractQuestionsFromPdfTextFallback = (rawText: string): StagedQuestion[] 
         options,
         correctAnswerIndex: answerIndex,
         explanation: '',
+        difficulty: DEFAULT_DIFFICULTY,
+        tags: [],
+        status: 'approved',
+        isActive: true,
         selected: true
       });
     }
@@ -226,10 +299,19 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
   const [testName, setTestName] = useState('');
   const [testDesc, setTestDesc] = useState('');
   const [testDuration, setTestDuration] = useState(60);
+  const [testGenerationMode, setTestGenerationMode] = useState<TestGenerationMode>('fixed');
   const [allowRetake, setAllowRetake] = useState(true);
   const [maxAttempts, setMaxAttempts] = useState<number | ''>('');
   const [sections, setSections] = useState<TestSection[]>([
-    { id: 'sec_' + Date.now(), name: 'Section 1', questionIds: [], marksPerQuestion: 1 }
+    {
+      id: 'sec_' + Date.now(),
+      name: 'Section 1',
+      questionIds: [],
+      marksPerQuestion: 1,
+      questionCount: 20,
+      sampleFilters: { subjects: [], topics: [], difficulties: ['easy', 'medium', 'hard'], tags: [] },
+      difficultyMix: { easy: 30, medium: 50, hard: 20 }
+    }
   ]);
   const [activeBuilderSection, setActiveBuilderSection] = useState(0);
 
@@ -241,11 +323,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
   const [qOptions, setQOptions] = useState(['', '', '', '']);
   const [qCorrect, setQCorrect] = useState(0);
   const [qExplanation, setQExplanation] = useState('');
+  const [qDifficulty, setQDifficulty] = useState<DifficultyLevel>(DEFAULT_DIFFICULTY);
+  const [qTags, setQTags] = useState('');
+  const [qIsActive, setQIsActive] = useState(true);
 
   // AI Import State
   const [importStatus, setImportStatus] = useState<'idle' | 'parsing' | 'review'>('idle');
   const [stagedQuestions, setStagedQuestions] = useState<StagedQuestion[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const csvInputRef = useRef<HTMLInputElement>(null);
   const [singleKeyDurationDays, setSingleKeyDurationDays] = useState(365);
   const [bulkKeyCount, setBulkKeyCount] = useState(10);
   const [bulkKeyDurationDays, setBulkKeyDurationDays] = useState(365);
@@ -315,13 +401,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
     setIsSearching(true);
     setDbError(null);
     try {
-      const snap = await getDocs(query(collection(db, 'questions'), limit(500)));
+      const snap = await getDocs(query(collection(db, 'questions'), limit(2000)));
       const data = snap.docs.map(d => ({ ...d.data(), id: d.id } as Question));
       const lowerQ = q.toLowerCase();
       const filtered = data.filter(item =>
         item.text.toLowerCase().includes(lowerQ) ||
         item.subject.toLowerCase().includes(lowerQ) ||
-        (item.topic || '').toLowerCase().includes(lowerQ)
+        (item.topic || '').toLowerCase().includes(lowerQ) ||
+        (item.tags || []).some(tag => tag.toLowerCase().includes(lowerQ))
       );
       setQuestions(filtered);
       setCollapsedSubjects({});
@@ -364,10 +451,23 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
     for (const test of tests) {
       const resultsSnap = await getDocs(query(collection(db, 'results'), where('testId', '==', test.id)));
 
-      resultsSnap.docs.forEach(resultDoc => {
+      for (const resultDoc of resultsSnap.docs) {
         const result = { ...resultDoc.data(), id: resultDoc.id } as ExamResult;
+        const sectionsToScore = Array.isArray(result.resolvedSections) && result.resolvedSections.length > 0
+          ? result.resolvedSections
+          : test.sections;
 
-        const sectionBreakdown = test.sections.map(section => {
+        const missingIds = Array.from(new Set(
+          sectionsToScore.flatMap(section => section.questionIds).filter(qId => !questionMap[qId])
+        ));
+        for (const chunk of chunkArray(missingIds, 10)) {
+          const qSnap = await getDocs(query(collection(db, 'questions'), where(documentId(), 'in', chunk)));
+          qSnap.docs.forEach(d => {
+            questionMap[d.id] = { ...d.data(), id: d.id } as Question;
+          });
+        }
+
+        const sectionBreakdown = sectionsToScore.map(section => {
           let sectionScore = 0;
           section.questionIds.forEach(qId => {
             const question = questionMap[qId];
@@ -396,7 +496,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
           });
           changedResults++;
         }
-      });
+      }
     }
 
     let batch = writeBatch(db);
@@ -640,6 +740,80 @@ Rules:
     }
   };
 
+  const processCSV = async (file: File) => {
+    setImportStatus('parsing');
+    try {
+      const text = await file.text();
+      const rows = parseCsvRows(text);
+      if (rows.length === 0) throw new Error('CSV has no valid data rows.');
+
+      rows.forEach((row) => {
+        if (!row.correctanswer && row.correctanswerindex) row.correctanswer = row.correctanswerindex;
+      });
+
+      const required = ['text', 'optiona', 'optionb', 'optionc', 'optiond', 'correctanswer'];
+      const first = rows[0] || {};
+      const missing = required.filter(col => !(col in first));
+      if (missing.length > 0) {
+        throw new Error(`Missing required CSV columns: ${missing.join(', ')}`);
+      }
+
+      const mapped: StagedQuestion[] = [];
+      const errors: string[] = [];
+      rows.forEach((row, idx) => {
+        const rowNo = idx + 2;
+        const textValue = (row.text || '').trim();
+        const options = [row.optiona || '', row.optionb || '', row.optionc || '', row.optiond || ''].map(v => v.trim());
+        const answerRaw = (row.correctanswer || '').trim();
+
+        if (!textValue || options.some(opt => !opt)) {
+          errors.push(`Row ${rowNo}: text/options missing.`);
+          return;
+        }
+
+        let correctAnswerIndex = Number(answerRaw);
+        if (!Number.isFinite(correctAnswerIndex)) {
+          const map: Record<string, number> = { a: 0, b: 1, c: 2, d: 3 };
+          correctAnswerIndex = map[answerRaw.toLowerCase()];
+        }
+        if (!Number.isFinite(correctAnswerIndex) || correctAnswerIndex < 0 || correctAnswerIndex > 3) {
+          errors.push(`Row ${rowNo}: correctAnswer must be A-D or 0-3.`);
+          return;
+        }
+
+        mapped.push({
+          subject: (row.subject || 'General').trim() || 'General',
+          topic: (row.topic || 'General').trim() || 'General',
+          text: textValue,
+          options,
+          correctAnswerIndex,
+          explanation: (row.explanation || '').trim(),
+          difficulty: normalizeDifficulty(row.difficulty || DEFAULT_DIFFICULTY),
+          tags: parseList(row.tags || ''),
+          source: (row.source || '').trim(),
+          year: row.year ? (Number.isFinite(Number(row.year)) ? Number(row.year) : null) : null,
+          examType: (row.examtype || '').trim(),
+          status: (row.status || 'approved').trim().toLowerCase() === 'draft' ? 'draft' : 'approved',
+          isActive: toBoolean(row.isactive || 'true', true),
+          selected: true
+        });
+      });
+
+      if (mapped.length === 0) {
+        throw new Error(errors[0] || 'No valid rows were found in CSV.');
+      }
+      if (errors.length > 0) {
+        alert(`Imported with ${errors.length} skipped row(s). First issue: ${errors[0]}`);
+      }
+
+      setStagedQuestions(mapped);
+      setImportStatus('review');
+    } catch (err: any) {
+      alert(err?.message || 'CSV import failed.');
+      setImportStatus('idle');
+    }
+  };
+
   const handleSaveQuestion = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -650,6 +824,10 @@ Rules:
       options: normalizeOptions(qOptions),
       correctAnswerIndex: qCorrect,
       explanation: qExplanation.trim(),
+      difficulty: qDifficulty,
+      tags: parseList(qTags),
+      status: 'approved' as const,
+      isActive: qIsActive,
       normalizedText: normalizeText(qText)
     };
     try {
@@ -687,13 +865,27 @@ Rules:
   };
 
   const resetForm = () => {
-    setEditingId(null); setQSubject(''); setQTopic(''); setQText(''); setQOptions(['','','','']); setQCorrect(0); setQExplanation('');
+    setEditingId(null);
+    setQSubject('');
+    setQTopic('');
+    setQText('');
+    setQOptions(['','','','']);
+    setQCorrect(0);
+    setQExplanation('');
+    setQDifficulty(DEFAULT_DIFFICULTY);
+    setQTags('');
+    setQIsActive(true);
   };
 
   const handleCreateTest = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!testName) return alert("Test name is required.");
-    if (sections.some(s => s.questionIds.length === 0)) return alert("One or more sections are empty.");
+    if (testGenerationMode === 'fixed' && sections.some(s => s.questionIds.length === 0)) {
+      return alert("One or more sections are empty.");
+    }
+    if (testGenerationMode === 'dynamic' && sections.some(s => Number(s.questionCount || 0) <= 0)) {
+      return alert("Each dynamic section must have a question count greater than zero.");
+    }
     if (!allowRetake && maxAttempts !== '' && Number(maxAttempts) > 1) {
       return alert("Retake is off, so max attempts must be 1.");
     }
@@ -705,6 +897,7 @@ Rules:
         description: testDesc,
         totalDurationSeconds: testDuration * 60,
         sections,
+        generationMode: testGenerationMode,
         allowRetake,
         maxAttempts: allowRetake ? (maxAttempts === '' ? null : Number(maxAttempts)) : 1,
         createdBy: user.id,
@@ -719,8 +912,25 @@ Rules:
   };
 
   const addSection = () => {
-    setSections([...sections, { id: 'sec_' + Date.now(), name: `Section ${sections.length + 1}`, questionIds: [], marksPerQuestion: 1 }]);
+    setSections([
+      ...sections,
+      {
+        id: 'sec_' + Date.now(),
+        name: `Section ${sections.length + 1}`,
+        questionIds: [],
+        marksPerQuestion: 1,
+        questionCount: 20,
+        sampleFilters: { subjects: [], topics: [], difficulties: ['easy', 'medium', 'hard'], tags: [] },
+        difficultyMix: { easy: 30, medium: 50, hard: 20 }
+      }
+    ]);
     setActiveBuilderSection(sections.length);
+  };
+
+  const updateActiveSection = (updater: (section: TestSection) => TestSection) => {
+    const next = [...sections];
+    next[activeBuilderSection] = updater(next[activeBuilderSection]);
+    setSections(next);
   };
 
   const toggleQuestionInActiveSection = (qId: string) => {
@@ -747,6 +957,9 @@ Rules:
     setQOptions(q.options);
     setQCorrect(q.correctAnswerIndex);
     setQExplanation(q.explanation || '');
+    setQDifficulty((q.difficulty as DifficultyLevel) || DEFAULT_DIFFICULTY);
+    setQTags((q.tags || []).join(', '));
+    setQIsActive(q.isActive !== false);
     setIsQuestionModalOpen(true);
   };
 
@@ -809,8 +1022,19 @@ Rules:
 
       const batch = writeBatch(db);
       finalList.forEach(q => {
+        const persistable = { ...q } as any;
+        delete persistable.selected;
         const ref = doc(collection(db, 'questions'));
-        batch.set(ref, { ...q, normalizedText: normalizeText(q.text), createdBy: user.id, createdAt: new Date().toISOString() });
+        batch.set(ref, {
+          ...persistable,
+          difficulty: persistable.difficulty || DEFAULT_DIFFICULTY,
+          tags: Array.isArray(persistable.tags) ? persistable.tags : [],
+          status: persistable.status || 'approved',
+          isActive: persistable.isActive !== false,
+          normalizedText: normalizeText(persistable.text),
+          createdBy: user.id,
+          createdAt: new Date().toISOString()
+        });
       });
       await batch.commit();
 
@@ -1015,7 +1239,7 @@ Rules:
         <button onClick={() => setActiveTab('questions')} className={`px-8 py-4 text-[10px] font-bold uppercase tracking-widest transition-all ${activeTab === 'questions' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50' : 'text-slate-400'}`}>Question Bank</button>
         <button onClick={() => setActiveTab('create-test')} className={`px-8 py-4 text-[10px] font-bold uppercase tracking-widest transition-all ${activeTab === 'create-test' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50' : 'text-slate-400'}`}>Create Test</button>
         <button onClick={() => setActiveTab('tests')} className={`px-8 py-4 text-[10px] font-bold uppercase tracking-widest transition-all ${activeTab === 'tests' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50' : 'text-slate-400'}`}>Tests</button>
-        <button onClick={() => setActiveTab('import')} className={`px-8 py-4 text-[10px] font-bold uppercase tracking-widest transition-all ${activeTab === 'import' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50' : 'text-slate-400'}`}>Extract PDF</button>
+        <button onClick={() => setActiveTab('import')} className={`px-8 py-4 text-[10px] font-bold uppercase tracking-widest transition-all ${activeTab === 'import' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50' : 'text-slate-400'}`}>Import</button>
         {canManageKeys && (
           <button onClick={() => setActiveTab('license-keys')} className={`px-8 py-4 text-[10px] font-bold uppercase tracking-widest transition-all ${activeTab === 'license-keys' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50' : 'text-slate-400'}`}>License Keys</button>
         )}
@@ -1125,6 +1349,25 @@ Rules:
                    <span className="text-[10px] font-bold uppercase text-slate-400">Time (mins)</span>
                    <input type="number" className="bg-transparent font-bold w-full text-center text-xl outline-none" value={testDuration} onChange={e => setTestDuration(parseInt(e.target.value) || 0)} />
                 </div>
+                <div className="flex items-center justify-between bg-slate-50 p-4 rounded-2xl">
+                  <span className="text-[10px] font-bold uppercase text-slate-400">Build Mode</span>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setTestGenerationMode('fixed')}
+                      className={`px-4 py-2 rounded-xl text-[9px] font-bold uppercase tracking-widest ${testGenerationMode === 'fixed' ? 'bg-slate-950 text-amber-500' : 'bg-slate-200 text-slate-600'}`}
+                    >
+                      Fixed
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTestGenerationMode('dynamic')}
+                      className={`px-4 py-2 rounded-xl text-[9px] font-bold uppercase tracking-widest ${testGenerationMode === 'dynamic' ? 'bg-slate-950 text-amber-500' : 'bg-slate-200 text-slate-600'}`}
+                    >
+                      Dynamic
+                    </button>
+                  </div>
+                </div>
 
                 <div className="flex items-center justify-between bg-slate-50 p-4 rounded-2xl">
                   <span className="text-[10px] font-bold uppercase text-slate-400">Allow Retake</span>
@@ -1165,7 +1408,9 @@ Rules:
                             }}
                             onClick={(e) => e.stopPropagation()}
                           />
-                          <p className="text-[9px] text-slate-400 mt-1">{s.questionIds.length} question(s)</p>
+                          <p className="text-[9px] text-slate-400 mt-1">
+                            {testGenerationMode === 'fixed' ? `${s.questionIds.length} question(s)` : `${s.questionCount || 0} generated question(s)`}
+                          </p>
                         </div>
                         {activeBuilderSection === idx && <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></div>}
                      </button>
@@ -1181,49 +1426,145 @@ Rules:
                <div className="bg-slate-900 text-white p-6 rounded-[2rem] flex justify-between items-center shadow-lg">
                   <div>
                     <h4 className="text-sm font-bold uppercase tracking-widest text-amber-500">Selecting for: {sections[activeBuilderSection].name}</h4>
-                  <p className="text-[9px] text-slate-400 mt-1">Tap a question to add/remove from this section</p>
+                  <p className="text-[9px] text-slate-400 mt-1">
+                    {testGenerationMode === 'fixed' ? 'Tap a question to add/remove from this section' : 'Define a sample space and count for this section'}
+                  </p>
                 </div>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      placeholder="Search question bank..."
-                      className="bg-slate-800 border-none p-3 rounded-xl text-xs font-bold w-56 outline-none"
-                      value={builderSearchQuery}
-                      onChange={e => setBuilderSearchQuery(e.target.value)}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter') {
-                          runQuestionSearch(builderSearchQuery);
-                        }
-                      }}
-                    />
-                    <button
-                      onClick={() => runQuestionSearch(builderSearchQuery)}
-                      className="px-4 py-3 bg-amber-500 text-slate-950 rounded-xl text-[9px] font-bold uppercase tracking-widest hover:bg-amber-400 transition-all"
-                    >
-                      {isSearching ? 'Searching...' : 'Search'}
-                    </button>
-                  </div>
-               </div>
-               
-               <div className="flex-1 overflow-y-auto pr-2 space-y-3 no-scrollbar pb-10">
-                  {questions.length === 0 && (
-                    <div className="bg-white p-16 rounded-[2rem] border border-dashed text-center text-slate-300 font-bold uppercase text-[10px] tracking-[0.2em]">
-                      Search the bank to load questions
+                  {testGenerationMode === 'fixed' && (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        placeholder="Search question bank..."
+                        className="bg-slate-800 border-none p-3 rounded-xl text-xs font-bold w-56 outline-none"
+                        value={builderSearchQuery}
+                        onChange={e => setBuilderSearchQuery(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') {
+                            runQuestionSearch(builderSearchQuery);
+                          }
+                        }}
+                      />
+                      <button
+                        onClick={() => runQuestionSearch(builderSearchQuery)}
+                        className="px-4 py-3 bg-amber-500 text-slate-950 rounded-xl text-[9px] font-bold uppercase tracking-widest hover:bg-amber-400 transition-all"
+                      >
+                        {isSearching ? 'Searching...' : 'Search'}
+                      </button>
                     </div>
                   )}
-                  {builderQuestions.map(q => {
-                    const isSelected = sections[activeBuilderSection].questionIds.includes(q.id);
-                    return (
-                      <div key={q.id} onClick={() => toggleQuestionInActiveSection(q.id)} className={`p-5 border-2 rounded-2xl cursor-pointer transition-all flex justify-between items-center gap-6 shadow-sm ${isSelected ? 'border-amber-500 bg-amber-50 shadow-md ring-2 ring-amber-500/10' : 'border-white bg-white hover:border-slate-200'}`}>
-                         <div className="flex-1">
-                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">{q.subject}</p>
-                            <p className="text-sm font-bold text-slate-800 leading-relaxed"><ScientificText text={q.text} /></p>
-                         </div>
-                         <div className={`w-6 h-6 rounded-lg flex items-center justify-center border-2 shrink-0 ${isSelected ? 'bg-amber-500 border-amber-500 text-slate-950 shadow-sm' : 'border-slate-100 text-transparent'}`}><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path></svg></div>
-                      </div>
-                    );
-                  })}
                </div>
+
+               {testGenerationMode === 'fixed' ? (
+                 <div className="flex-1 overflow-y-auto pr-2 space-y-3 no-scrollbar pb-10">
+                    {questions.length === 0 && (
+                      <div className="bg-white p-16 rounded-[2rem] border border-dashed text-center text-slate-300 font-bold uppercase text-[10px] tracking-[0.2em]">
+                        Search the bank to load questions
+                      </div>
+                    )}
+                    {builderQuestions.map(q => {
+                      const isSelected = sections[activeBuilderSection].questionIds.includes(q.id);
+                      return (
+                        <div key={q.id} onClick={() => toggleQuestionInActiveSection(q.id)} className={`p-5 border-2 rounded-2xl cursor-pointer transition-all flex justify-between items-center gap-6 shadow-sm ${isSelected ? 'border-amber-500 bg-amber-50 shadow-md ring-2 ring-amber-500/10' : 'border-white bg-white hover:border-slate-200'}`}>
+                           <div className="flex-1">
+                              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">{q.subject}</p>
+                              <p className="text-sm font-bold text-slate-800 leading-relaxed"><ScientificText text={q.text} /></p>
+                           </div>
+                           <div className={`w-6 h-6 rounded-lg flex items-center justify-center border-2 shrink-0 ${isSelected ? 'bg-amber-500 border-amber-500 text-slate-950 shadow-sm' : 'border-slate-100 text-transparent'}`}><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path></svg></div>
+                        </div>
+                      );
+                    })}
+                 </div>
+               ) : (
+                 <div className="flex-1 overflow-y-auto pr-2 no-scrollbar pb-10">
+                   <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm space-y-4">
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                       <label className="text-[10px] font-bold uppercase text-slate-400">
+                         Question Count
+                         <input
+                           type="number"
+                           min={1}
+                           value={sections[activeBuilderSection].questionCount || 20}
+                           onChange={(e) => updateActiveSection(s => ({ ...s, questionCount: Math.max(1, Number(e.target.value) || 1) }))}
+                           className="w-full mt-2 p-3 bg-slate-50 border rounded-xl text-xs font-bold"
+                         />
+                       </label>
+                       <label className="text-[10px] font-bold uppercase text-slate-400">
+                         Marks Per Question
+                         <input
+                           type="number"
+                           min={1}
+                           value={sections[activeBuilderSection].marksPerQuestion || 1}
+                           onChange={(e) => updateActiveSection(s => ({ ...s, marksPerQuestion: Math.max(1, Number(e.target.value) || 1) }))}
+                           className="w-full mt-2 p-3 bg-slate-50 border rounded-xl text-xs font-bold"
+                         />
+                       </label>
+                     </div>
+                     <label className="text-[10px] font-bold uppercase text-slate-400 block">
+                       Subjects (comma-separated)
+                       <input
+                         value={(sections[activeBuilderSection].sampleFilters?.subjects || []).join(', ')}
+                         onChange={(e) => updateActiveSection(s => ({ ...s, sampleFilters: { ...(s.sampleFilters || {}), subjects: parseList(e.target.value) } }))}
+                         className="w-full mt-2 p-3 bg-slate-50 border rounded-xl text-xs"
+                         placeholder="Anatomy, Physiology"
+                       />
+                     </label>
+                     <label className="text-[10px] font-bold uppercase text-slate-400 block">
+                       Topics (comma-separated)
+                       <input
+                         value={(sections[activeBuilderSection].sampleFilters?.topics || []).join(', ')}
+                         onChange={(e) => updateActiveSection(s => ({ ...s, sampleFilters: { ...(s.sampleFilters || {}), topics: parseList(e.target.value) } }))}
+                         className="w-full mt-2 p-3 bg-slate-50 border rounded-xl text-xs"
+                         placeholder="Cell Biology, Cardiology"
+                       />
+                     </label>
+                     <label className="text-[10px] font-bold uppercase text-slate-400 block">
+                       Tags (comma-separated)
+                       <input
+                         value={(sections[activeBuilderSection].sampleFilters?.tags || []).join(', ')}
+                         onChange={(e) => updateActiveSection(s => ({ ...s, sampleFilters: { ...(s.sampleFilters || {}), tags: parseList(e.target.value) } }))}
+                         className="w-full mt-2 p-3 bg-slate-50 border rounded-xl text-xs"
+                         placeholder="high-yield, clinical"
+                       />
+                     </label>
+                     <div className="grid grid-cols-3 gap-3">
+                       {(['easy', 'medium', 'hard'] as DifficultyLevel[]).map((d) => {
+                         const checked = (sections[activeBuilderSection].sampleFilters?.difficulties || ['easy', 'medium', 'hard']).includes(d);
+                         return (
+                           <button
+                             key={d}
+                             type="button"
+                             onClick={() => {
+                               updateActiveSection((s) => {
+                                 const curr = s.sampleFilters?.difficulties || ['easy', 'medium', 'hard'];
+                                 const next = checked ? curr.filter(item => item !== d) : [...curr, d];
+                                 return { ...s, sampleFilters: { ...(s.sampleFilters || {}), difficulties: next.length > 0 ? next : ['easy', 'medium', 'hard'] } };
+                               });
+                             }}
+                             className={`p-3 rounded-xl border text-[10px] font-bold uppercase ${checked ? 'bg-amber-100 border-amber-300 text-amber-700' : 'bg-slate-50 border-slate-200 text-slate-500'}`}
+                           >
+                             {d}
+                           </button>
+                         );
+                       })}
+                     </div>
+                     <div className="grid grid-cols-3 gap-3">
+                       {(['easy', 'medium', 'hard'] as DifficultyLevel[]).map((d) => (
+                         <label key={d} className="text-[10px] font-bold uppercase text-slate-400">
+                           {d} %
+                           <input
+                             type="number"
+                             min={0}
+                             max={100}
+                             value={(sections[activeBuilderSection].difficultyMix as any)?.[d] ?? (d === 'easy' ? 30 : d === 'medium' ? 50 : 20)}
+                             onChange={(e) => updateActiveSection(s => ({ ...s, difficultyMix: { ...(s.difficultyMix || {}), [d]: Math.max(0, Math.min(100, Number(e.target.value) || 0)) } }))}
+                             className="w-full mt-2 p-3 bg-slate-50 border rounded-xl text-xs font-bold"
+                           />
+                         </label>
+                       ))}
+                     </div>
+                   </div>
+                 </div>
+               )}
             </div>
           </div>
         )}
@@ -1300,20 +1641,32 @@ Rules:
         {activeTab === 'import' && (
            <div className="max-w-2xl mx-auto py-20 text-center">
               {importStatus === 'idle' ? (
-                <div onClick={() => fileInputRef.current?.click()} className="bg-white p-20 rounded-[3rem] border-4 border-dashed border-slate-100 hover:border-amber-400 cursor-pointer transition-all shadow-xl group">
+                <div className="space-y-4">
                   <input type="file" id="pdf-input" ref={fileInputRef} className="hidden" accept=".pdf" onChange={(e) => e.target.files?.[0] && processPDF(e.target.files[0])} />
-                  <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center mx-auto mb-6 group-hover:bg-amber-50 transition-colors">
-                    <svg className="w-8 h-8 text-slate-400 group-hover:text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+                  <input type="file" id="csv-input" ref={csvInputRef} className="hidden" accept=".csv,text/csv" onChange={(e) => e.target.files?.[0] && processCSV(e.target.files[0])} />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <button onClick={() => fileInputRef.current?.click()} className="bg-white p-8 rounded-[2rem] border-2 border-dashed border-slate-100 hover:border-amber-400 transition-all shadow-sm group text-left">
+                      <h3 className="text-sm font-bold mb-2 uppercase text-slate-900">Import From PDF</h3>
+                      <p className="text-[10px] text-slate-400 font-medium">AI extract questions and review before publish.</p>
+                    </button>
+                    <button onClick={() => csvInputRef.current?.click()} className="bg-white p-8 rounded-[2rem] border-2 border-dashed border-slate-100 hover:border-emerald-400 transition-all shadow-sm group text-left">
+                      <h3 className="text-sm font-bold mb-2 uppercase text-slate-900">Import From CSV</h3>
+                      <p className="text-[10px] text-slate-400 font-medium">Fast bulk upload with row validation and dedupe.</p>
+                    </button>
                   </div>
-                  <h3 className="text-xl font-bold mb-4 uppercase text-slate-900">Extract Questions From PDF</h3>
-                  <p className="text-xs text-slate-400 font-medium">Upload a PDF and review questions before adding.</p>
+                  <div className="bg-white p-6 rounded-2xl border border-slate-100 text-left">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">CSV Headers</p>
+                    <code className="text-[10px] text-slate-700 break-words">
+                      subject,topic,text,optionA,optionB,optionC,optionD,correctAnswer,explanation,difficulty,tags,source,year,examType,status,isActive
+                    </code>
+                  </div>
                 </div>
               ) : importStatus === 'parsing' ? (
                 <div className="py-20 flex flex-col items-center">
                   <div className="w-72 h-2 bg-slate-100 rounded-full overflow-hidden mb-6">
                     <div className="h-full bg-amber-500 animate-pulse w-1/2"></div>
                   </div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest animate-pulse">Reading PDF...</p>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest animate-pulse">Processing file...</p>
                 </div>
               ) : (
                 <div className="space-y-6 text-left animate-in slide-in-from-bottom-10">
@@ -1369,6 +1722,29 @@ Rules:
                             className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold"
                             placeholder="Topic"
                           />
+                          <select
+                            value={q.difficulty || DEFAULT_DIFFICULTY}
+                            onChange={(e) => {
+                              const next = [...stagedQuestions];
+                              next[i].difficulty = normalizeDifficulty(e.target.value);
+                              setStagedQuestions(next);
+                            }}
+                            className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold"
+                          >
+                            <option value="easy">easy</option>
+                            <option value="medium">medium</option>
+                            <option value="hard">hard</option>
+                          </select>
+                          <input
+                            value={(q.tags || []).join(', ')}
+                            onChange={(e) => {
+                              const next = [...stagedQuestions];
+                              next[i].tags = parseList(e.target.value);
+                              setStagedQuestions(next);
+                            }}
+                            className="w-full p-3 bg-slate-50 border rounded-xl text-xs"
+                            placeholder="Tags (comma-separated)"
+                          />
                         </div>
 
                         <textarea
@@ -1421,6 +1797,19 @@ Rules:
                           rows={3}
                           placeholder="Explanation (optional)"
                         />
+                        <label className="flex items-center gap-2 text-[10px] font-bold uppercase text-slate-500">
+                          <input
+                            type="checkbox"
+                            checked={q.isActive !== false}
+                            onChange={(e) => {
+                              const next = [...stagedQuestions];
+                              next[i].isActive = e.target.checked;
+                              setStagedQuestions(next);
+                            }}
+                            className="accent-amber-500"
+                          />
+                          Active
+                        </label>
                       </div>
                     ))}
                   </div>
@@ -1557,6 +1946,14 @@ Rules:
                 <input placeholder="Topic" className="w-full p-4 bg-slate-50 border rounded-2xl text-xs font-bold outline-none" value={qTopic} onChange={e => setQTopic(e.target.value)} />
               </div>
               <textarea placeholder="Question text" className="w-full p-5 bg-slate-50 border rounded-2xl text-sm h-32 outline-none" value={qText} onChange={e => setQText(e.target.value)} required />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <select value={qDifficulty} onChange={e => setQDifficulty(normalizeDifficulty(e.target.value))} className="w-full p-4 bg-slate-50 border rounded-2xl text-xs font-bold outline-none">
+                  <option value="easy">easy</option>
+                  <option value="medium">medium</option>
+                  <option value="hard">hard</option>
+                </select>
+                <input placeholder="Tags (comma-separated)" className="w-full p-4 bg-slate-50 border rounded-2xl text-xs font-bold outline-none" value={qTags} onChange={e => setQTags(e.target.value)} />
+              </div>
               {qOptions.map((o, i) => (
                 <div key={i} className="flex gap-2">
                    <input type="radio" checked={qCorrect === i} onChange={() => setQCorrect(i)} className="accent-amber-500 w-4" name="correct" />
@@ -1564,6 +1961,10 @@ Rules:
                 </div>
               ))}
               <textarea placeholder="Explanation (optional)" className="w-full p-4 bg-slate-50 border rounded-2xl text-xs h-20 outline-none" value={qExplanation} onChange={e => setQExplanation(e.target.value)} />
+              <label className="flex items-center gap-2 text-[10px] font-bold uppercase text-slate-500">
+                <input type="checkbox" checked={qIsActive} onChange={(e) => setQIsActive(e.target.checked)} className="accent-amber-500" />
+                Active
+              </label>
               <button disabled={loading} className="w-full py-4 bg-slate-950 text-amber-500 rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-xl active:scale-95 transition-all">{editingId ? 'Save Changes' : 'Add Question'}</button>
             </form>
           </div>

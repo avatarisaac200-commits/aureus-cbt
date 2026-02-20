@@ -1,5 +1,8 @@
 
 export type UserRole = 'student' | 'admin' | 'root-admin';
+export type DifficultyLevel = 'easy' | 'medium' | 'hard';
+export type QuestionStatus = 'draft' | 'approved';
+export type TestGenerationMode = 'fixed' | 'dynamic';
 
 export interface User {
   id: string;
@@ -22,8 +25,28 @@ export interface Question {
   correctAnswerIndex: number;
   explanation?: string;
   normalizedText?: string;
+  difficulty?: DifficultyLevel;
+  tags?: string[];
+  source?: string;
+  year?: number | null;
+  examType?: string;
+  status?: QuestionStatus;
+  isActive?: boolean;
   createdBy: string;
   createdAt: string;
+}
+
+export interface SectionSampleFilters {
+  subjects?: string[];
+  topics?: string[];
+  difficulties?: DifficultyLevel[];
+  tags?: string[];
+}
+
+export interface SectionDifficultyMix {
+  easy?: number;
+  medium?: number;
+  hard?: number;
 }
 
 export interface TestSection {
@@ -31,6 +54,9 @@ export interface TestSection {
   name: string;
   questionIds: string[];
   marksPerQuestion: number;
+  questionCount?: number;
+  sampleFilters?: SectionSampleFilters;
+  difficultyMix?: SectionDifficultyMix;
 }
 
 export interface MockTest {
@@ -38,6 +64,7 @@ export interface MockTest {
   name: string;
   description: string;
   sections: TestSection[];
+  generationMode?: TestGenerationMode;
   totalDurationSeconds: number;
   allowRetake: boolean;
   maxAttempts?: number | null;
@@ -58,11 +85,24 @@ export interface ExamResult {
   completedAt: string;
   status: 'completed' | 'abandoned' | 'auto-submitted';
   userAnswers: Record<string, number>;
+  resolvedSections?: TestSection[];
+  attemptId?: string;
   sectionBreakdown: {
     sectionName: string;
     score: number;
     total: number;
   }[];
+}
+
+export interface TestAttempt {
+  id: string;
+  testId: string;
+  userId: string;
+  userName: string;
+  createdAt: string;
+  seed: number;
+  sections: TestSection[];
+  questionIds: string[];
 }
 
 export type ViewState = 'auth' | 'verify-email' | 'dashboard' | 'exam' | 'admin' | 'root-admin' | 'results' | 'review';

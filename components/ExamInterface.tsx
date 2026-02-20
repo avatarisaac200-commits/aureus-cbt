@@ -10,6 +10,8 @@ import logo from '../assets/logo.png';
 interface ExamInterfaceProps {
   test: MockTest;
   user: User;
+  resolvedSections?: TestSection[];
+  attemptId?: string;
   packagedQuestions?: Record<string, Question>;
   onFinish: (result: ExamResult) => void;
   onExit: () => void;
@@ -33,7 +35,7 @@ const queuePendingResult = (payload: Omit<ExamResult, 'id'>) => {
   }
 };
 
-const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, packagedQuestions, onFinish, onExit }) => {
+const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, resolvedSections, attemptId, packagedQuestions, onFinish, onExit }) => {
   const [view, setView] = useState<'lobby' | 'testing'>('lobby');
   const [activeSectionIndex, setActiveSectionIndex] = useState<number | null>(null);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -47,6 +49,7 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, packagedQuest
   const [questionLoadError, setQuestionLoadError] = useState<string | null>(null);
   const [isPreparingQuestions, setIsPreparingQuestions] = useState(true);
   const [isFinishing, setIsFinishing] = useState(false);
+  const effectiveSections = resolvedSections || test.sections;
 
   // Store the shuffled order of question IDs for each section
   const [shuffledSections, setShuffledSections] = useState<TestSection[]>([]);
@@ -75,7 +78,7 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, packagedQuest
           return;
         }
 
-        const ids = Array.from(new Set(test.sections.flatMap(section => section.questionIds)));
+        const ids = Array.from(new Set(effectiveSections.flatMap(section => section.questionIds)));
         if (ids.length === 0) {
           throw new Error('This test has no questions configured.');
         }
@@ -103,15 +106,15 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, packagedQuest
     fetchQuestions();
 
     // Prepare shuffled question IDs for this specific attempt
-    const randomized = test.sections.map(section => ({
+    const randomized = effectiveSections.map(section => ({
       ...section,
       questionIds: shuffleArray(section.questionIds)
     }));
     setShuffledSections(randomized);
-  }, [test, packagedQuestions]);
+  }, [test, packagedQuestions, effectiveSections]);
 
   const calculateResult = useCallback(async (status: ExamResult['status']) => {
-    const sectionBreakdown = test.sections.map((section) => {
+    const sectionBreakdown = effectiveSections.map((section) => {
       let sectionScore = 0;
       section.questionIds.forEach(qId => {
         const question = allQuestions[qId];
@@ -135,6 +138,8 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, packagedQuest
       completedAt: new Date().toISOString(),
       status: status,
       userAnswers: answers,
+      resolvedSections: effectiveSections,
+      attemptId: attemptId || undefined,
       sectionBreakdown
     };
 
@@ -145,7 +150,7 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, packagedQuest
       queuePendingResult(result);
       onFinish({ ...result, id: 'temp-' + Date.now() } as ExamResult);
     }
-  }, [allQuestions, answers, onFinish, test, user.id, user.name]);
+  }, [allQuestions, answers, onFinish, test, user.id, user.name, effectiveSections, attemptId]);
 
   useEffect(() => {
     if (!hasStarted) return;
@@ -264,7 +269,7 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, packagedQuest
             <h2 className="text-2xl font-bold text-slate-950 mb-2 uppercase tracking-tight">Test Instructions</h2>
             <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-10">You can move between sections anytime from the lobby.</p>
             <div className="space-y-4">
-              {test.sections.map((section, idx) => {
+              {effectiveSections.map((section, idx) => {
                 const isCompleted = completedSections.includes(idx);
                 return (
                   <button key={idx} onClick={() => enterSection(idx)} className={`w-full flex justify-between items-center p-6 rounded-2xl border-2 transition-all ${isCompleted ? 'bg-slate-50 border-slate-100' : 'bg-white border-slate-100 hover:border-amber-500'}`}>

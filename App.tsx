@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { User, MockTest, ExamResult, Question } from './types';
+import { User, MockTest, ExamResult, Question, TestSection, TestAttempt, DifficultyLevel } from './types';
 import { auth, db } from './firebase';
 import { onAuthStateChanged, sendEmailVerification } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 import { doc, getDoc, collection, getDocs, query, where, limit, documentId, updateDoc, addDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
@@ -20,6 +20,7 @@ const WHATSAPP_PHONE = '2348145807650';
 const WHATSAPP_URL = `https://wa.me/${WHATSAPP_PHONE}?text=${encodeURIComponent('Hello, I want to purchase my CBT annual license key.')}`;
 const OFFLINE_PACKAGE_KEY_PREFIX = 'testpkg:offline:';
 const PENDING_RESULTS_QUEUE_KEY = 'pendingResultsQueue';
+const QUESTION_FETCH_LIMIT = 3000;
 
 type MonetizationMode = 'pre-deadline' | 'post-deadline';
 
@@ -141,6 +142,8 @@ const App: React.FC = () => {
   const [currentView, setCurrentView] = useState('auth');
   const [adminDefaultTab, setAdminDefaultTab] = useState<string>('questions');
   const [activeTest, setActiveTest] = useState<MockTest | null>(null);
+  const [activeResolvedSections, setActiveResolvedSections] = useState<TestSection[] | null>(null);
+  const [activeAttemptId, setActiveAttemptId] = useState<string | null>(null);
   const [reviewResult, setReviewResult] = useState<ExamResult | null>(null);
   const [recentResult, setRecentResult] = useState<ExamResult | null>(null);
   const [packagedQuestions, setPackagedQuestions] = useState<Record<string, Question> | null>(null);
@@ -222,62 +225,66 @@ const App: React.FC = () => {
     return `${formatted} WAT`;
   })();
 
-  const getPackageSignature = (test: MockTest) => {
-    const ids = Array.from(new Set(test.sections.flatMap(section => section.questionIds))).sort();
+  const getSectionQuestionIds = (sections: TestSection[]) => {
+    return Array.from(new Set(sections.flatMap(section => section.questionIds)));
+  };
+
+  const getPackageSignature = (test: MockTest, sections: TestSection[]) => {
+    const ids = getSectionQuestionIds(sections).sort();
     return `${ids.length}:${ids.join('|')}`;
   };
 
-  const getCachedPackage = (test: MockTest): Record<string, Question> | null => {
+  const getCachedPackage = (test: MockTest, sections: TestSection[]): Record<string, Question> | null => {
     if (typeof window === 'undefined') return null;
     try {
       const raw = window.sessionStorage.getItem(`testpkg:${test.id}`);
       if (raw) {
         const parsed = JSON.parse(raw) as { signature: string; questions: Record<string, Question> };
-        if (parsed.signature === getPackageSignature(test)) {
+        if (parsed.signature === getPackageSignature(test, sections)) {
           return parsed.questions || null;
         }
       }
       const offlineRaw = window.localStorage.getItem(`${OFFLINE_PACKAGE_KEY_PREFIX}${test.id}`);
       if (!offlineRaw) return null;
       const offlineParsed = JSON.parse(offlineRaw) as { signature: string; questions: Record<string, Question> };
-      if (offlineParsed.signature !== getPackageSignature(test)) return null;
+      if (offlineParsed.signature !== getPackageSignature(test, sections)) return null;
       return offlineParsed.questions || null;
     } catch {
       return null;
     }
   };
 
-  const setCachedPackage = (test: MockTest, questions: Record<string, Question>) => {
+  const setCachedPackage = (test: MockTest, sections: TestSection[], questions: Record<string, Question>) => {
     if (typeof window === 'undefined') return;
     try {
       window.sessionStorage.setItem(
         `testpkg:${test.id}`,
-        JSON.stringify({ signature: getPackageSignature(test), questions, createdAt: Date.now() })
+        JSON.stringify({ signature: getPackageSignature(test, sections), questions, createdAt: Date.now() })
       );
     } catch {
       // Ignore cache write failures (quota/private mode restrictions).
     }
   };
 
-  const setOfflinePackage = (test: MockTest, questions: Record<string, Question>) => {
+  const setOfflinePackage = (test: MockTest, sections: TestSection[], questions: Record<string, Question>) => {
     if (typeof window === 'undefined') return;
     try {
       window.localStorage.setItem(
         `${OFFLINE_PACKAGE_KEY_PREFIX}${test.id}`,
-        JSON.stringify({ signature: getPackageSignature(test), questions, createdAt: Date.now() })
+        JSON.stringify({ signature: getPackageSignature(test, sections), questions, createdAt: Date.now() })
       );
     } catch {
       alert('Could not save this test for offline use on this device.');
     }
   };
 
-  const packageQuestionsForTest = async (test: MockTest): Promise<Record<string, Question>> => {
-    const cached = getCachedPackage(test);
+  const packageQuestionsForTest = async (test: MockTest, sections: TestSection[]): Promise<Record<string, Question>> => {
+    const cached = getCachedPackage(test, sections);
     if (cached && Object.keys(cached).length > 0) {
       return cached;
     }
 
-    const ids = Array.from(new Set(test.sections.flatMap(section => section.questionIds)));
+    const ids = getSectionQuestionIds(sections);
     if (ids.length === 0) {
       throw new Error('This test has no questions configured.');
     }
@@ -306,16 +313,169 @@ const App: React.FC = () => {
     }
 
     setPackagingState({ message: 'Questions are being packaged...', progress: 100 });
-    setCachedPackage(test, map);
+    setCachedPackage(test, sections, map);
     return map;
   };
 
-  const startExamWithPackaging = async (test: MockTest) => {
+  const hashStringToSeed = (input: string) => {
+    let hash = 2166136261;
+    for (let i = 0; i < input.length; i++) {
+      hash ^= input.charCodeAt(i);
+      hash = Math.imul(hash, 16777619);
+    }
+    return (hash >>> 0) || 1;
+  };
+
+  const createSeededRng = (seed: number) => {
+    let state = seed >>> 0;
+    return () => {
+      state = (Math.imul(1664525, state) + 1013904223) >>> 0;
+      return state / 4294967296;
+    };
+  };
+
+  const shuffleWithRng = <T,>(arr: T[], rng: () => number) => {
+    const out = [...arr];
+    for (let i = out.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [out[i], out[j]] = [out[j], out[i]];
+    }
+    return out;
+  };
+
+  const normalizeDifficulty = (value?: string): DifficultyLevel => {
+    if (value === 'easy' || value === 'hard') return value;
+    return 'medium';
+  };
+
+  const sampleForDynamicSection = (
+    section: TestSection,
+    allQuestions: Question[],
+    usedIds: Set<string>,
+    rng: () => number
+  ): string[] => {
+    const wanted = Math.max(1, Number(section.questionCount || 0));
+    const subjects = new Set((section.sampleFilters?.subjects || []).map(s => s.toLowerCase().trim()).filter(Boolean));
+    const topics = new Set((section.sampleFilters?.topics || []).map(s => s.toLowerCase().trim()).filter(Boolean));
+    const tags = new Set((section.sampleFilters?.tags || []).map(s => s.toLowerCase().trim()).filter(Boolean));
+    const difficulties = new Set((section.sampleFilters?.difficulties || []).map(d => d.toLowerCase().trim()).filter(Boolean));
+
+    const filtered = allQuestions.filter(q => {
+      if (q.isActive === false) return false;
+      if ((q.status || 'approved') === 'draft') return false;
+      if (subjects.size > 0 && !subjects.has((q.subject || '').toLowerCase().trim())) return false;
+      if (topics.size > 0 && !topics.has((q.topic || '').toLowerCase().trim())) return false;
+      if (difficulties.size > 0 && !difficulties.has(normalizeDifficulty(q.difficulty))) return false;
+      if (tags.size > 0) {
+        const qTags = (q.tags || []).map(t => t.toLowerCase().trim());
+        if (!qTags.some(t => tags.has(t))) return false;
+      }
+      return true;
+    });
+
+    const uniquePool = filtered.filter(q => !usedIds.has(q.id));
+    const pool = uniquePool.length >= wanted ? uniquePool : filtered;
+    if (pool.length < wanted) {
+      throw new Error(`Not enough questions for section "${section.name}". Need ${wanted}, found ${pool.length}.`);
+    }
+
+    const mix = section.difficultyMix || {};
+    const mixTotal = Number(mix.easy || 0) + Number(mix.medium || 0) + Number(mix.hard || 0);
+    const byDifficulty: Record<DifficultyLevel, Question[]> = { easy: [], medium: [], hard: [] };
+    pool.forEach(q => byDifficulty[normalizeDifficulty(q.difficulty)].push(q));
+
+    let chosen: Question[] = [];
+    if (mixTotal > 0) {
+      const normalizedMix = {
+        easy: Math.max(0, Number(mix.easy || 0)) / mixTotal,
+        medium: Math.max(0, Number(mix.medium || 0)) / mixTotal,
+        hard: Math.max(0, Number(mix.hard || 0)) / mixTotal
+      };
+      const targets: Record<DifficultyLevel, number> = {
+        easy: Math.floor(wanted * normalizedMix.easy),
+        medium: Math.floor(wanted * normalizedMix.medium),
+        hard: Math.floor(wanted * normalizedMix.hard)
+      };
+      let assigned = targets.easy + targets.medium + targets.hard;
+      while (assigned < wanted) {
+        const options: DifficultyLevel[] = ['medium', 'easy', 'hard'];
+        const next = options.find(d => byDifficulty[d].length > targets[d]);
+        if (!next) break;
+        targets[next]++;
+        assigned++;
+      }
+
+      (['easy', 'medium', 'hard'] as DifficultyLevel[]).forEach((d) => {
+        const pick = shuffleWithRng(byDifficulty[d], rng).slice(0, targets[d]);
+        chosen.push(...pick);
+      });
+    }
+
+    if (chosen.length < wanted) {
+      const chosenSet = new Set(chosen.map(q => q.id));
+      const remaining = shuffleWithRng(pool.filter(q => !chosenSet.has(q.id)), rng);
+      chosen.push(...remaining.slice(0, wanted - chosen.length));
+    }
+
+    const final = shuffleWithRng(chosen, rng).slice(0, wanted).map(q => q.id);
+    final.forEach(id => usedIds.add(id));
+    return final;
+  };
+
+  const generateDynamicAttempt = async (test: MockTest, userObj: User) => {
+    const attemptsSnap = await getDocs(
+      query(collection(db, 'results'), where('userId', '==', userObj.id), where('testId', '==', test.id), limit(200))
+    );
+    const attemptNo = attemptsSnap.size + 1;
+    const seed = hashStringToSeed(`${userObj.id}:${test.id}:${attemptNo}`);
+    const rng = createSeededRng(seed);
+
+    setPackagingState({ message: 'Building your personalized test...', progress: 15 });
+    const qSnap = await getDocs(query(collection(db, 'questions'), limit(QUESTION_FETCH_LIMIT)));
+    const allQuestions = qSnap.docs.map(d => ({ ...d.data(), id: d.id } as Question));
+
+    const usedIds = new Set<string>();
+    const resolvedSections: TestSection[] = test.sections.map((section) => {
+      const sampledIds = sampleForDynamicSection(section, allQuestions, usedIds, rng);
+      return {
+        ...section,
+        questionIds: sampledIds
+      };
+    });
+
+    const allIds = getSectionQuestionIds(resolvedSections);
+    const attemptPayload: Omit<TestAttempt, 'id'> = {
+      testId: test.id,
+      userId: userObj.id,
+      userName: userObj.name,
+      createdAt: new Date().toISOString(),
+      seed,
+      sections: resolvedSections,
+      questionIds: allIds
+    };
+    setPackagingState({ message: 'Building your personalized test...', progress: 45 });
+    const attemptRef = await addDoc(collection(db, 'testAttempts'), attemptPayload);
+    return { attemptId: attemptRef.id, sections: resolvedSections };
+  };
+
+  const startExamWithPackaging = async (test: MockTest, userObj: User) => {
     setPackagedQuestions(null);
+    setActiveResolvedSections(null);
+    setActiveAttemptId(null);
     setPackagingState({ message: 'Questions are being packaged...', progress: 0 });
     try {
-      const pkg = await packageQuestionsForTest(test);
+      let sectionsToUse = test.sections;
+      let attemptId: string | null = null;
+      if ((test.generationMode || 'fixed') === 'dynamic') {
+        const generated = await generateDynamicAttempt(test, userObj);
+        sectionsToUse = generated.sections;
+        attemptId = generated.attemptId;
+      }
+
+      const pkg = await packageQuestionsForTest(test, sectionsToUse);
       setPackagedQuestions(pkg);
+      setActiveResolvedSections(sectionsToUse);
+      setActiveAttemptId(attemptId);
       setActiveTest(test);
       setCurrentView('exam');
     } finally {
@@ -324,9 +484,13 @@ const App: React.FC = () => {
   };
 
   const saveTestForOffline = async (test: MockTest) => {
+    if ((test.generationMode || 'fixed') === 'dynamic') {
+      alert('Dynamic tests are generated per attempt and cannot be saved offline as a single fixed package.');
+      return;
+    }
     try {
-      const pkg = await packageQuestionsForTest(test);
-      setOfflinePackage(test, pkg);
+      const pkg = await packageQuestionsForTest(test, test.sections);
+      setOfflinePackage(test, test.sections, pkg);
       alert(`"${test.name}" saved for offline use on this device.`);
     } catch (err: any) {
       alert(err?.message || 'Could not save this test offline right now.');
@@ -374,7 +538,7 @@ const App: React.FC = () => {
         return false;
       }
 
-      await startExamWithPackaging(test);
+      await startExamWithPackaging(test, userObj);
       clearLinkedTestId();
       return true;
     } catch (err) {
@@ -686,7 +850,7 @@ const App: React.FC = () => {
               return;
             }
             try {
-              await startExamWithPackaging(test);
+              await startExamWithPackaging(test, currentUser);
             } catch (err: any) {
               console.error('Test packaging error:', err);
               alert(err?.message || 'Unable to prepare this test right now.');
@@ -737,9 +901,11 @@ const App: React.FC = () => {
         <ExamInterface 
           test={activeTest} 
           user={currentUser}
+          resolvedSections={activeResolvedSections || undefined}
+          attemptId={activeAttemptId || undefined}
           packagedQuestions={packagedQuestions || undefined}
-          onFinish={(res) => { setRecentResult(res); setPackagedQuestions(null); setCurrentView('results'); }}
-          onExit={() => { setPackagedQuestions(null); setCurrentView('dashboard'); }}
+          onFinish={(res) => { setRecentResult(res); setPackagedQuestions(null); setActiveResolvedSections(null); setActiveAttemptId(null); setCurrentView('results'); }}
+          onExit={() => { setPackagedQuestions(null); setActiveResolvedSections(null); setActiveAttemptId(null); setCurrentView('dashboard'); }}
         />
       )}
       {currentView === 'results' && recentResult && (

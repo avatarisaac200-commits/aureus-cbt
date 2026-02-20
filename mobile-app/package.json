@@ -1,0 +1,19 @@
+{
+  "name": "aureus-medicos-cbt-mobile",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "build:web": "npm --prefix .. run build",
+    "prepare:web": "node ./scripts/prepare-web.mjs",
+    "sync": "npm run build:web && npm run prepare:web && npx cap sync",
+    "add:android": "npx cap add android",
+    "open:android": "npx cap open android",
+    "doctor": "npx cap doctor"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.0.0",
+    "@capacitor/cli": "^7.0.0",
+    "@capacitor/core": "^7.0.0"
+  }
+}
