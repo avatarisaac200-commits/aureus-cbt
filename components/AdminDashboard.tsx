@@ -81,6 +81,24 @@ const toBoolean = (value: string, fallback = true) => {
   if (['true', '1', 'yes', 'y', 'on'].includes(v)) return true;
   return fallback;
 };
+
+const matchesSectionFilters = (q: Question, section: TestSection) => {
+  if (q.isActive === false) return false;
+  if ((q.status || 'approved') === 'draft') return false;
+  const subjects = new Set((section.sampleFilters?.subjects || []).map(s => s.toLowerCase().trim()).filter(Boolean));
+  const topics = new Set((section.sampleFilters?.topics || []).map(s => s.toLowerCase().trim()).filter(Boolean));
+  const tags = new Set((section.sampleFilters?.tags || []).map(s => s.toLowerCase().trim()).filter(Boolean));
+  const difficulties = new Set((section.sampleFilters?.difficulties || []).map(d => d.toLowerCase().trim()).filter(Boolean));
+
+  if (subjects.size > 0 && !subjects.has((q.subject || '').toLowerCase().trim())) return false;
+  if (topics.size > 0 && !topics.has((q.topic || '').toLowerCase().trim())) return false;
+  if (difficulties.size > 0 && !difficulties.has(normalizeDifficulty(q.difficulty || DEFAULT_DIFFICULTY))) return false;
+  if (tags.size > 0) {
+    const qTags = (q.tags || []).map(t => t.toLowerCase().trim());
+    if (!qTags.some(t => tags.has(t))) return false;
+  }
+  return true;
+};
 const parseCsvRows = (text: string): Array<Record<string, string>> => {
   const rowsRaw: string[][] = [];
   let row: string[] = [];
@@ -877,6 +895,27 @@ Rules:
     setQIsActive(true);
   };
 
+  const buildDynamicSectionsWithPools = async (baseSections: TestSection[]) => {
+    const allSnap = await getDocs(query(collection(db, 'questions'), limit(5000)));
+    const allQuestions = allSnap.docs.map(d => ({ ...d.data(), id: d.id } as Question));
+    const sectionsWithPools = baseSections.map((section) => {
+      const poolIds = allQuestions
+        .filter(q => matchesSectionFilters(q, section))
+        .map(q => q.id);
+      return {
+        ...section,
+        questionIds: poolIds
+      };
+    });
+    const insufficient = sectionsWithPools.find(s => s.questionIds.length < Number(s.questionCount || 0));
+    if (insufficient) {
+      throw new Error(
+        `Section "${insufficient.name}" has only ${insufficient.questionIds.length} pool question(s), but needs ${insufficient.questionCount}.`
+      );
+    }
+    return sectionsWithPools;
+  };
+
   const handleCreateTest = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!testName) return alert("Test name is required.");
@@ -892,11 +931,16 @@ Rules:
     
     setLoading(true);
     try {
+      let sectionsToPersist = sections;
+      if (testGenerationMode === 'dynamic') {
+        sectionsToPersist = await buildDynamicSectionsWithPools(sections);
+      }
+
       await addDoc(collection(db, 'tests'), {
         name: testName,
         description: testDesc,
         totalDurationSeconds: testDuration * 60,
-        sections,
+        sections: sectionsToPersist,
         generationMode: testGenerationMode,
         allowRetake,
         maxAttempts: allowRetake ? (maxAttempts === '' ? null : Number(maxAttempts)) : 1,
@@ -909,6 +953,29 @@ Rules:
       setActiveTab('tests');
     } catch (e: any) { alert("Error creating test. " + (e?.message || "")); }
     finally { setLoading(false); }
+  };
+
+  const rebuildDynamicPools = async (test: MockTest) => {
+    if ((test.generationMode || 'fixed') !== 'dynamic') {
+      alert('This test is not dynamic.');
+      return;
+    }
+    if (!window.confirm(`Rebuild dynamic pools for "${test.name}" using current question bank?`)) return;
+    setLoading(true);
+    try {
+      const nextSections = await buildDynamicSectionsWithPools(test.sections);
+      await updateDoc(doc(db, 'tests', test.id), {
+        sections: nextSections,
+        poolsRebuiltAt: new Date().toISOString(),
+        poolRebuiltBy: user.id
+      });
+      await loadManagedTests();
+      alert('Dynamic pools rebuilt successfully.');
+    } catch (e: any) {
+      alert('Could not rebuild pools. ' + (e?.message || ''));
+    } finally {
+      setLoading(false);
+    }
   };
 
   const addSection = () => {
@@ -1602,7 +1669,7 @@ Rules:
                           <div>
                             <h4 className="text-base font-bold text-slate-900 uppercase">{test.name}</h4>
                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
-                              {Math.round((test.totalDurationSeconds || 0) / 60)} mins - {test.sections?.length || 0} section(s)
+                              {Math.round((test.totalDurationSeconds || 0) / 60)} mins - {test.sections?.length || 0} section(s) - {(test.generationMode || 'fixed')} mode
                             </p>
                           </div>
                           <span className={`px-3 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-widest ${isPaused ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
@@ -1613,6 +1680,9 @@ Rules:
                         <div className="flex flex-wrap gap-2">
                           <button onClick={() => copyTestLink(test)} className="px-5 py-2 bg-emerald-50 rounded-xl text-[10px] font-bold uppercase tracking-widest text-emerald-700 hover:bg-emerald-100">Copy Link</button>
                           <button onClick={() => startEditTest(test)} className="px-5 py-2 bg-slate-100 rounded-xl text-[10px] font-bold uppercase tracking-widest text-slate-700 hover:bg-slate-200">Edit</button>
+                          {(test.generationMode || 'fixed') === 'dynamic' && (
+                            <button onClick={() => rebuildDynamicPools(test)} className="px-5 py-2 bg-sky-50 rounded-xl text-[10px] font-bold uppercase tracking-widest text-sky-700 hover:bg-sky-100">Rebuild Pools</button>
+                          )}
                           <button onClick={() => togglePauseTest(test)} className="px-5 py-2 bg-amber-100 rounded-xl text-[10px] font-bold uppercase tracking-widest text-amber-700 hover:bg-amber-200">{isPaused ? 'Resume' : 'Pause'}</button>
                           <button onClick={() => removeTest(test)} className="px-5 py-2 bg-red-50 rounded-xl text-[10px] font-bold uppercase tracking-widest text-red-600 hover:bg-red-100">Delete</button>
                         </div>

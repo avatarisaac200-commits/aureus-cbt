@@ -431,12 +431,29 @@ const App: React.FC = () => {
     const rng = createSeededRng(seed);
 
     setPackagingState({ message: 'Building your personalized test...', progress: 15 });
-    const qSnap = await getDocs(query(collection(db, 'questions'), limit(QUESTION_FETCH_LIMIT)));
-    const allQuestions = qSnap.docs.map(d => ({ ...d.data(), id: d.id } as Question));
+    const pooledIds = Array.from(new Set(
+      test.sections.flatMap(section => section.questionIds || []).filter(Boolean)
+    ));
+    const allQuestions: Question[] = [];
+    if (pooledIds.length > 0) {
+      const chunks: string[][] = [];
+      for (let i = 0; i < pooledIds.length; i += 10) chunks.push(pooledIds.slice(i, i + 10));
+      for (const chunk of chunks) {
+        const snap = await getDocs(query(collection(db, 'questions'), where(documentId(), 'in', chunk)));
+        snap.docs.forEach(d => allQuestions.push({ ...d.data(), id: d.id } as Question));
+      }
+    } else {
+      // Backward-compat fallback for older dynamic tests that have no precomputed pools.
+      const qSnap = await getDocs(query(collection(db, 'questions'), limit(QUESTION_FETCH_LIMIT)));
+      qSnap.docs.forEach(d => allQuestions.push({ ...d.data(), id: d.id } as Question));
+    }
 
     const usedIds = new Set<string>();
     const resolvedSections: TestSection[] = test.sections.map((section) => {
-      const sampledIds = sampleForDynamicSection(section, allQuestions, usedIds, rng);
+      const sectionPool = section.questionIds?.length
+        ? allQuestions.filter(q => section.questionIds.includes(q.id))
+        : allQuestions;
+      const sampledIds = sampleForDynamicSection(section, sectionPool, usedIds, rng);
       return {
         ...section,
         questionIds: sampledIds
@@ -467,9 +484,16 @@ const App: React.FC = () => {
       let sectionsToUse = test.sections;
       let attemptId: string | null = null;
       if ((test.generationMode || 'fixed') === 'dynamic') {
-        const generated = await generateDynamicAttempt(test, userObj);
-        sectionsToUse = generated.sections;
-        attemptId = generated.attemptId;
+        try {
+          const generated = await generateDynamicAttempt(test, userObj);
+          sectionsToUse = generated.sections;
+          attemptId = generated.attemptId;
+        } catch (err: any) {
+          if (err?.code === 'permission-denied') {
+            throw new Error('This dynamic test is not yet packaged for student access. Re-publish the test from admin.');
+          }
+          throw err;
+        }
       }
 
       const pkg = await packageQuestionsForTest(test, sectionsToUse);
@@ -558,18 +582,20 @@ const App: React.FC = () => {
         return;
       }
 
-      const isOfficialEmail = updatedUser.email?.toLowerCase().endsWith('@aureusmedicos.com');
-
-      if (!updatedUser.emailVerified && !isOfficialEmail) {
-        setCurrentView('verify-email');
-        setIsLoading(false);
-        return;
-      }
-
       const userDoc = await getDoc(doc(db, 'users', updatedUser.uid));
       if (userDoc.exists()) {
         const userData = userDoc.data() as User;
-        const userObj = { ...userData, id: updatedUser.uid };
+        const isOfficialEmail = updatedUser.email?.toLowerCase().endsWith('@aureusmedicos.com');
+        const isManuallyVerified = userData.emailVerified === true;
+        const isVerifiedForAccess = updatedUser.emailVerified || isOfficialEmail || isManuallyVerified;
+
+        if (!isVerifiedForAccess) {
+          setCurrentView('verify-email');
+          setIsLoading(false);
+          return;
+        }
+
+        const userObj = { ...userData, id: updatedUser.uid, emailVerified: isVerifiedForAccess };
         setCurrentUser(userObj);
 
         const linkedTestId = getLinkedTestId();
@@ -823,7 +849,7 @@ const App: React.FC = () => {
         <img src={logo} className="w-16 h-16 mb-6" alt="Logo" />
         <h2 className="text-2xl font-black text-slate-950 uppercase tracking-tight mb-2">Verify Your Email</h2>
         <p className="text-slate-500 text-sm max-w-sm mb-8 leading-relaxed">
-          We sent a verification link to your email. Open it to activate your account.
+          We sent a verification link to your email. Open it to activate your account, and check spam/junk if you do not see it.
         </p>
         <div className="flex flex-col gap-3 w-full max-w-xs">
           <button onClick={handleManualVerifyCheck} className="w-full py-4 bg-slate-950 text-amber-500 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-lg">I Verified</button>

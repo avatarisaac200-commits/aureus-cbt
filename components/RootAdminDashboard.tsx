@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { User } from '../types';
 import { db, firebaseConfig } from '../firebase';
-import { collection, getDocs, doc, deleteDoc, setDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+import { collection, getDocs, doc, deleteDoc, setDoc, updateDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import { createUserWithEmailAndPassword, getAuth, sendEmailVerification } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
 import logo from '../assets/logo.png';
@@ -18,6 +18,7 @@ interface RootAdminDashboardProps {
 
 const RootAdminDashboard: React.FC<RootAdminDashboardProps> = ({ user, onLogout, onSwitchToStudent, onSwitchToAdmin, onGoToImport, onGoToAnalytics }) => {
   const [admins, setAdmins] = useState<User[]>([]);
+  const [verificationQueue, setVerificationQueue] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
   const [activeView, setActiveView] = useState<'staff' | 'tools'>('staff');
   
@@ -31,7 +32,9 @@ const RootAdminDashboard: React.FC<RootAdminDashboardProps> = ({ user, onLogout,
       const snap = await getDocs(collection(db, 'users'));
       const allUsers = snap.docs.map(d => ({ ...d.data(), id: d.id } as User));
       const filteredAdmins = allUsers.filter(u => u.role === 'admin');
+      const unverifiedUsers = allUsers.filter(u => u.role !== 'root-admin' && u.emailVerified !== true);
       setAdmins(filteredAdmins);
+      setVerificationQueue(unverifiedUsers);
     } catch (err) { 
       console.error("Error fetching admin list:", err); 
     } finally { 
@@ -73,6 +76,16 @@ const RootAdminDashboard: React.FC<RootAdminDashboardProps> = ({ user, onLogout,
       } catch (err) {
         alert("Failed to delete account.");
       }
+    }
+  };
+
+  const handleVerifyUser = async (target: User) => {
+    if (!window.confirm(`Mark ${target.email} as verified?`)) return;
+    try {
+      await updateDoc(doc(db, 'users', target.id), { emailVerified: true });
+      fetchAdmins();
+    } catch (err: any) {
+      alert(err?.message || 'Failed to verify user.');
     }
   };
 
@@ -134,6 +147,28 @@ const RootAdminDashboard: React.FC<RootAdminDashboardProps> = ({ user, onLogout,
               </div>
             </div>
             <div className="lg:col-span-2 space-y-4">
+              <div className="bg-white p-6 rounded-[1.5rem] border border-slate-100 shadow-sm">
+                <h2 className="text-xl font-bold text-slate-950 mb-4 uppercase tracking-tight">Pending Verification</h2>
+                <div className="space-y-3">
+                  {verificationQueue.map(account => (
+                    <div key={account.id} className="flex items-center justify-between gap-3 border border-slate-100 rounded-xl p-3">
+                      <div>
+                        <p className="text-sm font-bold text-slate-900">{account.name || 'Unnamed User'}</p>
+                        <p className="text-[10px] font-bold text-slate-500 uppercase">{account.email} • {account.role}</p>
+                      </div>
+                      <button
+                        onClick={() => handleVerifyUser(account)}
+                        className="px-4 py-2 bg-slate-950 text-amber-500 rounded-xl font-bold uppercase text-[10px] tracking-widest"
+                      >
+                        Verify
+                      </button>
+                    </div>
+                  ))}
+                  {verificationQueue.length === 0 && !loading && (
+                    <p className="text-slate-400 font-bold uppercase text-[10px] tracking-widest italic">No pending users.</p>
+                  )}
+                </div>
+              </div>
               <h2 className="text-xl font-bold text-slate-950 mb-6 uppercase tracking-tight">Registered Admins</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {admins.map(admin => (
