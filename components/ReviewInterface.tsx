@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { ExamResult, MockTest, Question } from '../types';
 import { db } from '../firebase';
-import { collection, getDocs, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+import { collection, getDocs, doc, getDoc, query, where, documentId } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import ScientificText from './ScientificText';
 import logo from '../assets/logo.png';
 
@@ -22,15 +22,86 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
     const fetchData = async () => {
       try {
         setLoading(true);
-        const testDoc = await getDoc(doc(db, 'tests', result.testId));
-        if (testDoc.exists()) {
-          setTest({ ...testDoc.data(), id: testDoc.id } as MockTest);
+        if (result.testId.startsWith('quiz:')) {
+          const quizId = result.testId.replace(/^quiz:/, '');
+          const quizDoc = await getDoc(doc(db, 'quizzes', quizId));
+          if (quizDoc.exists()) {
+            const quizData = quizDoc.data() as any;
+            const ids = (quizData.questions || []).map((_: any, idx: number) => `quizq_${idx}`);
+            setTest({
+              id: result.testId,
+              name: quizData.name || result.testName,
+              description: quizData.description || '',
+              sections: [{
+                id: 'quiz_sec_1',
+                name: 'Quiz',
+                questionIds: ids,
+                marksPerQuestion: 1
+              }],
+              totalDurationSeconds: Number(quizData.totalDurationSeconds || 0),
+              allowRetake: Boolean(quizData.allowRetake),
+              maxAttempts: quizData.maxAttempts ?? null,
+              createdBy: quizData.createdBy || '',
+              creatorName: quizData.creatorName || '',
+              isApproved: true,
+              createdAt: quizData.createdAt || new Date().toISOString(),
+              generationMode: 'fixed'
+            });
+
+            const qMap: Record<string, Question> = {};
+            (quizData.questions || []).forEach((q: any, idx: number) => {
+              qMap[`quizq_${idx}`] = {
+                id: `quizq_${idx}`,
+                subject: 'Quiz',
+                topic: 'General',
+                text: q.text,
+                options: q.options || [],
+                correctAnswerIndex: Number(q.correctAnswerIndex || 0),
+                explanation: q.explanation || '',
+                createdBy: quizData.createdBy || '',
+                createdAt: quizData.createdAt || new Date().toISOString()
+              } as Question;
+            });
+            setQuestions(qMap);
+            return;
+          }
         }
 
-        const qSnap = await getDocs(collection(db, 'questions'));
-        const qMap: Record<string, Question> = {};
-        qSnap.docs.forEach(d => { qMap[d.id] = { ...d.data(), id: d.id } as Question; });
-        setQuestions(qMap);
+        const testDoc = await getDoc(doc(db, 'tests', result.testId));
+        if (testDoc.exists()) {
+          const testData = { ...testDoc.data(), id: testDoc.id } as MockTest;
+          setTest(testData);
+          const sectionsToUse = result.resolvedSections && result.resolvedSections.length > 0
+            ? result.resolvedSections
+            : testData.sections;
+          const ids = Array.from(new Set(sectionsToUse.flatMap(section => section.questionIds)));
+          const qMap: Record<string, Question> = {};
+          for (let i = 0; i < ids.length; i += 10) {
+            const chunk = ids.slice(i, i + 10);
+            const qSnap = await getDocs(query(collection(db, 'questions'), where(documentId(), 'in', chunk)));
+            qSnap.docs.forEach(d => { qMap[d.id] = { ...d.data(), id: d.id } as Question; });
+          }
+          setQuestions(qMap);
+          return;
+        }
+
+        if (result.resolvedSections && result.questionSnapshot) {
+          setTest({
+            id: result.testId,
+            name: result.testName,
+            description: '',
+            sections: result.resolvedSections,
+            totalDurationSeconds: 0,
+            allowRetake: true,
+            maxAttempts: null,
+            createdBy: '',
+            creatorName: '',
+            isApproved: true,
+            createdAt: result.completedAt,
+            generationMode: 'fixed'
+          });
+          setQuestions(result.questionSnapshot);
+        }
       } catch (err) {
         console.error("Error fetching review data:", err);
       } finally {

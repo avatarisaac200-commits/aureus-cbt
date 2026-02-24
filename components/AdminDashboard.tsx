@@ -150,6 +150,66 @@ const parseCsvRows = (text: string): Array<Record<string, string>> => {
   return rows;
 };
 
+const mapCsvRowsToStagedQuestions = (rows: Array<Record<string, string>>) => {
+  rows.forEach((row) => {
+    if (!row.correctanswer && row.correctanswerindex) row.correctanswer = row.correctanswerindex;
+  });
+
+  const required = ['text', 'optiona', 'optionb', 'optionc', 'optiond', 'correctanswer'];
+  const first = rows[0] || {};
+  const missing = required.filter(col => !(col in first));
+  if (missing.length > 0) {
+    throw new Error(`Missing required CSV columns: ${missing.join(', ')}`);
+  }
+
+  const mapped: StagedQuestion[] = [];
+  const errors: string[] = [];
+  rows.forEach((row, idx) => {
+    const rowNo = idx + 2;
+    const textValue = (row.text || '').trim();
+    const options = [row.optiona || '', row.optionb || '', row.optionc || '', row.optiond || ''].map(v => v.trim());
+    const answerRaw = (row.correctanswer || '').trim();
+
+    if (!textValue || options.some(opt => !opt)) {
+      errors.push(`Row ${rowNo}: text/options missing.`);
+      return;
+    }
+
+    let correctAnswerIndex = Number(answerRaw);
+    if (!Number.isFinite(correctAnswerIndex)) {
+      const map: Record<string, number> = { a: 0, b: 1, c: 2, d: 3 };
+      correctAnswerIndex = map[answerRaw.toLowerCase()];
+    }
+    if (!Number.isFinite(correctAnswerIndex) || correctAnswerIndex < 0 || correctAnswerIndex > 3) {
+      errors.push(`Row ${rowNo}: correctAnswer must be A-D or 0-3.`);
+      return;
+    }
+
+    mapped.push({
+      subject: (row.subject || 'General').trim() || 'General',
+      topic: (row.topic || 'General').trim() || 'General',
+      text: textValue,
+      options,
+      correctAnswerIndex,
+      explanation: (row.explanation || '').trim(),
+      difficulty: normalizeDifficulty(row.difficulty || DEFAULT_DIFFICULTY),
+      tags: parseList(row.tags || ''),
+      source: (row.source || '').trim(),
+      year: row.year ? (Number.isFinite(Number(row.year)) ? Number(row.year) : null) : null,
+      examType: (row.examtype || '').trim(),
+      status: (row.status || 'approved').trim().toLowerCase() === 'draft' ? 'draft' : 'approved',
+      isActive: toBoolean(row.isactive || 'true', true),
+      selected: true
+    });
+  });
+
+  if (mapped.length === 0) {
+    throw new Error(errors[0] || 'No valid rows were found in CSV.');
+  }
+
+  return { mapped, errors };
+};
+
 const normalizeExtractedQuestions = (input: any): StagedQuestion[] => {
   const arr = Array.isArray(input) ? input : [];
   return arr
@@ -318,6 +378,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
   const [testDesc, setTestDesc] = useState('');
   const [testDuration, setTestDuration] = useState(60);
   const [testGenerationMode, setTestGenerationMode] = useState<TestGenerationMode>('fixed');
+  const [csvDynamicQuestions, setCsvDynamicQuestions] = useState<StagedQuestion[]>([]);
+  const [csvDynamicFileName, setCsvDynamicFileName] = useState('');
+  const [csvDynamicQuestionCount, setCsvDynamicQuestionCount] = useState(20);
+  const [csvDynamicMarksPerQuestion, setCsvDynamicMarksPerQuestion] = useState(1);
   const [allowRetake, setAllowRetake] = useState(true);
   const [maxAttempts, setMaxAttempts] = useState<number | ''>('');
   const [sections, setSections] = useState<TestSection[]>([
@@ -764,58 +828,7 @@ Rules:
       const text = await file.text();
       const rows = parseCsvRows(text);
       if (rows.length === 0) throw new Error('CSV has no valid data rows.');
-
-      rows.forEach((row) => {
-        if (!row.correctanswer && row.correctanswerindex) row.correctanswer = row.correctanswerindex;
-      });
-
-      const required = ['text', 'optiona', 'optionb', 'optionc', 'optiond', 'correctanswer'];
-      const first = rows[0] || {};
-      const missing = required.filter(col => !(col in first));
-      if (missing.length > 0) {
-        throw new Error(`Missing required CSV columns: ${missing.join(', ')}`);
-      }
-
-      const mapped: StagedQuestion[] = [];
-      const errors: string[] = [];
-      rows.forEach((row, idx) => {
-        const rowNo = idx + 2;
-        const textValue = (row.text || '').trim();
-        const options = [row.optiona || '', row.optionb || '', row.optionc || '', row.optiond || ''].map(v => v.trim());
-        const answerRaw = (row.correctanswer || '').trim();
-
-        if (!textValue || options.some(opt => !opt)) {
-          errors.push(`Row ${rowNo}: text/options missing.`);
-          return;
-        }
-
-        let correctAnswerIndex = Number(answerRaw);
-        if (!Number.isFinite(correctAnswerIndex)) {
-          const map: Record<string, number> = { a: 0, b: 1, c: 2, d: 3 };
-          correctAnswerIndex = map[answerRaw.toLowerCase()];
-        }
-        if (!Number.isFinite(correctAnswerIndex) || correctAnswerIndex < 0 || correctAnswerIndex > 3) {
-          errors.push(`Row ${rowNo}: correctAnswer must be A-D or 0-3.`);
-          return;
-        }
-
-        mapped.push({
-          subject: (row.subject || 'General').trim() || 'General',
-          topic: (row.topic || 'General').trim() || 'General',
-          text: textValue,
-          options,
-          correctAnswerIndex,
-          explanation: (row.explanation || '').trim(),
-          difficulty: normalizeDifficulty(row.difficulty || DEFAULT_DIFFICULTY),
-          tags: parseList(row.tags || ''),
-          source: (row.source || '').trim(),
-          year: row.year ? (Number.isFinite(Number(row.year)) ? Number(row.year) : null) : null,
-          examType: (row.examtype || '').trim(),
-          status: (row.status || 'approved').trim().toLowerCase() === 'draft' ? 'draft' : 'approved',
-          isActive: toBoolean(row.isactive || 'true', true),
-          selected: true
-        });
-      });
+      const { mapped, errors } = mapCsvRowsToStagedQuestions(rows);
 
       if (mapped.length === 0) {
         throw new Error(errors[0] || 'No valid rows were found in CSV.');
@@ -829,6 +842,26 @@ Rules:
     } catch (err: any) {
       alert(err?.message || 'CSV import failed.');
       setImportStatus('idle');
+    }
+  };
+
+  const processCsvForDynamicTest = async (file: File) => {
+    setLoading(true);
+    try {
+      const text = await file.text();
+      const rows = parseCsvRows(text);
+      if (rows.length === 0) throw new Error('CSV has no valid data rows.');
+      const { mapped, errors } = mapCsvRowsToStagedQuestions(rows);
+      setCsvDynamicQuestions(mapped);
+      setCsvDynamicFileName(file.name);
+      setCsvDynamicQuestionCount(prev => Math.max(1, Math.min(mapped.length, prev || mapped.length)));
+      if (errors.length > 0) {
+        alert(`CSV loaded with ${errors.length} skipped row(s). First issue: ${errors[0]}`);
+      }
+    } catch (err: any) {
+      alert(err?.message || 'Could not load CSV for dynamic test.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -919,6 +952,12 @@ Rules:
   const handleCreateTest = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!testName) return alert("Test name is required.");
+    if (testGenerationMode === 'csv-dynamic' && csvDynamicQuestions.length === 0) {
+      return alert("Upload a CSV file for CSV Dynamic mode.");
+    }
+    if (testGenerationMode === 'csv-dynamic' && (csvDynamicQuestionCount <= 0 || csvDynamicQuestionCount > csvDynamicQuestions.length)) {
+      return alert(`Question count must be between 1 and ${csvDynamicQuestions.length}.`);
+    }
     if (testGenerationMode === 'fixed' && sections.some(s => s.questionIds.length === 0)) {
       return alert("One or more sections are empty.");
     }
@@ -932,8 +971,62 @@ Rules:
     setLoading(true);
     try {
       let sectionsToPersist = sections;
+      let csvMeta: Record<string, any> = {};
       if (testGenerationMode === 'dynamic') {
         sectionsToPersist = await buildDynamicSectionsWithPools(sections);
+      } else if (testGenerationMode === 'csv-dynamic') {
+        const nowIso = new Date().toISOString();
+        const csvPoolId = `csvpool_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        const persistedIds: string[] = [];
+        let batch = writeBatch(db);
+        let writes = 0;
+        for (const q of csvDynamicQuestions) {
+          const ref = doc(collection(db, 'questions'));
+          persistedIds.push(ref.id);
+          batch.set(ref, {
+            subject: q.subject || 'General',
+            topic: q.topic || 'General',
+            text: q.text,
+            options: q.options,
+            correctAnswerIndex: q.correctAnswerIndex,
+            explanation: q.explanation || '',
+            difficulty: q.difficulty || DEFAULT_DIFFICULTY,
+            tags: Array.isArray(q.tags) ? q.tags : [],
+            source: q.source || csvDynamicFileName || 'csv-dynamic',
+            year: q.year ?? null,
+            examType: q.examType || '',
+            status: 'approved',
+            isActive: q.isActive !== false,
+            normalizedText: normalizeText(q.text),
+            createdBy: user.id,
+            createdAt: nowIso,
+            csvPoolId
+          });
+          writes++;
+          if (writes >= 450) {
+            await batch.commit();
+            batch = writeBatch(db);
+            writes = 0;
+          }
+        }
+        if (writes > 0) {
+          await batch.commit();
+        }
+
+        sectionsToPersist = [{
+          id: 'sec_csv_' + Date.now(),
+          name: 'CSV Section',
+          questionIds: persistedIds,
+          marksPerQuestion: Math.max(1, Number(csvDynamicMarksPerQuestion) || 1),
+          questionCount: Math.max(1, Number(csvDynamicQuestionCount) || 1),
+          sampleFilters: { subjects: [], topics: [], difficulties: ['easy', 'medium', 'hard'], tags: [] },
+          difficultyMix: { easy: 30, medium: 50, hard: 20 }
+        }];
+        csvMeta = {
+          csvPoolId,
+          csvPoolSourceFile: csvDynamicFileName || null,
+          csvPoolSize: persistedIds.length
+        };
       }
 
       await addDoc(collection(db, 'tests'), {
@@ -947,9 +1040,14 @@ Rules:
         createdBy: user.id,
         creatorName: user.name,
         isApproved: true,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        ...csvMeta
       });
       alert("Test published.");
+      if (testGenerationMode === 'csv-dynamic') {
+        setCsvDynamicQuestions([]);
+        setCsvDynamicFileName('');
+      }
       setActiveTab('tests');
     } catch (e: any) { alert("Error creating test. " + (e?.message || "")); }
     finally { setLoading(false); }
@@ -1433,6 +1531,13 @@ Rules:
                     >
                       Dynamic
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => setTestGenerationMode('csv-dynamic')}
+                      className={`px-4 py-2 rounded-xl text-[9px] font-bold uppercase tracking-widest ${testGenerationMode === 'csv-dynamic' ? 'bg-slate-950 text-amber-500' : 'bg-slate-200 text-slate-600'}`}
+                    >
+                      CSV Dynamic
+                    </button>
                   </div>
                 </div>
 
@@ -1460,6 +1565,7 @@ Rules:
                   />
                 </div>
                 
+                {testGenerationMode !== 'csv-dynamic' && (
                 <div className="space-y-3">
                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Sections</p>
                    {sections.map((s, idx) => (
@@ -1484,6 +1590,43 @@ Rules:
                    ))}
                    <button onClick={addSection} className="w-full p-3 border-2 border-dashed border-slate-100 rounded-2xl text-[10px] font-bold text-slate-400 uppercase tracking-widest hover:border-amber-200 transition-all">+ New Section</button>
                 </div>
+                )}
+
+                {testGenerationMode === 'csv-dynamic' && (
+                  <div className="space-y-3">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">CSV Pool</p>
+                    <input
+                      type="file"
+                      accept=".csv,text/csv"
+                      onChange={(e) => e.target.files?.[0] && processCsvForDynamicTest(e.target.files[0])}
+                      className="w-full p-3 bg-slate-50 border rounded-2xl text-[10px] font-bold"
+                    />
+                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                      {csvDynamicFileName ? `${csvDynamicFileName} loaded (${csvDynamicQuestions.length} questions)` : 'No CSV loaded yet'}
+                    </p>
+                    <label className="text-[10px] font-bold uppercase text-slate-400 block">
+                      Questions Per User
+                      <input
+                        type="number"
+                        min={1}
+                        max={Math.max(1, csvDynamicQuestions.length)}
+                        value={csvDynamicQuestionCount}
+                        onChange={(e) => setCsvDynamicQuestionCount(Math.max(1, Number(e.target.value) || 1))}
+                        className="w-full mt-2 p-3 bg-slate-50 border rounded-xl text-xs font-bold"
+                      />
+                    </label>
+                    <label className="text-[10px] font-bold uppercase text-slate-400 block">
+                      Marks Per Question
+                      <input
+                        type="number"
+                        min={1}
+                        value={csvDynamicMarksPerQuestion}
+                        onChange={(e) => setCsvDynamicMarksPerQuestion(Math.max(1, Number(e.target.value) || 1))}
+                        className="w-full mt-2 p-3 bg-slate-50 border rounded-xl text-xs font-bold"
+                      />
+                    </label>
+                  </div>
+                )}
 
                 <button onClick={handleCreateTest} className="w-full py-5 bg-slate-950 text-amber-500 rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-xl active:scale-95 transition-all">Publish Test</button>
               </div>
@@ -1492,9 +1635,15 @@ Rules:
             <div className="xl:col-span-2 space-y-6 flex flex-col h-[700px]">
                <div className="bg-slate-900 text-white p-6 rounded-[2rem] flex justify-between items-center shadow-lg">
                   <div>
-                    <h4 className="text-sm font-bold uppercase tracking-widest text-amber-500">Selecting for: {sections[activeBuilderSection].name}</h4>
+                    <h4 className="text-sm font-bold uppercase tracking-widest text-amber-500">
+                      {testGenerationMode === 'csv-dynamic' ? 'CSV Dynamic Pool' : `Selecting for: ${sections[activeBuilderSection].name}`}
+                    </h4>
                   <p className="text-[9px] text-slate-400 mt-1">
-                    {testGenerationMode === 'fixed' ? 'Tap a question to add/remove from this section' : 'Define a sample space and count for this section'}
+                    {testGenerationMode === 'fixed'
+                      ? 'Tap a question to add/remove from this section'
+                      : testGenerationMode === 'dynamic'
+                        ? 'Define a sample space and count for this section'
+                        : 'Each user gets a unique sampled set from this uploaded CSV pool.'}
                   </p>
                 </div>
                   {testGenerationMode === 'fixed' && (
@@ -1541,7 +1690,7 @@ Rules:
                       );
                     })}
                  </div>
-               ) : (
+               ) : testGenerationMode === 'dynamic' ? (
                  <div className="flex-1 overflow-y-auto pr-2 no-scrollbar pb-10">
                    <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm space-y-4">
                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1629,6 +1778,46 @@ Rules:
                          </label>
                        ))}
                      </div>
+                   </div>
+                 </div>
+               ) : (
+                 <div className="flex-1 overflow-y-auto pr-2 no-scrollbar pb-10">
+                   <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm space-y-4">
+                     <p className="text-xs text-slate-600">
+                       Upload your CSV in the setup panel. The full CSV becomes the private pool for this test,
+                       and each attempt generates a unique subset per user based on "Questions Per User".
+                     </p>
+                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                       <div className="p-4 rounded-xl bg-slate-50 border border-slate-100">
+                         <p className="text-[10px] font-bold uppercase text-slate-400">CSV Questions</p>
+                         <p className="text-lg font-black text-slate-900 mt-1">{csvDynamicQuestions.length}</p>
+                       </div>
+                       <div className="p-4 rounded-xl bg-slate-50 border border-slate-100">
+                         <p className="text-[10px] font-bold uppercase text-slate-400">Per User</p>
+                         <p className="text-lg font-black text-slate-900 mt-1">{csvDynamicQuestionCount}</p>
+                       </div>
+                       <div className="p-4 rounded-xl bg-slate-50 border border-slate-100">
+                         <p className="text-[10px] font-bold uppercase text-slate-400">Sufficient Pool</p>
+                         <p className={`text-lg font-black mt-1 ${csvDynamicQuestionCount <= csvDynamicQuestions.length ? 'text-emerald-600' : 'text-red-600'}`}>
+                           {csvDynamicQuestionCount <= csvDynamicQuestions.length ? 'Yes' : 'No'}
+                         </p>
+                       </div>
+                     </div>
+                     {csvDynamicQuestions.length > 0 && (
+                       <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+                         {csvDynamicQuestions.slice(0, 20).map((q, idx) => (
+                           <div key={`${idx}-${q.text.slice(0, 24)}`} className="p-3 rounded-xl border border-slate-100 bg-slate-50">
+                             <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">{q.subject} • {q.topic || 'General'}</p>
+                             <p className="text-xs font-bold text-slate-800 leading-relaxed"><ScientificText text={q.text} /></p>
+                           </div>
+                         ))}
+                         {csvDynamicQuestions.length > 20 && (
+                           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                             Showing first 20 of {csvDynamicQuestions.length} CSV questions.
+                           </p>
+                         )}
+                       </div>
+                     )}
                    </div>
                  </div>
                )}

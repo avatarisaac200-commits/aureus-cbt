@@ -139,6 +139,7 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, resolvedSecti
       status: status,
       userAnswers: answers,
       resolvedSections: effectiveSections,
+      questionSnapshot: Object.keys(allQuestions).every((id) => id.startsWith('quizq_')) ? allQuestions : undefined,
       attemptId: attemptId || undefined,
       sectionBreakdown
     };

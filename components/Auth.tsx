@@ -37,6 +37,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
           name, 
           email: trimmedEmail, 
           role: assignedRole,
+          emailVerified: isOfficialEmail,
           subscriptionStatus: 'inactive'
         };
         await setDoc(doc(db, 'users', userCredential.user.uid), newUser);

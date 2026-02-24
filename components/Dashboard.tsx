@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { User, MockTest, ExamResult } from '../types';
+import { User, MockTest, ExamResult, QuizQuestion, SharedQuiz } from '../types';
 import { db } from '../firebase';
-import { collection, query, where, onSnapshot, getDocs, limit } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+import { collection, query, where, onSnapshot, getDocs, limit, addDoc, updateDoc, deleteDoc, doc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import logo from '../assets/logo.png';
 
 interface DashboardProps {
@@ -108,10 +108,20 @@ const Dashboard: React.FC<DashboardProps> = ({
   const [testCounts, setTestCounts] = useState<Record<string, number>>({});
   const [errors, setErrors] = useState<string | null>(null);
   const [showLeaderboard, setShowLeaderboard] = useState<MockTest | null>(null);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'settings' | 'create-quiz'>('dashboard');
   const [activationInput, setActivationInput] = useState('');
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [lowDataMode, setLowDataMode] = useState(false);
+  const [quizName, setQuizName] = useState('');
+  const [quizDescription, setQuizDescription] = useState('');
+  const [quizDurationMins, setQuizDurationMins] = useState(30);
+  const [quizAllowRetake, setQuizAllowRetake] = useState(true);
+  const [quizMaxAttempts, setQuizMaxAttempts] = useState<number | ''>('');
+  const [quizQuestions, setQuizQuestions] = useState<QuizQuestion[]>([
+    { id: 'qq_' + Date.now(), text: '', options: ['', '', '', ''], correctAnswerIndex: 0, explanation: '' }
+  ]);
+  const [isPublishingQuiz, setIsPublishingQuiz] = useState(false);
+  const [myQuizzes, setMyQuizzes] = useState<SharedQuiz[]>([]);
   const isStudent = user.role === 'student';
   const licenseEndsMs = Date.parse(user.subscriptionEndsAt || '');
   const licenseEndsLabel = Number.isFinite(licenseEndsMs)
@@ -174,6 +184,94 @@ const Dashboard: React.FC<DashboardProps> = ({
     if (!onActivateLicense) return;
     await onActivateLicense(key);
     setActivationInput('');
+  };
+
+  const addQuizQuestion = () => {
+    setQuizQuestions(prev => [...prev, {
+      id: 'qq_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+      text: '',
+      options: ['', '', '', ''],
+      correctAnswerIndex: 0,
+      explanation: ''
+    }]);
+  };
+
+  const removeQuizQuestion = (id: string) => {
+    setQuizQuestions(prev => prev.length > 1 ? prev.filter(q => q.id !== id) : prev);
+  };
+
+  const updateQuizQuestion = (id: string, updater: (q: QuizQuestion) => QuizQuestion) => {
+    setQuizQuestions(prev => prev.map(q => q.id === id ? updater(q) : q));
+  };
+
+  const copyText = async (text: string) => {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return;
+    }
+    const temp = document.createElement('input');
+    temp.value = text;
+    document.body.appendChild(temp);
+    temp.select();
+    document.execCommand('copy');
+    document.body.removeChild(temp);
+  };
+
+  const publishQuiz = async () => {
+    const trimmedName = quizName.trim();
+    if (!trimmedName) {
+      alert('Quiz name is required.');
+      return;
+    }
+    if (!quizAllowRetake && quizMaxAttempts !== '' && Number(quizMaxAttempts) > 1) {
+      alert('Retake is off, so max attempts must be 1.');
+      return;
+    }
+
+    const normalizedQuestions = quizQuestions.map((q) => ({
+      ...q,
+      text: q.text.trim(),
+      options: q.options.map(opt => opt.trim()),
+      explanation: (q.explanation || '').trim()
+    }));
+
+    const invalidQuestion = normalizedQuestions.find((q) =>
+      !q.text || q.options.some(opt => !opt) || q.correctAnswerIndex < 0 || q.correctAnswerIndex > 3
+    );
+    if (invalidQuestion) {
+      alert('Each question must have text, 4 options, and a valid correct answer.');
+      return;
+    }
+
+    setIsPublishingQuiz(true);
+    try {
+      const quizDoc = await addDoc(collection(db, 'quizzes'), {
+        name: trimmedName,
+        description: quizDescription.trim(),
+        totalDurationSeconds: Math.max(1, Number(quizDurationMins) || 1) * 60,
+        allowRetake: quizAllowRetake,
+        maxAttempts: quizAllowRetake ? (quizMaxAttempts === '' ? null : Number(quizMaxAttempts)) : 1,
+        isActive: true,
+        createdBy: user.id,
+        creatorName: user.name,
+        createdAt: new Date().toISOString(),
+        questions: normalizedQuestions
+      });
+      const link = `${window.location.origin}/quiz/${quizDoc.id}`;
+      await copyText(link);
+      alert('Quiz published. Share link copied.');
+      setQuizName('');
+      setQuizDescription('');
+      setQuizDurationMins(30);
+      setQuizAllowRetake(true);
+      setQuizMaxAttempts('');
+      setQuizQuestions([{ id: 'qq_' + Date.now(), text: '', options: ['', '', '', ''], correctAnswerIndex: 0, explanation: '' }]);
+      setActiveTab('dashboard');
+    } catch (err: any) {
+      alert('Failed to publish quiz. ' + (err?.message || ''));
+    } finally {
+      setIsPublishingQuiz(false);
+    }
   };
 
   useEffect(() => {
@@ -239,11 +337,58 @@ const Dashboard: React.FC<DashboardProps> = ({
     if (tests.length > 0) fetchCounts();
   }, [tests, lowDataMode]);
 
+  useEffect(() => {
+    if (activeTab !== 'create-quiz') return;
+    const unsub = onSnapshot(
+      query(collection(db, 'quizzes'), where('createdBy', '==', user.id), limit(100)),
+      (snap) => {
+        const rows = snap.docs
+          .map(d => ({ ...d.data(), id: d.id } as SharedQuiz))
+          .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+        setMyQuizzes(rows);
+      },
+      () => {
+        setMyQuizzes([]);
+      }
+    );
+    return () => unsub();
+  }, [activeTab, user.id]);
+
   if (loading) {
     return (
       <div className="h-full w-full flex flex-col items-center justify-center bg-slate-50"><img src={logo} className="w-12 h-12 animate-pulse mb-4" alt="Loading" /><p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Opening Portal...</p></div>
     );
   }
+
+  const copyQuizLink = async (quizId: string) => {
+    const link = `${window.location.origin}/quiz/${quizId}`;
+    try {
+      await copyText(link);
+      alert('Quiz link copied.');
+    } catch {
+      alert('Could not copy link. Link: ' + link);
+    }
+  };
+
+  const toggleQuizActive = async (quiz: SharedQuiz) => {
+    try {
+      await updateDoc(doc(db, 'quizzes', quiz.id), {
+        isActive: !quiz.isActive,
+        updatedAt: new Date().toISOString()
+      });
+    } catch (err: any) {
+      alert('Failed to update quiz status. ' + (err?.message || ''));
+    }
+  };
+
+  const removeQuiz = async (quiz: SharedQuiz) => {
+    if (!window.confirm(`Delete quiz "${quiz.name}"?`)) return;
+    try {
+      await deleteDoc(doc(db, 'quizzes', quiz.id));
+    } catch (err: any) {
+      alert('Failed to delete quiz. ' + (err?.message || ''));
+    }
+  };
 
   return (
     <div className="flex-1 w-full bg-slate-50 flex flex-col overflow-hidden relative">
@@ -287,24 +432,28 @@ const Dashboard: React.FC<DashboardProps> = ({
             )}
           </div>
 
-          {isStudent && (
-            <div className="mb-8 bg-white rounded-2xl border border-slate-100 p-2 inline-flex gap-2">
-              <button
-                onClick={() => setActiveTab('dashboard')}
-                className={`px-5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest ${activeTab === 'dashboard' ? 'bg-slate-950 text-amber-500' : 'text-slate-500 bg-slate-50'}`}
-              >
-                Dashboard
-              </button>
-              <button
-                onClick={() => setActiveTab('settings')}
-                className={`px-5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest ${activeTab === 'settings' ? 'bg-slate-950 text-amber-500' : 'text-slate-500 bg-slate-50'}`}
-              >
-                Settings
-              </button>
-            </div>
-          )}
+          <div className="mb-8 bg-white rounded-2xl border border-slate-100 p-2 inline-flex gap-2">
+            <button
+              onClick={() => setActiveTab('dashboard')}
+              className={`px-5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest ${activeTab === 'dashboard' ? 'bg-slate-950 text-amber-500' : 'text-slate-500 bg-slate-50'}`}
+            >
+              Dashboard
+            </button>
+            <button
+              onClick={() => setActiveTab('settings')}
+              className={`px-5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest ${activeTab === 'settings' ? 'bg-slate-950 text-amber-500' : 'text-slate-500 bg-slate-50'}`}
+            >
+              Settings
+            </button>
+            <button
+              onClick={() => setActiveTab('create-quiz')}
+              className={`px-5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest ${activeTab === 'create-quiz' ? 'bg-slate-950 text-amber-500' : 'text-slate-500 bg-slate-50'}`}
+            >
+              Create Quiz
+            </button>
+          </div>
 
-          {(!isStudent || activeTab === 'dashboard') && (
+          {activeTab === 'dashboard' && (
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-10">
               <div className="xl:col-span-2 space-y-10">
                 <section>
@@ -371,7 +520,136 @@ const Dashboard: React.FC<DashboardProps> = ({
             </div>
           )}
 
-          {isStudent && activeTab === 'settings' && (
+          {activeTab === 'create-quiz' && (
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+              <div className="xl:col-span-1">
+                <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-xl space-y-6">
+                  <h3 className="text-lg font-bold">Create Quiz</h3>
+                  <input placeholder="Quiz name" className="w-full p-4 bg-slate-50 border rounded-2xl text-xs font-bold" value={quizName} onChange={e => setQuizName(e.target.value)} />
+                  <textarea placeholder="Quiz instructions" className="w-full p-4 bg-slate-50 border rounded-2xl text-xs h-20" value={quizDescription} onChange={e => setQuizDescription(e.target.value)} />
+                  <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl">
+                    <span className="text-[10px] font-bold uppercase text-slate-400">Time (mins)</span>
+                    <input type="number" min={1} className="bg-transparent font-bold w-full text-center text-xl outline-none" value={quizDurationMins} onChange={e => setQuizDurationMins(Math.max(1, parseInt(e.target.value) || 1))} />
+                  </div>
+                  <div className="flex items-center justify-between bg-slate-50 p-4 rounded-2xl">
+                    <span className="text-[10px] font-bold uppercase text-slate-400">Allow Retake</span>
+                    <button type="button" onClick={() => setQuizAllowRetake(!quizAllowRetake)} className={`px-4 py-2 rounded-xl text-[9px] font-bold uppercase tracking-widest ${quizAllowRetake ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-600'}`}>
+                      {quizAllowRetake ? 'Yes' : 'No'}
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl">
+                    <span className="text-[10px] font-bold uppercase text-slate-400">Max Attempts</span>
+                    <input
+                      type="number"
+                      min={1}
+                      disabled={!quizAllowRetake}
+                      className="bg-transparent font-bold w-full text-center text-xl outline-none disabled:text-slate-300"
+                      value={quizMaxAttempts}
+                      onChange={e => setQuizMaxAttempts(e.target.value === '' ? '' : Number(e.target.value))}
+                      placeholder="Unlimited"
+                    />
+                  </div>
+                  <button onClick={publishQuiz} disabled={isPublishingQuiz || isReadOnly} className="w-full py-5 bg-slate-950 text-amber-500 rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-xl active:scale-95 transition-all disabled:opacity-40">
+                    {isPublishingQuiz ? 'Publishing...' : 'Publish Quiz'}
+                  </button>
+                </div>
+              </div>
+              <div className="xl:col-span-2 space-y-4">
+                <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="text-sm font-bold uppercase tracking-widest text-slate-900">My Created Quizzes</h4>
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{myQuizzes.length} quiz(es)</span>
+                  </div>
+                  <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
+                    {myQuizzes.map((quiz) => (
+                      <div key={quiz.id} className="p-4 rounded-xl border border-slate-100 bg-slate-50 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-bold text-slate-900">{quiz.name}</p>
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                            {Math.round((quiz.totalDurationSeconds || 0) / 60)} mins • {quiz.questions?.length || 0} questions • {quiz.isActive ? 'active' : 'paused'}
+                          </p>
+                        </div>
+                        <div className="flex gap-2">
+                          <button onClick={() => copyQuizLink(quiz.id)} className="px-3 py-2 bg-emerald-50 text-emerald-700 rounded-xl text-[9px] font-bold uppercase tracking-widest">Copy Link</button>
+                          <button onClick={() => toggleQuizActive(quiz)} className="px-3 py-2 bg-amber-50 text-amber-700 rounded-xl text-[9px] font-bold uppercase tracking-widest">
+                            {quiz.isActive ? 'Pause' : 'Activate'}
+                          </button>
+                          <button onClick={() => removeQuiz(quiz)} className="px-3 py-2 bg-red-50 text-red-700 rounded-xl text-[9px] font-bold uppercase tracking-widest">Delete</button>
+                        </div>
+                      </div>
+                    ))}
+                    {myQuizzes.length === 0 && (
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">No quizzes created yet.</p>
+                    )}
+                  </div>
+                </div>
+                <div className="bg-slate-900 text-white p-6 rounded-[2rem] flex justify-between items-center shadow-lg">
+                  <div>
+                    <h4 className="text-sm font-bold uppercase tracking-widest text-amber-500">Manual Questions</h4>
+                    <p className="text-[9px] text-slate-400 mt-1">These questions are private to this quiz link and are not added to the bank.</p>
+                  </div>
+                  <button onClick={addQuizQuestion} className="px-4 py-3 bg-amber-500 text-slate-950 rounded-xl text-[9px] font-bold uppercase tracking-widest">Add Question</button>
+                </div>
+                <div className="space-y-4">
+                  {quizQuestions.map((q, qIdx) => (
+                    <div key={q.id} className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm space-y-4">
+                      <div className="flex justify-between items-center">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Question {qIdx + 1}</p>
+                        <button onClick={() => removeQuizQuestion(q.id)} disabled={quizQuestions.length <= 1} className="text-[10px] font-bold uppercase tracking-widest text-red-500 disabled:opacity-30">Remove</button>
+                      </div>
+                      <textarea
+                        value={q.text}
+                        onChange={(e) => updateQuizQuestion(q.id, prev => ({ ...prev, text: e.target.value }))}
+                        className="w-full p-4 bg-slate-50 border rounded-2xl text-sm font-bold min-h-24"
+                        placeholder="Enter question text"
+                      />
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {q.options.map((opt, oIdx) => (
+                          <input
+                            key={`${q.id}_${oIdx}`}
+                            value={opt}
+                            onChange={(e) => updateQuizQuestion(q.id, prev => {
+                              const next = [...prev.options];
+                              next[oIdx] = e.target.value;
+                              return { ...prev, options: next };
+                            })}
+                            className="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold"
+                            placeholder={`Option ${String.fromCharCode(65 + oIdx)}`}
+                          />
+                        ))}
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <label className="text-[10px] font-bold uppercase text-slate-400">
+                          Correct Answer
+                          <select
+                            value={q.correctAnswerIndex}
+                            onChange={(e) => updateQuizQuestion(q.id, prev => ({ ...prev, correctAnswerIndex: Number(e.target.value) }))}
+                            className="w-full mt-2 p-3 bg-slate-50 border rounded-xl text-xs font-bold"
+                          >
+                            <option value={0}>Option A</option>
+                            <option value={1}>Option B</option>
+                            <option value={2}>Option C</option>
+                            <option value={3}>Option D</option>
+                          </select>
+                        </label>
+                        <label className="text-[10px] font-bold uppercase text-slate-400">
+                          Explanation (optional)
+                          <input
+                            value={q.explanation || ''}
+                            onChange={(e) => updateQuizQuestion(q.id, prev => ({ ...prev, explanation: e.target.value }))}
+                            className="w-full mt-2 p-3 bg-slate-50 border rounded-xl text-xs"
+                            placeholder="Optional explanation"
+                          />
+                        </label>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'settings' && (
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
               <section className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
                 <h2 className="text-lg font-bold text-slate-950 uppercase mb-5">Account</h2>

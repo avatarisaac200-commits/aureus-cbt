@@ -2,7 +2,7 @@
 export type UserRole = 'student' | 'admin' | 'root-admin';
 export type DifficultyLevel = 'easy' | 'medium' | 'hard';
 export type QuestionStatus = 'draft' | 'approved';
-export type TestGenerationMode = 'fixed' | 'dynamic';
+export type TestGenerationMode = 'fixed' | 'dynamic' | 'csv-dynamic';
 
 export interface User {
   id: string;
@@ -74,6 +74,28 @@ export interface MockTest {
   createdAt: string;
 }
 
+export interface QuizQuestion {
+  id: string;
+  text: string;
+  options: string[];
+  correctAnswerIndex: number;
+  explanation?: string;
+}
+
+export interface SharedQuiz {
+  id: string;
+  name: string;
+  description?: string;
+  totalDurationSeconds: number;
+  allowRetake: boolean;
+  maxAttempts?: number | null;
+  isActive: boolean;
+  createdBy: string;
+  creatorName: string;
+  createdAt: string;
+  questions: QuizQuestion[];
+}
+
 export interface ExamResult {
   id: string;
   userId: string;
@@ -86,6 +108,7 @@ export interface ExamResult {
   status: 'completed' | 'abandoned' | 'auto-submitted';
   userAnswers: Record<string, number>;
   resolvedSections?: TestSection[];
+  questionSnapshot?: Record<string, Question>;
   attemptId?: string;
   sectionBreakdown: {
     sectionName: string;

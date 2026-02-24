@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { User, MockTest, ExamResult, Question, TestSection, TestAttempt, DifficultyLevel } from './types';
+import { User, MockTest, ExamResult, Question, TestSection, TestAttempt, DifficultyLevel, SharedQuiz } from './types';
 import { auth, db } from './firebase';
 import { onAuthStateChanged, sendEmailVerification } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 import { doc, getDoc, collection, getDocs, query, where, limit, documentId, updateDoc, addDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
@@ -163,6 +163,10 @@ const App: React.FC = () => {
     return 'dashboard';
   };
 
+  const isDynamicGenerationMode = (mode?: string) => {
+    return (mode || 'fixed') === 'dynamic' || mode === 'csv-dynamic';
+  };
+
   const getLinkedTestId = (): string | null => {
     if (typeof window === 'undefined') return null;
     const match = window.location.pathname.match(/^\/test\/([^/?#]+)/i);
@@ -174,10 +178,29 @@ const App: React.FC = () => {
     return window.localStorage.getItem('linkedTestId');
   };
 
+  const getLinkedQuizId = (): string | null => {
+    if (typeof window === 'undefined') return null;
+    const match = window.location.pathname.match(/^\/quiz\/([^/?#]+)/i);
+    if (match?.[1]) {
+      const id = decodeURIComponent(match[1]);
+      window.localStorage.setItem('linkedQuizId', id);
+      return id;
+    }
+    return window.localStorage.getItem('linkedQuizId');
+  };
+
   const clearLinkedTestId = () => {
     if (typeof window === 'undefined') return;
     window.localStorage.removeItem('linkedTestId');
     if (window.location.pathname.startsWith('/test/')) {
+      window.history.replaceState({}, '', '/');
+    }
+  };
+
+  const clearLinkedQuizId = () => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.removeItem('linkedQuizId');
+    if (window.location.pathname.startsWith('/quiz/')) {
       window.history.replaceState({}, '', '/');
     }
   };
@@ -471,8 +494,17 @@ const App: React.FC = () => {
       questionIds: allIds
     };
     setPackagingState({ message: 'Building your personalized test...', progress: 45 });
-    const attemptRef = await addDoc(collection(db, 'testAttempts'), attemptPayload);
-    return { attemptId: attemptRef.id, sections: resolvedSections };
+    try {
+      const attemptRef = await addDoc(collection(db, 'testAttempts'), attemptPayload);
+      return { attemptId: attemptRef.id, sections: resolvedSections };
+    } catch (err: any) {
+      if (err?.code === 'permission-denied') {
+        // Some deployments do not expose student write access to testAttempts.
+        // The dynamic section set is already generated, so continue without persisted attempt metadata.
+        return { attemptId: null, sections: resolvedSections };
+      }
+      throw err;
+    }
   };
 
   const startExamWithPackaging = async (test: MockTest, userObj: User) => {
@@ -483,17 +515,10 @@ const App: React.FC = () => {
     try {
       let sectionsToUse = test.sections;
       let attemptId: string | null = null;
-      if ((test.generationMode || 'fixed') === 'dynamic') {
-        try {
-          const generated = await generateDynamicAttempt(test, userObj);
-          sectionsToUse = generated.sections;
-          attemptId = generated.attemptId;
-        } catch (err: any) {
-          if (err?.code === 'permission-denied') {
-            throw new Error('This dynamic test is not yet packaged for student access. Re-publish the test from admin.');
-          }
-          throw err;
-        }
+      if (isDynamicGenerationMode(test.generationMode)) {
+        const generated = await generateDynamicAttempt(test, userObj);
+        sectionsToUse = generated.sections;
+        attemptId = generated.attemptId;
       }
 
       const pkg = await packageQuestionsForTest(test, sectionsToUse);
@@ -508,7 +533,7 @@ const App: React.FC = () => {
   };
 
   const saveTestForOffline = async (test: MockTest) => {
-    if ((test.generationMode || 'fixed') === 'dynamic') {
+    if (isDynamicGenerationMode(test.generationMode)) {
       alert('Dynamic tests are generated per attempt and cannot be saved offline as a single fixed package.');
       return;
     }
@@ -573,6 +598,98 @@ const App: React.FC = () => {
     }
   };
 
+  const tryStartQuizFromLink = async (userObj: User, quizId: string): Promise<boolean> => {
+    if (isReadOnlyForUnactivatedUser(userObj)) {
+      alert('Activate your license key to open shared quizzes.');
+      setShowMonetizationModal(true);
+      clearLinkedQuizId();
+      return false;
+    }
+    try {
+      const quizDoc = await getDoc(doc(db, 'quizzes', quizId));
+      if (!quizDoc.exists()) {
+        alert('This quiz link is invalid or no longer available.');
+        clearLinkedQuizId();
+        return false;
+      }
+
+      const quiz = { ...quizDoc.data(), id: quizDoc.id } as SharedQuiz;
+      if (!quiz.isActive) {
+        alert('This quiz is currently unavailable.');
+        clearLinkedQuizId();
+        return false;
+      }
+
+      const virtualTestId = `quiz:${quiz.id}`;
+      const attemptsSnap = await getDocs(
+        query(
+          collection(db, 'results'),
+          where('userId', '==', userObj.id),
+          where('testId', '==', virtualTestId),
+          limit(200)
+        )
+      );
+      const attempts = attemptsSnap.size;
+      const maxAttempts = quiz.maxAttempts ?? null;
+      const retakeBlocked = !quiz.allowRetake && attempts >= 1;
+      const attemptsBlocked = maxAttempts !== null && maxAttempts > 0 && attempts >= maxAttempts;
+      if (retakeBlocked || attemptsBlocked) {
+        alert('You cannot take this quiz again.');
+        clearLinkedQuizId();
+        return false;
+      }
+
+      const sectionQuestionIds = quiz.questions.map((_, idx) => `quizq_${idx}`);
+      const virtualTest: MockTest = {
+        id: virtualTestId,
+        name: quiz.name,
+        description: quiz.description || 'Shared quiz',
+        sections: [{
+          id: 'quiz_sec_1',
+          name: 'Quiz',
+          questionIds: sectionQuestionIds,
+          marksPerQuestion: 1
+        }],
+        generationMode: 'fixed',
+        totalDurationSeconds: quiz.totalDurationSeconds,
+        allowRetake: quiz.allowRetake,
+        maxAttempts: quiz.maxAttempts ?? null,
+        createdBy: quiz.createdBy,
+        creatorName: quiz.creatorName,
+        isApproved: true,
+        createdAt: quiz.createdAt
+      };
+
+      const packaged: Record<string, Question> = {};
+      quiz.questions.forEach((q, idx) => {
+        packaged[`quizq_${idx}`] = {
+          id: `quizq_${idx}`,
+          subject: 'Quiz',
+          topic: 'General',
+          text: q.text,
+          options: q.options,
+          correctAnswerIndex: q.correctAnswerIndex,
+          explanation: q.explanation || '',
+          createdBy: quiz.createdBy,
+          createdAt: quiz.createdAt
+        } as Question;
+      });
+
+      setPackagedQuestions(packaged);
+      setActiveResolvedSections(virtualTest.sections);
+      setActiveAttemptId(null);
+      setActiveTest(virtualTest);
+      setCurrentView('exam');
+      clearLinkedQuizId();
+      return true;
+    } catch (err) {
+      console.error('Linked quiz open error:', err);
+      alert('Unable to open this shared quiz right now.');
+      clearLinkedQuizId();
+      return false;
+    }
+  };
+
   const checkUserStatus = async (firebaseUser: any) => {
     try {
       await firebaseUser.reload();
@@ -589,6 +706,14 @@ const App: React.FC = () => {
         const isManuallyVerified = userData.emailVerified === true;
         const isVerifiedForAccess = updatedUser.emailVerified || isOfficialEmail || isManuallyVerified;
 
+        if (updatedUser.emailVerified && userData.emailVerified !== true) {
+          try {
+            await updateDoc(doc(db, 'users', updatedUser.uid), { emailVerified: true });
+          } catch {
+            // Non-blocking sync; access check already uses Firebase Auth verification.
+          }
+        }
+
         if (!isVerifiedForAccess) {
           setCurrentView('verify-email');
           setIsLoading(false);
@@ -599,8 +724,14 @@ const App: React.FC = () => {
         setCurrentUser(userObj);
 
         const linkedTestId = getLinkedTestId();
+        const linkedQuizId = getLinkedQuizId();
         if (linkedTestId) {
           const started = await tryStartTestFromLink(userObj, linkedTestId);
+          if (!started) {
+            setCurrentView(getDefaultViewForRole(userData.role));
+          }
+        } else if (linkedQuizId) {
+          const started = await tryStartQuizFromLink(userObj, linkedQuizId);
           if (!started) {
             setCurrentView(getDefaultViewForRole(userData.role));
           }

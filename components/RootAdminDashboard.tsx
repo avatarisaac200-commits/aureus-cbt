@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { User } from '../types';
 import { db, firebaseConfig } from '../firebase';
-import { collection, getDocs, doc, deleteDoc, setDoc, updateDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+import { collection, getDocs, doc, deleteDoc, setDoc, updateDoc, query, where, limit } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import { createUserWithEmailAndPassword, getAuth, sendEmailVerification } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
 import logo from '../assets/logo.png';
@@ -20,6 +20,8 @@ const RootAdminDashboard: React.FC<RootAdminDashboardProps> = ({ user, onLogout,
   const [admins, setAdmins] = useState<User[]>([]);
   const [verificationQueue, setVerificationQueue] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
+  const [adminsLoaded, setAdminsLoaded] = useState(false);
+  const [pendingLoaded, setPendingLoaded] = useState(false);
   const [activeView, setActiveView] = useState<'staff' | 'tools'>('staff');
   
   const [newEmail, setNewEmail] = useState('');
@@ -29,12 +31,10 @@ const RootAdminDashboard: React.FC<RootAdminDashboardProps> = ({ user, onLogout,
   const fetchAdmins = async () => {
     setLoading(true);
     try {
-      const snap = await getDocs(collection(db, 'users'));
-      const allUsers = snap.docs.map(d => ({ ...d.data(), id: d.id } as User));
-      const filteredAdmins = allUsers.filter(u => u.role === 'admin');
-      const unverifiedUsers = allUsers.filter(u => u.role !== 'root-admin' && u.emailVerified !== true);
+      const adminsSnap = await getDocs(query(collection(db, 'users'), where('role', '==', 'admin'), limit(100)));
+      const filteredAdmins = adminsSnap.docs.map(d => ({ ...d.data(), id: d.id } as User));
       setAdmins(filteredAdmins);
-      setVerificationQueue(unverifiedUsers);
+      setAdminsLoaded(true);
     } catch (err) { 
       console.error("Error fetching admin list:", err); 
     } finally { 
@@ -42,7 +42,21 @@ const RootAdminDashboard: React.FC<RootAdminDashboardProps> = ({ user, onLogout,
     }
   };
 
-  useEffect(() => { fetchAdmins(); }, []);
+  const fetchPendingVerification = async () => {
+    setLoading(true);
+    try {
+      const pendingSnap = await getDocs(query(collection(db, 'users'), where('emailVerified', '==', false), limit(100)));
+      const unverifiedUsers = pendingSnap.docs
+        .map(d => ({ ...d.data(), id: d.id } as User))
+        .filter(u => u.role !== 'root-admin');
+      setVerificationQueue(unverifiedUsers);
+      setPendingLoaded(true);
+    } catch (err) {
+      console.error("Error fetching pending verification list:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleCreateAdmin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,7 +69,8 @@ const RootAdminDashboard: React.FC<RootAdminDashboardProps> = ({ user, onLogout,
         id: res.user.uid, 
         name: newName, 
         email: newEmail, 
-        role: 'admin' 
+        role: 'admin',
+        emailVerified: false
       });
       await sendEmailVerification(res.user);
       setNewEmail(''); setNewPass(''); setNewName(''); 
@@ -83,7 +98,7 @@ const RootAdminDashboard: React.FC<RootAdminDashboardProps> = ({ user, onLogout,
     if (!window.confirm(`Mark ${target.email} as verified?`)) return;
     try {
       await updateDoc(doc(db, 'users', target.id), { emailVerified: true });
-      fetchAdmins();
+      setVerificationQueue(prev => prev.filter(u => u.id !== target.id));
     } catch (err: any) {
       alert(err?.message || 'Failed to verify user.');
     }
@@ -148,7 +163,10 @@ const RootAdminDashboard: React.FC<RootAdminDashboardProps> = ({ user, onLogout,
             </div>
             <div className="lg:col-span-2 space-y-4">
               <div className="bg-white p-6 rounded-[1.5rem] border border-slate-100 shadow-sm">
-                <h2 className="text-xl font-bold text-slate-950 mb-4 uppercase tracking-tight">Pending Verification</h2>
+                <div className="flex items-center justify-between gap-3 mb-4">
+                  <h2 className="text-xl font-bold text-slate-950 uppercase tracking-tight">Pending Verification</h2>
+                  <button onClick={fetchPendingVerification} className="px-4 py-2 text-[10px] font-bold text-slate-600 border border-slate-200 rounded-xl uppercase tracking-widest hover:bg-slate-50 transition-all">Load Pending</button>
+                </div>
                 <div className="space-y-3">
                   {verificationQueue.map(account => (
                     <div key={account.id} className="flex items-center justify-between gap-3 border border-slate-100 rounded-xl p-3">
@@ -164,12 +182,18 @@ const RootAdminDashboard: React.FC<RootAdminDashboardProps> = ({ user, onLogout,
                       </button>
                     </div>
                   ))}
-                  {verificationQueue.length === 0 && !loading && (
+                  {verificationQueue.length === 0 && pendingLoaded && !loading && (
                     <p className="text-slate-400 font-bold uppercase text-[10px] tracking-widest italic">No pending users.</p>
+                  )}
+                  {!pendingLoaded && !loading && (
+                    <p className="text-slate-400 font-bold uppercase text-[10px] tracking-widest italic">Click "Load Pending" to fetch pending verification users.</p>
                   )}
                 </div>
               </div>
-              <h2 className="text-xl font-bold text-slate-950 mb-6 uppercase tracking-tight">Registered Admins</h2>
+              <div className="flex items-center justify-between gap-3 mb-2">
+                <h2 className="text-xl font-bold text-slate-950 uppercase tracking-tight">Registered Admins</h2>
+                <button onClick={fetchAdmins} className="px-4 py-2 text-[10px] font-bold text-slate-600 border border-slate-200 rounded-xl uppercase tracking-widest hover:bg-slate-50 transition-all">Load Admins</button>
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {admins.map(admin => (
                   <div key={admin.id} className="bg-white p-6 rounded-[1.5rem] border border-slate-100 shadow-sm flex flex-col justify-between hover:border-amber-200 transition-all group">
@@ -180,9 +204,14 @@ const RootAdminDashboard: React.FC<RootAdminDashboardProps> = ({ user, onLogout,
                     <button onClick={() => handleDeleteAdmin(admin.id)} className="mt-6 text-[10px] font-bold text-red-500 uppercase tracking-widest hover:underline text-left transition-all">Remove Admin</button>
                   </div>
                 ))}
-                {admins.length === 0 && !loading && (
+                {admins.length === 0 && adminsLoaded && !loading && (
                   <div className="col-span-full py-20 text-center bg-white rounded-2xl border border-slate-100">
                     <p className="text-slate-400 font-bold uppercase text-[10px] tracking-widest italic">No admins registered yet.</p>
+                  </div>
+                )}
+                {!adminsLoaded && !loading && (
+                  <div className="col-span-full py-20 text-center bg-white rounded-2xl border border-slate-100">
+                    <p className="text-slate-400 font-bold uppercase text-[10px] tracking-widest italic">Click "Load Admins" to fetch staff accounts.</p>
                   </div>
                 )}
                 {loading && (
