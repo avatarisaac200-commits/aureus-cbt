@@ -10,6 +10,7 @@ import logo from '../assets/logo.png';
 interface ExamInterfaceProps {
   test: MockTest;
   user: User;
+  instantFeedback?: boolean;
   resolvedSections?: TestSection[];
   attemptId?: string;
   packagedQuestions?: Record<string, Question>;
@@ -35,7 +36,7 @@ const queuePendingResult = (payload: Omit<ExamResult, 'id'>) => {
   }
 };
 
-const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, resolvedSections, attemptId, packagedQuestions, onFinish, onExit }) => {
+const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedback = false, resolvedSections, attemptId, packagedQuestions, onFinish, onExit }) => {
   const [view, setView] = useState<'lobby' | 'testing'>('lobby');
   const [activeSectionIndex, setActiveSectionIndex] = useState<number | null>(null);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -49,6 +50,7 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, resolvedSecti
   const [questionLoadError, setQuestionLoadError] = useState<string | null>(null);
   const [isPreparingQuestions, setIsPreparingQuestions] = useState(true);
   const [isFinishing, setIsFinishing] = useState(false);
+  const [revealedAnswers, setRevealedAnswers] = useState<Record<string, boolean>>({});
   const effectiveSections = resolvedSections || test.sections;
 
   // Store the shuffled order of question IDs for each section
@@ -213,6 +215,15 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, resolvedSecti
     }
   };
 
+  const selectAnswer = (questionId: string | undefined, optionIndex: number) => {
+    if (!questionId) return;
+    if (instantFeedback && revealedAnswers[questionId]) return;
+    setAnswers(prev => ({ ...prev, [questionId]: optionIndex }));
+    if (instantFeedback) {
+      setRevealedAnswers(prev => ({ ...prev, [questionId]: true }));
+    }
+  };
+
   const finalSubmit = () => {
     if (window.confirm("Submit your entire test?")) {
       setIsFinishing(true);
@@ -268,7 +279,12 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, resolvedSecti
         <main className="flex-1 overflow-y-auto p-6 md:p-12 no-scrollbar safe-bottom">
           <div className="max-w-4xl mx-auto bg-white rounded-[2rem] shadow-xl border border-slate-100 p-8 md:p-12">
             <h2 className="text-2xl font-bold text-slate-950 mb-2 uppercase tracking-tight">Test Instructions</h2>
-            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-10">You can move between sections anytime from the lobby.</p>
+            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-3">You can move between sections anytime from the lobby.</p>
+            {instantFeedback && (
+              <p className="text-emerald-700 text-[10px] font-bold uppercase tracking-widest mb-10">
+                Quiz Mode: answers are revealed instantly after each selection.
+              </p>
+            )}
             <div className="space-y-4">
               {effectiveSections.map((section, idx) => {
                 const isCompleted = completedSections.includes(idx);
@@ -299,6 +315,9 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, resolvedSecti
   const activeSection = shuffledSections[activeSectionIndex!];
   const currentQuestionId = activeSection?.questionIds[currentQuestionIndex];
   const currentQuestion = allQuestions[currentQuestionId];
+  const correctAnswerIndex = currentQuestion?.correctAnswerIndex ?? -1;
+  const currentAnswer = currentQuestionId ? answers[currentQuestionId] : undefined;
+  const isCurrentRevealed = currentQuestionId ? Boolean(revealedAnswers[currentQuestionId]) : false;
 
   return (
     <div className="flex flex-col h-full bg-slate-50 select-none overflow-hidden safe-top">
@@ -326,12 +345,41 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, resolvedSecti
             <div className="text-lg md:text-2xl font-bold text-slate-900 mb-12 leading-tight"><ScientificText text={currentQuestion?.text || "Loading..."} /></div>
             <div className="space-y-4">
               {currentQuestion?.options.map((option, idx) => (
-                <button key={idx} onClick={() => setAnswers(prev => ({ ...prev, [currentQuestionId]: idx }))} className={`w-full text-left p-6 rounded-2xl border-2 transition-all flex items-center ${answers[currentQuestionId] === idx ? 'border-amber-500 bg-amber-50 shadow-sm' : 'border-slate-50 hover:bg-slate-50 hover:border-slate-200'}`}>
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center mr-6 font-bold text-base transition-all ${answers[currentQuestionId] === idx ? 'bg-amber-500 text-slate-950' : 'bg-slate-100 text-slate-400'}`}>{String.fromCharCode(65 + idx)}</div>
-                  <ScientificText text={option} className={`text-base font-bold flex-1 ${answers[currentQuestionId] === idx ? 'text-slate-950' : 'text-slate-600'}`} />
+                <button
+                  key={idx}
+                  onClick={() => selectAnswer(currentQuestionId, idx)}
+                    disabled={instantFeedback && isCurrentRevealed}
+                    className={`w-full text-left p-6 rounded-2xl border-2 transition-all flex items-center ${(instantFeedback && isCurrentRevealed)
+                    ? (correctAnswerIndex === idx
+                      ? 'border-emerald-500 bg-emerald-50 shadow-sm'
+                      : (currentAnswer === idx
+                        ? 'border-red-400 bg-red-50 shadow-sm'
+                        : 'border-slate-100 bg-white'))
+                    : (currentAnswer === idx
+                      ? 'border-amber-500 bg-amber-50 shadow-sm'
+                      : 'border-slate-50 hover:bg-slate-50 hover:border-slate-200')
+                  } ${instantFeedback && isCurrentRevealed ? 'cursor-default' : ''}`}
+                >
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center mr-6 font-bold text-base transition-all ${(instantFeedback && isCurrentRevealed)
+                    ? (correctAnswerIndex === idx
+                      ? 'bg-emerald-500 text-white'
+                      : (currentAnswer === idx ? 'bg-red-500 text-white' : 'bg-slate-100 text-slate-400'))
+                    : (currentAnswer === idx ? 'bg-amber-500 text-slate-950' : 'bg-slate-100 text-slate-400')
+                  }`}>{String.fromCharCode(65 + idx)}</div>
+                  <ScientificText text={option} className={`text-base font-bold flex-1 ${(instantFeedback && isCurrentRevealed)
+                    ? (correctAnswerIndex === idx ? 'text-emerald-700' : (currentAnswer === idx ? 'text-red-700' : 'text-slate-600'))
+                    : (currentAnswer === idx ? 'text-slate-950' : 'text-slate-600')
+                  }`} />
                 </button>
               ))}
             </div>
+            {instantFeedback && isCurrentRevealed && currentQuestion && (
+              <div className="mt-6 p-4 rounded-2xl border border-emerald-100 bg-emerald-50">
+                <p className={`text-[10px] font-bold uppercase tracking-widest ${currentAnswer === correctAnswerIndex ? 'text-emerald-700' : 'text-red-600'}`}>
+                  {currentAnswer === correctAnswerIndex ? 'Correct' : `Incorrect. Correct answer: ${String.fromCharCode(65 + correctAnswerIndex)}`}
+                </p>
+              </div>
+            )}
           </div>
         </main>
 

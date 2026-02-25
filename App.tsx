@@ -144,6 +144,7 @@ const App: React.FC = () => {
   const [activeTest, setActiveTest] = useState<MockTest | null>(null);
   const [activeResolvedSections, setActiveResolvedSections] = useState<TestSection[] | null>(null);
   const [activeAttemptId, setActiveAttemptId] = useState<string | null>(null);
+  const [activeQuizMode, setActiveQuizMode] = useState(false);
   const [reviewResult, setReviewResult] = useState<ExamResult | null>(null);
   const [recentResult, setRecentResult] = useState<ExamResult | null>(null);
   const [packagedQuestions, setPackagedQuestions] = useState<Record<string, Question> | null>(null);
@@ -587,6 +588,7 @@ const App: React.FC = () => {
         return false;
       }
 
+      setActiveQuizMode(false);
       await startExamWithPackaging(test, userObj);
       clearLinkedTestId();
       return true;
@@ -1000,15 +1002,17 @@ const App: React.FC = () => {
         <Dashboard 
           user={currentUser} 
           onLogout={() => auth.signOut()} 
-          onStartTest={async (test) => {
+          onStartTest={async (test, options) => {
             if (isReadOnlyForUnactivatedUser(currentUser)) {
               setShowMonetizationModal(true);
               alert('Activate your license key in Settings before starting a test.');
               return;
             }
             try {
+              setActiveQuizMode(Boolean(options?.quizMode));
               await startExamWithPackaging(test, currentUser);
             } catch (err: any) {
+              setActiveQuizMode(false);
               console.error('Test packaging error:', err);
               alert(err?.message || 'Unable to prepare this test right now.');
             }
@@ -1058,11 +1062,12 @@ const App: React.FC = () => {
         <ExamInterface 
           test={activeTest} 
           user={currentUser}
+          instantFeedback={activeQuizMode}
           resolvedSections={activeResolvedSections || undefined}
           attemptId={activeAttemptId || undefined}
           packagedQuestions={packagedQuestions || undefined}
-          onFinish={(res) => { setRecentResult(res); setPackagedQuestions(null); setActiveResolvedSections(null); setActiveAttemptId(null); setCurrentView('results'); }}
-          onExit={() => { setPackagedQuestions(null); setActiveResolvedSections(null); setActiveAttemptId(null); setCurrentView('dashboard'); }}
+          onFinish={(res) => { setRecentResult(res); setPackagedQuestions(null); setActiveResolvedSections(null); setActiveAttemptId(null); setActiveQuizMode(false); setCurrentView('results'); }}
+          onExit={() => { setPackagedQuestions(null); setActiveResolvedSections(null); setActiveAttemptId(null); setActiveQuizMode(false); setCurrentView('dashboard'); }}
         />
       )}
       {currentView === 'results' && recentResult && (

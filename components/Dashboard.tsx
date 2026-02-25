@@ -7,7 +7,7 @@ import logo from '../assets/logo.png';
 interface DashboardProps {
   user: User;
   onLogout: () => void;
-  onStartTest: (test: MockTest) => void;
+  onStartTest: (test: MockTest, options?: { quizMode?: boolean }) => void;
   onReviewResult: (result: ExamResult) => void;
   onSaveOfflineTest?: (test: MockTest) => void;
   onReturnToAdmin?: () => void;
@@ -418,6 +418,24 @@ const Dashboard: React.FC<DashboardProps> = ({
     });
   };
 
+  const startBundleInQuizMode = (test: MockTest, bundle: CsvQuestionBundle) => {
+    if (!test.sections?.length) return;
+    const baseSection = test.sections[0];
+    const maxFromBundle = bundle.questionIds.length;
+    const targetCount = Math.max(1, Number(baseSection.questionCount || maxFromBundle) || maxFromBundle);
+    const sectionForBundle = {
+      ...baseSection,
+      name: `${baseSection.name} - ${bundle.name}`,
+      questionIds: bundle.questionIds,
+      questionCount: Math.min(targetCount, maxFromBundle)
+    };
+    onStartTest({
+      ...test,
+      name: `${test.name} - ${bundle.name}`,
+      sections: [sectionForBundle]
+    }, { quizMode: true });
+  };
+
   return (
     <div className="flex-1 w-full bg-slate-50 flex flex-col overflow-hidden relative">
       <div className="bg-slate-950 text-amber-500 py-3 px-8 flex justify-between items-center text-[10px] font-black uppercase tracking-widest shrink-0 border-b border-slate-900 shadow-xl z-50 safe-top">
@@ -497,9 +515,9 @@ const Dashboard: React.FC<DashboardProps> = ({
                         const bundles = getTestBundles(test);
                         const hasBundles = isBundledCsvDynamicTest(test);
                         return (
-                      <div key={test.id} className={`bg-white p-8 rounded-[2.5rem] shadow-sm border transition-all flex flex-col h-full group ${isReadOnly ? 'border-slate-100 opacity-60' : 'border-slate-100 hover:border-amber-400'}`}>
-                        <div className="flex justify-between items-start mb-4">
-                          <h3 className="font-bold text-xl text-slate-950 uppercase truncate leading-tight mr-2">{test.name}</h3>
+                      <div key={test.id} className={`bg-white p-8 rounded-[2.5rem] shadow-sm border transition-all flex flex-col h-full group min-w-0 ${isReadOnly ? 'border-slate-100 opacity-60' : 'border-slate-100 hover:border-amber-400'}`}>
+                        <div className="flex justify-between items-start mb-4 min-w-0">
+                          <h3 className="font-bold text-xl text-slate-950 uppercase truncate leading-tight mr-2 min-w-0">{test.name}</h3>
                           <span className="bg-slate-50 text-slate-500 text-[8px] font-black px-3 py-1.5 rounded-lg uppercase whitespace-nowrap">{test.totalDurationSeconds / 60}m</span>
                         </div>
                         <p className="text-xs text-slate-400 mb-6 font-medium italic line-clamp-3 leading-relaxed">{test.description || 'Start this test.'}</p>
@@ -530,21 +548,32 @@ const Dashboard: React.FC<DashboardProps> = ({
                                         {bundle.categoryField}: {bundle.category}
                                       </p>
                                     </div>
-                                    <button
-                                      disabled={isBlocked}
-                                      onClick={() => startBundleTest(test, bundle)}
-                                      className="disabled:opacity-40 px-3 py-2 bg-amber-500 text-slate-950 rounded-lg text-[9px] font-bold uppercase tracking-widest"
-                                    >
-                                      Start
-                                    </button>
+                                    <div className="flex items-center gap-2">
+                                      <button
+                                        disabled={isBlocked}
+                                        onClick={() => startBundleTest(test, bundle)}
+                                        className="disabled:opacity-40 px-3 py-2 bg-amber-500 text-slate-950 rounded-lg text-[9px] font-bold uppercase tracking-widest whitespace-nowrap"
+                                      >
+                                        Start
+                                      </button>
+                                      {attempts >= 1 && (
+                                        <button
+                                          disabled={isReadOnly}
+                                          onClick={() => startBundleInQuizMode(test, bundle)}
+                                          className="disabled:opacity-40 px-3 py-2 bg-slate-900 text-amber-500 rounded-lg text-[9px] font-bold uppercase tracking-widest whitespace-nowrap"
+                                        >
+                                          Quiz Mode
+                                        </button>
+                                      )}
+                                    </div>
                                   </div>
                                 ))}
                               </div>
                             )}
                           </div>
                         )}
-                        <div className="mt-auto flex justify-between items-center gap-2">
-                          <div className="flex items-center gap-2">
+                        <div className="mt-auto flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-2 min-w-0">
+                          <div className="flex flex-wrap items-center gap-2 min-w-0">
                             <button disabled={isReadOnly || lowDataMode} onClick={() => setShowLeaderboard(test)} className="disabled:opacity-40 text-[9px] font-bold text-amber-600 uppercase tracking-widest hover:underline flex items-center gap-1">
                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>Leaderboard
                             </button>
@@ -556,9 +585,20 @@ const Dashboard: React.FC<DashboardProps> = ({
                             </button>
                           </div>
                           {!hasBundles && (
-                            <button onClick={() => onStartTest(test)} disabled={isBlocked} className="px-8 py-3 bg-amber-500 text-slate-950 rounded-xl font-bold uppercase tracking-widest text-[9px] shadow-lg active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed">
+                            <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+                              {attempts >= 1 && (
+                                <button
+                                  onClick={() => onStartTest(test, { quizMode: true })}
+                                  disabled={isReadOnly}
+                                  className="px-5 py-3 bg-slate-900 text-amber-500 rounded-xl font-bold uppercase tracking-widest text-[9px] shadow-lg active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap text-center"
+                                >
+                                  Quiz Mode
+                                </button>
+                              )}
+                              <button onClick={() => onStartTest(test)} disabled={isBlocked} className="px-8 py-3 bg-amber-500 text-slate-950 rounded-xl font-bold uppercase tracking-widest text-[9px] shadow-lg active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap text-center">
                               {isReadOnly ? 'Activate First' : isBlocked ? 'Not Available' : 'Start Test'}
-                            </button>
+                              </button>
+                            </div>
                           )}
                         </div>
                       </div>
