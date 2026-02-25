@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, MockTest, ExamResult, QuizQuestion, SharedQuiz } from '../types';
+import { User, MockTest, ExamResult, QuizQuestion, SharedQuiz, CsvQuestionBundle } from '../types';
 import { db } from '../firebase';
 import { collection, query, where, onSnapshot, getDocs, limit, addDoc, updateDoc, deleteDoc, doc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import logo from '../assets/logo.png';
@@ -122,6 +122,7 @@ const Dashboard: React.FC<DashboardProps> = ({
   ]);
   const [isPublishingQuiz, setIsPublishingQuiz] = useState(false);
   const [myQuizzes, setMyQuizzes] = useState<SharedQuiz[]>([]);
+  const [expandedBundleTestId, setExpandedBundleTestId] = useState<string | null>(null);
   const isStudent = user.role === 'student';
   const licenseEndsMs = Date.parse(user.subscriptionEndsAt || '');
   const licenseEndsLabel = Number.isFinite(licenseEndsMs)
@@ -390,6 +391,33 @@ const Dashboard: React.FC<DashboardProps> = ({
     }
   };
 
+  const getTestBundles = (test: MockTest): CsvQuestionBundle[] => {
+    if (!Array.isArray(test.csvBundles)) return [];
+    return test.csvBundles.filter(bundle => Array.isArray(bundle.questionIds) && bundle.questionIds.length > 0);
+  };
+
+  const isBundledCsvDynamicTest = (test: MockTest) => {
+    return (test.generationMode || 'fixed') === 'csv-dynamic' && getTestBundles(test).length > 0;
+  };
+
+  const startBundleTest = (test: MockTest, bundle: CsvQuestionBundle) => {
+    if (!test.sections?.length) return;
+    const baseSection = test.sections[0];
+    const maxFromBundle = bundle.questionIds.length;
+    const targetCount = Math.max(1, Number(baseSection.questionCount || maxFromBundle) || maxFromBundle);
+    const sectionForBundle = {
+      ...baseSection,
+      name: `${baseSection.name} - ${bundle.name}`,
+      questionIds: bundle.questionIds,
+      questionCount: Math.min(targetCount, maxFromBundle)
+    };
+    onStartTest({
+      ...test,
+      name: `${test.name} - ${bundle.name}`,
+      sections: [sectionForBundle]
+    });
+  };
+
   return (
     <div className="flex-1 w-full bg-slate-50 flex flex-col overflow-hidden relative">
       <div className="bg-slate-950 text-amber-500 py-3 px-8 flex justify-between items-center text-[10px] font-black uppercase tracking-widest shrink-0 border-b border-slate-900 shadow-xl z-50 safe-top">
@@ -466,6 +494,8 @@ const Dashboard: React.FC<DashboardProps> = ({
                         const retakeBlocked = !test.allowRetake && attempts >= 1;
                         const attemptsBlocked = maxAttempts !== null && maxAttempts > 0 && attempts >= maxAttempts;
                         const isBlocked = retakeBlocked || attemptsBlocked || isReadOnly;
+                        const bundles = getTestBundles(test);
+                        const hasBundles = isBundledCsvDynamicTest(test);
                         return (
                       <div key={test.id} className={`bg-white p-8 rounded-[2.5rem] shadow-sm border transition-all flex flex-col h-full group ${isReadOnly ? 'border-slate-100 opacity-60' : 'border-slate-100 hover:border-amber-400'}`}>
                         <div className="flex justify-between items-start mb-4">
@@ -476,6 +506,43 @@ const Dashboard: React.FC<DashboardProps> = ({
                         <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-6">
                           Taken by {testCounts[test.id] ?? 0} people
                         </div>
+                        {hasBundles && (
+                          <div className="mb-4 p-4 rounded-xl border border-sky-100 bg-sky-50">
+                            <div className="flex items-center justify-between gap-2 mb-2">
+                              <p className="text-[10px] font-bold uppercase tracking-widest text-sky-700">
+                                Test Bundles ({bundles.length})
+                              </p>
+                              <button
+                                disabled={isBlocked}
+                                onClick={() => setExpandedBundleTestId(prev => prev === test.id ? null : test.id)}
+                                className="disabled:opacity-40 px-3 py-1.5 bg-white border border-sky-200 rounded-lg text-[9px] font-bold uppercase tracking-widest text-sky-700 hover:bg-sky-100"
+                              >
+                                {expandedBundleTestId === test.id ? 'Hide' : 'Open'}
+                              </button>
+                            </div>
+                            {expandedBundleTestId === test.id && (
+                              <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                                {bundles.map((bundle) => (
+                                  <div key={bundle.id} className="p-3 rounded-lg bg-white border border-sky-100 flex items-center justify-between gap-2">
+                                    <div>
+                                      <p className="text-[10px] font-bold uppercase text-slate-800">{bundle.name}</p>
+                                      <p className="text-[9px] font-bold uppercase tracking-widest text-slate-500">
+                                        {bundle.categoryField}: {bundle.category}
+                                      </p>
+                                    </div>
+                                    <button
+                                      disabled={isBlocked}
+                                      onClick={() => startBundleTest(test, bundle)}
+                                      className="disabled:opacity-40 px-3 py-2 bg-amber-500 text-slate-950 rounded-lg text-[9px] font-bold uppercase tracking-widest"
+                                    >
+                                      Start
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
                         <div className="mt-auto flex justify-between items-center gap-2">
                           <div className="flex items-center gap-2">
                             <button disabled={isReadOnly || lowDataMode} onClick={() => setShowLeaderboard(test)} className="disabled:opacity-40 text-[9px] font-bold text-amber-600 uppercase tracking-widest hover:underline flex items-center gap-1">
@@ -488,9 +555,11 @@ const Dashboard: React.FC<DashboardProps> = ({
                               Save Offline
                             </button>
                           </div>
-                          <button onClick={() => onStartTest(test)} disabled={isBlocked} className="px-8 py-3 bg-amber-500 text-slate-950 rounded-xl font-bold uppercase tracking-widest text-[9px] shadow-lg active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed">
-                            {isReadOnly ? 'Activate First' : isBlocked ? 'Not Available' : 'Start Test'}
-                          </button>
+                          {!hasBundles && (
+                            <button onClick={() => onStartTest(test)} disabled={isBlocked} className="px-8 py-3 bg-amber-500 text-slate-950 rounded-xl font-bold uppercase tracking-widest text-[9px] shadow-lg active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed">
+                              {isReadOnly ? 'Activate First' : isBlocked ? 'Not Available' : 'Start Test'}
+                            </button>
+                          )}
                         </div>
                       </div>
                         );

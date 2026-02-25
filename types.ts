@@ -3,6 +3,7 @@ export type UserRole = 'student' | 'admin' | 'root-admin';
 export type DifficultyLevel = 'easy' | 'medium' | 'hard';
 export type QuestionStatus = 'draft' | 'approved';
 export type TestGenerationMode = 'fixed' | 'dynamic' | 'csv-dynamic';
+export type CsvBundleCategoryField = 'subject' | 'topic' | 'difficulty' | 'examType';
 
 export interface User {
   id: string;
@@ -59,6 +60,15 @@ export interface TestSection {
   difficultyMix?: SectionDifficultyMix;
 }
 
+export interface CsvQuestionBundle {
+  id: string;
+  name: string;
+  category: string;
+  categoryField: CsvBundleCategoryField;
+  questionIds: string[];
+  questionCount: number;
+}
+
 export interface MockTest {
   id: string;
   name: string;
@@ -72,6 +82,10 @@ export interface MockTest {
   creatorName: string;
   isApproved: boolean;
   createdAt: string;
+  csvBundlesEnabled?: boolean;
+  csvBundleSize?: number;
+  csvBundleCategoryField?: CsvBundleCategoryField;
+  csvBundles?: CsvQuestionBundle[];
 }
 
 export interface QuizQuestion {

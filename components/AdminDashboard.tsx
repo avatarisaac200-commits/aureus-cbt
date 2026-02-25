@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useMemo, useEffect } from 'react';
-import { User, Question, TestSection, MockTest, ExamResult, DifficultyLevel, TestGenerationMode } from '../types';
+import { User, Question, TestSection, MockTest, ExamResult, DifficultyLevel, TestGenerationMode, CsvBundleCategoryField, CsvQuestionBundle } from '../types';
 import { db } from '../firebase';
 import { collection, addDoc, getDocs, getDoc, deleteDoc, doc, query, updateDoc, setDoc, writeBatch, limit, where, documentId } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import { GoogleGenAI } from '@google/genai';
@@ -69,10 +69,50 @@ const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, 
 const DEFAULT_DIFFICULTY: DifficultyLevel = 'medium';
 
 const parseList = (value: string) => value.split(',').map(item => item.trim()).filter(Boolean);
+const CSV_BUNDLE_CATEGORY_OPTIONS: CsvBundleCategoryField[] = ['subject', 'topic', 'difficulty', 'examType'];
 const normalizeDifficulty = (value: string): DifficultyLevel => {
   const normalized = value.trim().toLowerCase();
   if (normalized === 'easy' || normalized === 'hard') return normalized;
   return 'medium';
+};
+const getCsvBundleCategoryValue = (q: Pick<Question, 'subject' | 'topic' | 'difficulty' | 'examType'>, field: CsvBundleCategoryField) => {
+  if (field === 'subject') return (q.subject || 'General').trim() || 'General';
+  if (field === 'topic') return (q.topic || 'General').trim() || 'General';
+  if (field === 'difficulty') return normalizeDifficulty(String(q.difficulty || DEFAULT_DIFFICULTY));
+  return (q.examType || 'General').trim() || 'General';
+};
+const buildCsvBundles = (
+  questionsWithIds: Array<{ id: string; question: StagedQuestion }>,
+  categoryField: CsvBundleCategoryField,
+  bundleSize: number
+): CsvQuestionBundle[] => {
+  const normalizedSize = Math.max(1, Number(bundleSize) || 1);
+  const grouped: Record<string, string[]> = {};
+  questionsWithIds.forEach(({ id, question }) => {
+    const category = getCsvBundleCategoryValue(question, categoryField);
+    if (!grouped[category]) grouped[category] = [];
+    grouped[category].push(id);
+  });
+
+  const bundles: CsvQuestionBundle[] = [];
+  let serial = 1;
+  Object.entries(grouped)
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .forEach(([category, ids]) => {
+      for (let i = 0; i < ids.length; i += normalizedSize) {
+        const slice = ids.slice(i, i + normalizedSize);
+        bundles.push({
+          id: `bundle_${serial}`,
+          name: `Bundle ${serial} - ${slice.length} Questions`,
+          category,
+          categoryField,
+          questionIds: slice,
+          questionCount: slice.length
+        });
+        serial++;
+      }
+    });
+  return bundles;
 };
 const toBoolean = (value: string, fallback = true) => {
   const v = value.trim().toLowerCase();
@@ -382,6 +422,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
   const [csvDynamicFileName, setCsvDynamicFileName] = useState('');
   const [csvDynamicQuestionCount, setCsvDynamicQuestionCount] = useState(20);
   const [csvDynamicMarksPerQuestion, setCsvDynamicMarksPerQuestion] = useState(1);
+  const [csvBundleEnabled, setCsvBundleEnabled] = useState(false);
+  const [csvBundleCategoryField, setCsvBundleCategoryField] = useState<CsvBundleCategoryField>('subject');
+  const [csvBundleSize, setCsvBundleSize] = useState(100);
   const [allowRetake, setAllowRetake] = useState(true);
   const [maxAttempts, setMaxAttempts] = useState<number | ''>('');
   const [sections, setSections] = useState<TestSection[]>([
@@ -441,6 +484,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
       (item.topic || '').toLowerCase().includes(q)
     );
   }, [questions, builderSearchQuery]);
+
+  const csvBundlePreview = useMemo(() => {
+    if (!csvBundleEnabled || csvDynamicQuestions.length === 0) return [];
+    const staged = csvDynamicQuestions.map((q, idx) => ({ id: `preview_${idx}`, question: q }));
+    return buildCsvBundles(staged, csvBundleCategoryField, csvBundleSize);
+  }, [csvBundleEnabled, csvDynamicQuestions, csvBundleCategoryField, csvBundleSize]);
 
   useEffect(() => {
     if (activeTab === 'tests') {
@@ -855,6 +904,7 @@ Rules:
       setCsvDynamicQuestions(mapped);
       setCsvDynamicFileName(file.name);
       setCsvDynamicQuestionCount(prev => Math.max(1, Math.min(mapped.length, prev || mapped.length)));
+      setCsvBundleSize(prev => Math.max(1, Math.min(mapped.length, prev || 100)));
       if (errors.length > 0) {
         alert(`CSV loaded with ${errors.length} skipped row(s). First issue: ${errors[0]}`);
       }
@@ -958,6 +1008,9 @@ Rules:
     if (testGenerationMode === 'csv-dynamic' && (csvDynamicQuestionCount <= 0 || csvDynamicQuestionCount > csvDynamicQuestions.length)) {
       return alert(`Question count must be between 1 and ${csvDynamicQuestions.length}.`);
     }
+    if (testGenerationMode === 'csv-dynamic' && csvBundleEnabled && (csvBundleSize <= 0 || csvBundleSize > csvDynamicQuestions.length)) {
+      return alert(`Bundle size must be between 1 and ${csvDynamicQuestions.length}.`);
+    }
     if (testGenerationMode === 'fixed' && sections.some(s => s.questionIds.length === 0)) {
       return alert("One or more sections are empty.");
     }
@@ -977,12 +1030,12 @@ Rules:
       } else if (testGenerationMode === 'csv-dynamic') {
         const nowIso = new Date().toISOString();
         const csvPoolId = `csvpool_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-        const persistedIds: string[] = [];
+        const persistedRows: Array<{ id: string; question: StagedQuestion }> = [];
         let batch = writeBatch(db);
         let writes = 0;
         for (const q of csvDynamicQuestions) {
           const ref = doc(collection(db, 'questions'));
-          persistedIds.push(ref.id);
+          persistedRows.push({ id: ref.id, question: q });
           batch.set(ref, {
             subject: q.subject || 'General',
             topic: q.topic || 'General',
@@ -1016,16 +1069,23 @@ Rules:
         sectionsToPersist = [{
           id: 'sec_csv_' + Date.now(),
           name: 'CSV Section',
-          questionIds: persistedIds,
+          questionIds: persistedRows.map(item => item.id),
           marksPerQuestion: Math.max(1, Number(csvDynamicMarksPerQuestion) || 1),
           questionCount: Math.max(1, Number(csvDynamicQuestionCount) || 1),
           sampleFilters: { subjects: [], topics: [], difficulties: ['easy', 'medium', 'hard'], tags: [] },
           difficultyMix: { easy: 30, medium: 50, hard: 20 }
         }];
+        const bundles = csvBundleEnabled
+          ? buildCsvBundles(persistedRows, csvBundleCategoryField, csvBundleSize)
+          : [];
         csvMeta = {
           csvPoolId,
           csvPoolSourceFile: csvDynamicFileName || null,
-          csvPoolSize: persistedIds.length
+          csvPoolSize: persistedRows.length,
+          csvBundlesEnabled: csvBundleEnabled,
+          csvBundleCategoryField: csvBundleCategoryField,
+          csvBundleSize: Math.max(1, Number(csvBundleSize) || 1),
+          csvBundles: bundles
         };
       }
 
@@ -1047,6 +1107,7 @@ Rules:
       if (testGenerationMode === 'csv-dynamic') {
         setCsvDynamicQuestions([]);
         setCsvDynamicFileName('');
+        setCsvBundleEnabled(false);
       }
       setActiveTab('tests');
     } catch (e: any) { alert("Error creating test. " + (e?.message || "")); }
@@ -1625,6 +1686,43 @@ Rules:
                         className="w-full mt-2 p-3 bg-slate-50 border rounded-xl text-xs font-bold"
                       />
                     </label>
+                    <div className="flex items-center justify-between bg-slate-50 p-3 rounded-xl border border-slate-100">
+                      <span className="text-[10px] font-bold uppercase text-slate-500">Enable Test Bundles</span>
+                      <button
+                        type="button"
+                        onClick={() => setCsvBundleEnabled(!csvBundleEnabled)}
+                        className={`px-3 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-widest ${csvBundleEnabled ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-600'}`}
+                      >
+                        {csvBundleEnabled ? 'On' : 'Off'}
+                      </button>
+                    </div>
+                    {csvBundleEnabled && (
+                      <>
+                        <label className="text-[10px] font-bold uppercase text-slate-400 block">
+                          Bundle By
+                          <select
+                            value={csvBundleCategoryField}
+                            onChange={(e) => setCsvBundleCategoryField(e.target.value as CsvBundleCategoryField)}
+                            className="w-full mt-2 p-3 bg-slate-50 border rounded-xl text-xs font-bold"
+                          >
+                            {CSV_BUNDLE_CATEGORY_OPTIONS.map((field) => (
+                              <option key={field} value={field}>{field}</option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="text-[10px] font-bold uppercase text-slate-400 block">
+                          Bundle Size
+                          <input
+                            type="number"
+                            min={1}
+                            max={Math.max(1, csvDynamicQuestions.length)}
+                            value={csvBundleSize}
+                            onChange={(e) => setCsvBundleSize(Math.max(1, Number(e.target.value) || 1))}
+                            className="w-full mt-2 p-3 bg-slate-50 border rounded-xl text-xs font-bold"
+                          />
+                        </label>
+                      </>
+                    )}
                   </div>
                 )}
 
@@ -1803,6 +1901,16 @@ Rules:
                          </p>
                        </div>
                      </div>
+                     {csvBundleEnabled && (
+                      <div className="p-4 rounded-xl bg-sky-50 border border-sky-100">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-sky-700">
+                          Bundle Preview: {csvBundlePreview.length} bundle(s) by {csvBundleCategoryField}
+                        </p>
+                        <p className="text-[10px] text-sky-700 mt-1">
+                          Size target: {Math.max(1, Number(csvBundleSize) || 1)} question(s) per bundle.
+                        </p>
+                      </div>
+                     )}
                      {csvDynamicQuestions.length > 0 && (
                        <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
                          {csvDynamicQuestions.slice(0, 20).map((q, idx) => (
