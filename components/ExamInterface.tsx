@@ -6,6 +6,7 @@ import { collection, getDocs, addDoc, query, where, documentId } from 'https://w
 import Calculator from './Calculator';
 import ScientificText from './ScientificText';
 import logo from '../assets/logo.png';
+import { getOrCreateAiExplanation } from './aiExplanationService';
 
 interface ExamInterfaceProps {
   test: MockTest;
@@ -51,6 +52,10 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
   const [isPreparingQuestions, setIsPreparingQuestions] = useState(true);
   const [isFinishing, setIsFinishing] = useState(false);
   const [revealedAnswers, setRevealedAnswers] = useState<Record<string, boolean>>({});
+  const [showMoreInfo, setShowMoreInfo] = useState(false);
+  const [aiExplanation, setAiExplanation] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState('');
   const effectiveSections = resolvedSections || test.sections;
 
   // Store the shuffled order of question IDs for each section
@@ -319,6 +324,30 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
   const currentAnswer = currentQuestionId ? answers[currentQuestionId] : undefined;
   const isCurrentRevealed = currentQuestionId ? Boolean(revealedAnswers[currentQuestionId]) : false;
 
+  useEffect(() => {
+    setAiExplanation('');
+    setAiError('');
+  }, [currentQuestionId]);
+
+  useEffect(() => {
+    if (!instantFeedback || !showMoreInfo || !currentQuestion || !isCurrentRevealed) return;
+    let cancelled = false;
+    const run = async () => {
+      try {
+        setAiLoading(true);
+        setAiError('');
+        const text = await getOrCreateAiExplanation(currentQuestion);
+        if (!cancelled) setAiExplanation(text);
+      } catch (err: any) {
+        if (!cancelled) setAiError(err?.message || 'Could not load AI explanation.');
+      } finally {
+        if (!cancelled) setAiLoading(false);
+      }
+    };
+    run();
+    return () => { cancelled = true; };
+  }, [instantFeedback, showMoreInfo, currentQuestionId, isCurrentRevealed]);
+
   return (
     <div className="flex flex-col h-full bg-slate-50 select-none overflow-hidden safe-top">
       <header className="bg-slate-950 text-white px-6 py-4 flex justify-between items-center border-b-4 border-amber-500 z-30 shrink-0">
@@ -340,7 +369,18 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
           <div className="flex-1 bg-white rounded-[2rem] md:rounded-[3rem] shadow-sm border border-slate-100 overflow-y-auto p-8 md:p-12 no-scrollbar">
             <div className="mb-8 border-b border-slate-50 pb-4 flex justify-between items-center">
                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Question {currentQuestionIndex + 1} of {activeSection.questionIds.length}</span>
-               <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-3 py-1 rounded-full uppercase tracking-widest">{activeSection.name}</span>
+               <div className="flex items-center gap-2">
+                 {instantFeedback && (
+                   <button
+                     type="button"
+                     onClick={() => setShowMoreInfo(prev => !prev)}
+                     className={`text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-widest border ${showMoreInfo ? 'text-sky-700 bg-sky-50 border-sky-200' : 'text-slate-500 bg-white border-slate-200'}`}
+                   >
+                     {showMoreInfo ? 'Hide More Info' : 'Show More Info'}
+                   </button>
+                 )}
+                 <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-3 py-1 rounded-full uppercase tracking-widest">{activeSection.name}</span>
+               </div>
             </div>
             <div className="text-lg md:text-2xl font-bold text-slate-900 mb-12 leading-tight"><ScientificText text={currentQuestion?.text || "Loading..."} /></div>
             <div className="space-y-4">
@@ -378,6 +418,18 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
                 <p className={`text-[10px] font-bold uppercase tracking-widest ${currentAnswer === correctAnswerIndex ? 'text-emerald-700' : 'text-red-600'}`}>
                   {currentAnswer === correctAnswerIndex ? 'Correct' : `Incorrect. Correct answer: ${String.fromCharCode(65 + correctAnswerIndex)}`}
                 </p>
+              </div>
+            )}
+            {instantFeedback && showMoreInfo && isCurrentRevealed && (
+              <div className="mt-6 p-5 rounded-2xl border border-sky-100 bg-sky-50">
+                <h4 className="text-[10px] font-bold uppercase tracking-widest text-sky-700 mb-3">AI More Info</h4>
+                {aiLoading && <p className="text-[10px] font-bold uppercase tracking-widest text-sky-700">Loading explanation...</p>}
+                {!aiLoading && aiError && <p className="text-[10px] font-bold uppercase tracking-widest text-red-600">{aiError}</p>}
+                {!aiLoading && !aiError && aiExplanation && (
+                  <div className="text-sm leading-relaxed text-slate-700">
+                    <ScientificText text={aiExplanation} />
+                  </div>
+                )}
               </div>
             )}
           </div>
