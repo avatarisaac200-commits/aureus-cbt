@@ -244,6 +244,38 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
+  // Keep these derived values and hooks before any conditional return.
+  const activeSection = activeSectionIndex === null ? undefined : shuffledSections[activeSectionIndex];
+  const currentQuestionId = activeSection?.questionIds[currentQuestionIndex];
+  const currentQuestion = currentQuestionId ? allQuestions[currentQuestionId] : undefined;
+  const correctAnswerIndex = currentQuestion?.correctAnswerIndex ?? -1;
+  const currentAnswer = currentQuestionId ? answers[currentQuestionId] : undefined;
+  const isCurrentRevealed = currentQuestionId ? Boolean(revealedAnswers[currentQuestionId]) : false;
+
+  useEffect(() => {
+    setAiExplanation('');
+    setAiError('');
+  }, [currentQuestionId]);
+
+  useEffect(() => {
+    if (!instantFeedback || !showMoreInfo || !currentQuestion || !isCurrentRevealed) return;
+    let cancelled = false;
+    const run = async () => {
+      try {
+        setAiLoading(true);
+        setAiError('');
+        const text = await getOrCreateAiExplanation(currentQuestion);
+        if (!cancelled) setAiExplanation(text);
+      } catch (err: any) {
+        if (!cancelled) setAiError(err?.message || 'Could not load AI explanation.');
+      } finally {
+        if (!cancelled) setAiLoading(false);
+      }
+    };
+    run();
+    return () => { cancelled = true; };
+  }, [instantFeedback, showMoreInfo, currentQuestionId, isCurrentRevealed, currentQuestion]);
+
   if (isPreparingQuestions) {
     return (
       <div className="h-full w-full flex flex-col items-center justify-center bg-slate-950 p-8 text-center">
@@ -316,37 +348,15 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
     );
   }
 
-  // Use the shuffled section for question order
-  const activeSection = shuffledSections[activeSectionIndex!];
-  const currentQuestionId = activeSection?.questionIds[currentQuestionIndex];
-  const currentQuestion = allQuestions[currentQuestionId];
-  const correctAnswerIndex = currentQuestion?.correctAnswerIndex ?? -1;
-  const currentAnswer = currentQuestionId ? answers[currentQuestionId] : undefined;
-  const isCurrentRevealed = currentQuestionId ? Boolean(revealedAnswers[currentQuestionId]) : false;
-
-  useEffect(() => {
-    setAiExplanation('');
-    setAiError('');
-  }, [currentQuestionId]);
-
-  useEffect(() => {
-    if (!instantFeedback || !showMoreInfo || !currentQuestion || !isCurrentRevealed) return;
-    let cancelled = false;
-    const run = async () => {
-      try {
-        setAiLoading(true);
-        setAiError('');
-        const text = await getOrCreateAiExplanation(currentQuestion);
-        if (!cancelled) setAiExplanation(text);
-      } catch (err: any) {
-        if (!cancelled) setAiError(err?.message || 'Could not load AI explanation.');
-      } finally {
-        if (!cancelled) setAiLoading(false);
-      }
-    };
-    run();
-    return () => { cancelled = true; };
-  }, [instantFeedback, showMoreInfo, currentQuestionId, isCurrentRevealed]);
+  if (!activeSection) {
+    return (
+      <div className="h-full w-full flex flex-col items-center justify-center bg-slate-950 p-8 text-center">
+        <img src={logo} className="w-12 h-12 animate-pulse mb-5" alt="Aureus Medicos CBT Logo" />
+        <p className="text-amber-500 text-[10px] font-black uppercase tracking-[0.3em] mb-2">Preparing Section</p>
+        <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">Please wait...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-full bg-slate-50 select-none overflow-hidden safe-top">
