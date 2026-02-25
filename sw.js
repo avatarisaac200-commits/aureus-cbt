@@ -1,4 +1,4 @@
-const CACHE_NAME = 'aureus-medicos-cbt-v2';
+const CACHE_NAME = 'aureus-medicos-cbt-v3';
 const ASSETS = [
   '/',
   '/index.html',
@@ -23,6 +23,7 @@ self.addEventListener('activate', (event) => {
       );
     })
   );
+  self.clients.claim();
 });
 
 self.addEventListener('fetch', (event) => {

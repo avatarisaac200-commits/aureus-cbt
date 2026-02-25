@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, MockTest, ExamResult, QuizQuestion, SharedQuiz, CsvQuestionBundle } from '../types';
 import { db } from '../firebase';
-import { collection, query, where, onSnapshot, getDocs, limit, addDoc, updateDoc, deleteDoc, doc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+import { collection, query, where, onSnapshot, getDocs, getDocsFromServer, limit, addDoc, updateDoc, deleteDoc, doc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import logo from '../assets/logo.png';
 
 interface DashboardProps {
@@ -102,6 +102,18 @@ const Dashboard: React.FC<DashboardProps> = ({
   onActivateLicense,
   onOpenActivationSupport
 }) => {
+  const parseIsoDate = (value?: string) => {
+    const ms = Date.parse(value || '');
+    return Number.isFinite(ms) ? ms : 0;
+  };
+
+  const normalizeTestsForDisplay = (rows: MockTest[], maxRows: number) => {
+    return rows
+      .filter((t) => !(t as any).isPaused)
+      .sort((a, b) => parseIsoDate((b as any).updatedAt || b.createdAt) - parseIsoDate((a as any).updatedAt || a.createdAt))
+      .slice(0, maxRows);
+  };
+
   const [tests, setTests] = useState<MockTest[]>([]);
   const [history, setHistory] = useState<ExamResult[]>([]);
   const [loading, setLoading] = useState(true);
@@ -278,13 +290,45 @@ const Dashboard: React.FC<DashboardProps> = ({
   useEffect(() => {
     const testsLimit = lowDataMode ? 12 : 30;
     const historyLimit = lowDataMode ? 25 : 100;
-    const unsubTests = onSnapshot(
-      query(collection(db, 'tests'), where('isApproved', '==', true), limit(testsLimit)),
-      (snap) => {
-        const loaded = snap.docs
-          .map(d => ({ ...d.data(), id: d.id } as MockTest))
-          .filter(t => !(t as any).isPaused);
+    let hasFreshServerSnapshot = false;
+    let allowCacheFallback = false;
+    const testsQuery = query(collection(db, 'tests'), where('isApproved', '==', true));
+
+    const hydrateTestsFromServer = async () => {
+      try {
+        const snap = await getDocsFromServer(testsQuery);
+        hasFreshServerSnapshot = true;
+        const loaded = normalizeTestsForDisplay(
+          snap.docs.map(d => ({ ...d.data(), id: d.id } as MockTest)),
+          testsLimit
+        );
         setTests(loaded);
+        setErrors(null);
+        setLoading(false);
+      } catch {
+        allowCacheFallback = true;
+        // If server fetch fails, realtime listener fallback below can still hydrate from cache/offline.
+      }
+    };
+    hydrateTestsFromServer();
+
+    const unsubTests = onSnapshot(
+      testsQuery,
+      { includeMetadataChanges: true },
+      (snap) => {
+        const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+        if (snap.metadata.fromCache && isOnline && !hasFreshServerSnapshot && !allowCacheFallback) {
+          return;
+        }
+        if (!snap.metadata.fromCache) {
+          hasFreshServerSnapshot = true;
+        }
+        const loaded = normalizeTestsForDisplay(
+          snap.docs.map(d => ({ ...d.data(), id: d.id } as MockTest)),
+          testsLimit
+        );
+        setTests(loaded);
+        setErrors(null);
         setLoading(false);
       },
       (err) => {
@@ -817,11 +861,27 @@ const Dashboard: React.FC<DashboardProps> = ({
               <section className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
                 <h2 className="text-lg font-bold text-slate-950 uppercase mb-5">App Data</h2>
                 <button
-                  onClick={() => {
+                  onClick={async () => {
                     if (typeof window !== 'undefined') {
                       window.sessionStorage.clear();
+                      window.localStorage.removeItem(`notifications:${user.id}`);
+                      window.localStorage.removeItem(`lowDataMode:${user.id}`);
+                      Object.keys(window.localStorage).forEach((key) => {
+                        if (key.startsWith('testpkg:offline:') || key === 'pendingResultsQueue') {
+                          window.localStorage.removeItem(key);
+                        }
+                      });
+                      if ('serviceWorker' in navigator) {
+                        const registrations = await navigator.serviceWorker.getRegistrations();
+                        await Promise.all(registrations.map((registration) => registration.unregister()));
+                      }
+                      if ('caches' in window) {
+                        const cacheNames = await caches.keys();
+                        await Promise.all(cacheNames.map((name) => caches.delete(name)));
+                      }
                     }
-                    alert('Local cache cleared.');
+                    alert('Local cache cleared. Reloading...');
+                    window.location.reload();
                   }}
                   className="w-full py-4 bg-slate-50 border border-slate-200 text-slate-700 rounded-2xl text-[10px] font-black uppercase tracking-widest"
                 >

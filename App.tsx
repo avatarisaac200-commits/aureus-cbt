@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { User, MockTest, ExamResult, Question, TestSection, TestAttempt, DifficultyLevel, SharedQuiz } from './types';
 import { auth, db } from './firebase';
 import { onAuthStateChanged, sendEmailVerification } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
-import { doc, getDoc, collection, getDocs, query, where, limit, documentId, updateDoc, addDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+import { doc, getDoc, getDocFromServer, collection, getDocs, query, where, limit, documentId, updateDoc, addDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import Auth from './components/Auth';
 import Dashboard from './components/Dashboard';
 import AdminDashboard from './components/AdminDashboard';
@@ -555,7 +555,7 @@ const App: React.FC = () => {
       return false;
     }
     try {
-      const testDoc = await getDoc(doc(db, 'tests', testId));
+      const testDoc = await getDocFromServer(doc(db, 'tests', testId));
       if (!testDoc.exists()) {
         alert('This test link is invalid or no longer available.');
         clearLinkedTestId();
@@ -608,7 +608,7 @@ const App: React.FC = () => {
       return false;
     }
     try {
-      const quizDoc = await getDoc(doc(db, 'quizzes', quizId));
+      const quizDoc = await getDocFromServer(doc(db, 'quizzes', quizId));
       if (!quizDoc.exists()) {
         alert('This quiz link is invalid or no longer available.');
         clearLinkedQuizId();
@@ -993,10 +993,8 @@ const App: React.FC = () => {
     );
   }
 
-  const isAuthLikeView = currentView === 'auth' || currentView === 'verify-email';
-
   return (
-    <div className={isAuthLikeView ? 'min-h-[100dvh] w-full overflow-x-hidden flex flex-col' : 'h-[100dvh] w-full overflow-hidden flex flex-col'}>
+    <div className="min-h-[100dvh] w-full overflow-x-hidden flex flex-col">
       {currentView === 'auth' && <Auth onLogin={checkUserStatus} />}
       {currentView === 'dashboard' && currentUser && (
         <Dashboard 
