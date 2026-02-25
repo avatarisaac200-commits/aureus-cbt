@@ -4,9 +4,10 @@ import { db } from '../firebase';
 import { doc, getDoc, setDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 
 const COLLECTION_NAME = 'aiQuestionExplanations';
-const MODEL_NAME = 'gemini-2.0-flash';
+const MODEL_CANDIDATES = ['gemini-2.0-flash', 'gemini-1.5-flash'];
 
 const memoryCache: Record<string, string> = {};
+let quotaBlockedUntilMs = 0;
 
 const normalize = (value: string) => value.trim().replace(/\s+/g, ' ').toLowerCase();
 
@@ -57,7 +58,12 @@ const getApiKey = () => {
   return (import.meta.env.VITE_GEMINI_API_KEY as string | undefined)?.trim() || '';
 };
 
-export const getOrCreateAiExplanation = async (question: Question): Promise<string> => {
+export type AiExplanationResult = {
+  text: string;
+  source: 'cache' | 'generated' | 'fallback';
+};
+
+export const getOrCreateAiExplanation = async (question: Question): Promise<AiExplanationResult> => {
   if (!question?.id) {
     throw new Error('Question id is required for AI explanation.');
   }
@@ -65,7 +71,7 @@ export const getOrCreateAiExplanation = async (question: Question): Promise<stri
   const signature = getQuestionSignature(question);
   const cacheKey = getCacheKey(question, signature);
   const inMemory = memoryCache[cacheKey];
-  if (inMemory) return inMemory;
+  if (inMemory) return { text: inMemory, source: 'cache' };
 
   const ref = doc(db, COLLECTION_NAME, cacheKey);
   try {
@@ -76,7 +82,7 @@ export const getOrCreateAiExplanation = async (question: Question): Promise<stri
       const cachedSignature = String(data?.questionSignature || '').trim();
       if (cachedText && cachedSignature === signature) {
         memoryCache[cacheKey] = cachedText;
-        return cachedText;
+        return { text: cachedText, source: 'cache' };
       }
     }
   } catch {
@@ -88,14 +94,51 @@ export const getOrCreateAiExplanation = async (question: Question): Promise<stri
     throw new Error('Missing Gemini API key. Add VITE_GEMINI_API_KEY to .env.local.');
   }
 
+  if (Date.now() < quotaBlockedUntilMs) {
+    const waitSec = Math.max(1, Math.ceil((quotaBlockedUntilMs - Date.now()) / 1000));
+    if (question.explanation?.trim()) {
+      return { text: question.explanation.trim(), source: 'fallback' };
+    }
+    throw new Error(`Gemini quota reached. Please retry in about ${waitSec}s.`);
+  }
+
   const ai = new GoogleGenAI({ apiKey });
-  const response = await ai.models.generateContent({
-    model: MODEL_NAME,
-    contents: buildPrompt(question)
-  });
-  const generated = String(response.text || '').trim();
+  let generated = '';
+  let usedModel = '';
+  let lastErr: any = null;
+
+  for (const model of MODEL_CANDIDATES) {
+    try {
+      const response = await ai.models.generateContent({
+        model,
+        contents: buildPrompt(question)
+      });
+      generated = String(response.text || '').trim();
+      usedModel = model;
+      if (generated) break;
+    } catch (err: any) {
+      lastErr = err;
+    }
+  }
+
   if (!generated) {
-    throw new Error('Gemini did not return an explanation.');
+    const retryHint = String(lastErr?.message || '').match(/retry in\s+([0-9.]+)s/i);
+    const retrySeconds = retryHint ? Math.max(1, Math.ceil(Number(retryHint[1]) || 0)) : 60;
+    const looksLikeQuota = Number(lastErr?.status) === 429
+      || Number(lastErr?.code) === 429
+      || String(lastErr?.message || '').toLowerCase().includes('quota')
+      || String(lastErr?.message || '').toLowerCase().includes('resource_exhausted');
+    if (looksLikeQuota) {
+      quotaBlockedUntilMs = Date.now() + retrySeconds * 1000;
+      if (question.explanation?.trim()) {
+        return { text: question.explanation.trim(), source: 'fallback' };
+      }
+      throw new Error(`Gemini quota reached. Please retry in about ${retrySeconds}s.`);
+    }
+    if (question.explanation?.trim()) {
+      return { text: question.explanation.trim(), source: 'fallback' };
+    }
+    throw new Error('Could not generate explanation right now.');
   }
 
   memoryCache[cacheKey] = generated;
@@ -106,12 +149,12 @@ export const getOrCreateAiExplanation = async (question: Question): Promise<stri
       questionId: question.id,
       questionSignature: signature,
       explanation: generated,
-      model: MODEL_NAME,
+      model: usedModel || MODEL_CANDIDATES[0],
       updatedAt: new Date().toISOString()
     }, { merge: true });
   } catch {
     // If write is blocked, still return generated content for this user.
   }
 
-  return generated;
+  return { text: generated, source: 'generated' };
 };

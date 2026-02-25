@@ -56,6 +56,7 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
   const [aiExplanation, setAiExplanation] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState('');
+  const [aiSource, setAiSource] = useState<'cache' | 'generated' | 'fallback' | ''>('');
   const effectiveSections = resolvedSections || test.sections;
 
   // Store the shuffled order of question IDs for each section
@@ -255,6 +256,7 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
   useEffect(() => {
     setAiExplanation('');
     setAiError('');
+    setAiSource('');
   }, [currentQuestionId]);
 
   useEffect(() => {
@@ -264,8 +266,11 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
       try {
         setAiLoading(true);
         setAiError('');
-        const text = await getOrCreateAiExplanation(currentQuestion);
-        if (!cancelled) setAiExplanation(text);
+        const result = await getOrCreateAiExplanation(currentQuestion);
+        if (!cancelled) {
+          setAiExplanation(result.text);
+          setAiSource(result.source);
+        }
       } catch (err: any) {
         if (!cancelled) setAiError(err?.message || 'Could not load AI explanation.');
       } finally {
@@ -435,6 +440,11 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
                 <h4 className="text-[10px] font-bold uppercase tracking-widest text-sky-700 mb-3">AI More Info</h4>
                 {aiLoading && <p className="text-[10px] font-bold uppercase tracking-widest text-sky-700">Loading explanation...</p>}
                 {!aiLoading && aiError && <p className="text-[10px] font-bold uppercase tracking-widest text-red-600">{aiError}</p>}
+                {!aiLoading && !aiError && aiSource === 'fallback' && (
+                  <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-amber-700 bg-amber-100 border border-amber-200 rounded-lg px-3 py-2">
+                    AI quota is unavailable. Showing stored local explanation.
+                  </p>
+                )}
                 {!aiLoading && !aiError && aiExplanation && (
                   <div className="text-sm leading-relaxed text-slate-700">
                     <ScientificText text={aiExplanation} />

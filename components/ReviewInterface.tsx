@@ -22,6 +22,7 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
   const [aiExplanation, setAiExplanation] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState('');
+  const [aiSource, setAiSource] = useState<'cache' | 'generated' | 'fallback' | ''>('');
 
   useEffect(() => {
     const fetchData = async () => {
@@ -125,6 +126,7 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
   useEffect(() => {
     setAiExplanation('');
     setAiError('');
+    setAiSource('');
   }, [currentQuestionId]);
 
   useEffect(() => {
@@ -134,8 +136,11 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
       try {
         setAiLoading(true);
         setAiError('');
-        const text = await getOrCreateAiExplanation(currentQuestion);
-        if (!cancelled) setAiExplanation(text);
+        const result = await getOrCreateAiExplanation(currentQuestion);
+        if (!cancelled) {
+          setAiExplanation(result.text);
+          setAiSource(result.source);
+        }
       } catch (err: any) {
         if (!cancelled) setAiError(err?.message || 'Could not load AI explanation.');
       } finally {
@@ -299,6 +304,11 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
                 <h4 className="text-[11px] font-black text-sky-700 uppercase tracking-[0.3em] mb-4">AI More Info</h4>
                 {aiLoading && <p className="text-[10px] font-bold uppercase tracking-widest text-sky-700">Loading explanation...</p>}
                 {!aiLoading && aiError && <p className="text-[10px] font-bold uppercase tracking-widest text-red-600">{aiError}</p>}
+                {!aiLoading && !aiError && aiSource === 'fallback' && (
+                  <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-amber-700 bg-amber-100 border border-amber-200 rounded-lg px-3 py-2">
+                    AI quota is unavailable. Showing stored local explanation.
+                  </p>
+                )}
                 {!aiLoading && !aiError && aiExplanation && (
                   <div className="text-sm leading-relaxed">
                     <ScientificText text={aiExplanation} />
