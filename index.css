@@ -8,11 +8,105 @@ body {
   margin: 0;
   overflow-y: scroll;
   overflow-x: hidden;
+  color: #0f172a;
+  background:
+    radial-gradient(1100px 520px at -10% -20%, rgba(251, 191, 36, 0.18), transparent 65%),
+    radial-gradient(820px 460px at 110% -15%, rgba(56, 189, 248, 0.12), transparent 58%),
+    linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
 }
 
 #root {
   display: flex;
   flex-direction: column;
+}
+
+:root {
+  --v2-title: "Sora", "Manrope", sans-serif;
+  --v2-ui: "Manrope", sans-serif;
+  --v2-card: rgba(255, 255, 255, 0.88);
+  --v2-border: rgba(148, 163, 184, 0.24);
+  --v2-shadow: 0 12px 30px rgba(15, 23, 42, 0.1);
+  --v2-shadow-lg: 0 20px 55px rgba(15, 23, 42, 0.16);
+}
+
+.v2-app {
+  font-family: var(--v2-ui);
+}
+
+.v2-page {
+  background: transparent;
+}
+
+.v2-surface {
+  background: var(--v2-card);
+  border: 1px solid var(--v2-border);
+  box-shadow: var(--v2-shadow);
+  border-radius: 24px;
+  backdrop-filter: blur(10px);
+}
+
+.v2-app h1,
+.v2-app h2,
+.v2-app h3,
+.v2-app h4 {
+  font-family: var(--v2-title);
+  letter-spacing: -0.01em;
+}
+
+.v2-app button {
+  transition: transform 120ms ease, box-shadow 180ms ease, background-color 180ms ease, color 180ms ease, border-color 180ms ease;
+}
+
+.v2-app button:active {
+  transform: translateY(1px);
+}
+
+.v2-app input,
+.v2-app textarea,
+.v2-app select {
+  border-color: rgba(148, 163, 184, 0.28) !important;
+  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.02);
+}
+
+.v2-app .bg-white {
+  background: var(--v2-card) !important;
+  border-color: var(--v2-border) !important;
+  box-shadow: var(--v2-shadow);
+  backdrop-filter: blur(10px);
+}
+
+.v2-app .shadow-sm,
+.v2-app .shadow-xl,
+.v2-app .shadow-2xl,
+.v2-app .shadow-lg {
+  box-shadow: var(--v2-shadow-lg) !important;
+}
+
+.v2-app .bg-slate-950 {
+  background-image: linear-gradient(160deg, #020617 0%, #0f172a 68%, #172554 100%);
+}
+
+.v2-app .text-\[8px\],
+.v2-app .text-\[9px\],
+.v2-app .text-\[10px\] {
+  letter-spacing: 0.08em;
+}
+
+.v2-app .tracking-\[0\.4em\],
+.v2-app .tracking-\[0\.5em\] {
+  letter-spacing: 0.18em !important;
+}
+
+.v2-app .rounded-\[2rem\],
+.v2-app .rounded-\[2\.5rem\],
+.v2-app .rounded-\[3rem\],
+.v2-app .rounded-\[4rem\] {
+  border-radius: 24px !important;
+}
+
+.v2-app .border-slate-100,
+.v2-app .border-slate-200 {
+  border-color: var(--v2-border) !important;
 }
 
 @keyframes paywallPopIn {
@@ -58,4 +152,54 @@ body {
 
 .paywall-float-alt {
   animation: paywallFloatAlt 2.6s ease-in-out infinite;
+}
+
+.desktop-context-menu {
+  position: fixed;
+  z-index: 250;
+  width: 280px;
+  padding: 12px;
+  border-radius: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: linear-gradient(160deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.92));
+  box-shadow: 0 24px 60px rgba(2, 6, 23, 0.42);
+  backdrop-filter: blur(14px);
+  animation: contextPopIn 180ms ease-out;
+}
+
+.desktop-context-title {
+  margin: 0 0 8px;
+  color: #f59e0b;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.desktop-context-menu button {
+  width: 100%;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: #e2e8f0;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.desktop-context-menu button:hover {
+  background: rgba(148, 163, 184, 0.2);
+}
+
+@keyframes contextPopIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }

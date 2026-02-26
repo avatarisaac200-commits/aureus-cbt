@@ -283,7 +283,7 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
 
   if (isPreparingQuestions) {
     return (
-      <div className="h-full w-full flex flex-col items-center justify-center bg-slate-950 p-8 text-center">
+      <div className="v2-page h-full w-full flex flex-col items-center justify-center bg-slate-950 p-8 text-center">
         <img src={logo} className="w-12 h-12 animate-pulse mb-5" alt="Aureus Medicos CBT Logo" />
         <p className="text-amber-500 text-[10px] font-black uppercase tracking-[0.3em] mb-2">Preparing Question Package</p>
         <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">Please wait...</p>
@@ -293,7 +293,7 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
 
   if (questionLoadError) {
     return (
-      <div className="h-full w-full flex flex-col items-center justify-center bg-slate-50 p-8 text-center">
+      <div className="v2-page h-full w-full flex flex-col items-center justify-center bg-slate-50 p-8 text-center">
         <img src={logo} className="w-14 h-14 mb-6" alt="Aureus Medicos CBT Logo" />
         <p className="text-red-600 text-[10px] font-black uppercase tracking-[0.2em] mb-3">Could Not Open Test</p>
         <p className="text-slate-500 text-sm max-w-md mb-8">{questionLoadError}</p>
@@ -304,7 +304,7 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
 
   if (view === 'lobby') {
     return (
-      <div className="h-full w-full bg-slate-50 flex flex-col overflow-hidden safe-top">
+      <div className="v2-page h-full w-full bg-slate-50 flex flex-col overflow-hidden safe-top">
         <header className="bg-slate-950 p-6 flex justify-between items-center border-b-4 border-amber-500 text-white shadow-2xl">
           <div className="flex items-center gap-4">
             <img src={logo} className="w-10 h-10" alt="Logo" />
@@ -355,7 +355,7 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
 
   if (!activeSection) {
     return (
-      <div className="h-full w-full flex flex-col items-center justify-center bg-slate-950 p-8 text-center">
+      <div className="v2-page h-full w-full flex flex-col items-center justify-center bg-slate-950 p-8 text-center">
         <img src={logo} className="w-12 h-12 animate-pulse mb-5" alt="Aureus Medicos CBT Logo" />
         <p className="text-amber-500 text-[10px] font-black uppercase tracking-[0.3em] mb-2">Preparing Section</p>
         <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">Please wait...</p>
@@ -364,7 +364,7 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
   }
 
   return (
-    <div className="flex flex-col h-full bg-slate-50 select-none overflow-hidden safe-top">
+    <div className="v2-page flex flex-col h-full bg-slate-50 select-none overflow-hidden safe-top">
       <header className="bg-slate-950 text-white px-6 py-4 flex justify-between items-center border-b-4 border-amber-500 z-30 shrink-0">
         <div className="flex items-center gap-4">
           <img src={logo} className="w-8 h-8" alt="Logo" />

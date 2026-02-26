@@ -153,7 +153,7 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
 
   if (loading) {
     return (
-      <div className="h-full w-full flex flex-col items-center justify-center bg-slate-950 safe-top safe-bottom">
+      <div className="v2-page h-full w-full flex flex-col items-center justify-center bg-slate-950 safe-top safe-bottom">
         <img src={logo} className="w-16 h-16 animate-spin mb-6" alt="Aureus Medicos CBT Logo" />
         <p className="text-[11px] font-black uppercase tracking-[0.4em] text-amber-500">Loading Review...</p>
       </div>
@@ -162,7 +162,7 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
 
   if (!test) {
     return (
-      <div className="h-full w-full flex flex-col items-center justify-center bg-slate-50 p-6 text-center safe-top safe-bottom">
+      <div className="v2-page h-full w-full flex flex-col items-center justify-center bg-slate-50 p-6 text-center safe-top safe-bottom">
         <img src={logo} className="w-16 h-16 mb-6" alt="Aureus Medicos CBT Logo" />
         <h2 className="text-xl font-bold text-slate-900 mb-2 uppercase">Review Unavailable</h2>
         <p className="text-slate-500 text-sm mb-6">We could not load this test.</p>
@@ -172,7 +172,7 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
   }
 
   return (
-    <div className="flex flex-col h-full bg-slate-50 select-none overflow-hidden safe-top">
+    <div className="v2-page flex flex-col h-full bg-slate-50 select-none overflow-hidden safe-top">
       <header className="bg-slate-950 text-white px-6 py-5 flex justify-between items-center border-b-4 border-amber-500 z-30 shrink-0">
         <div className="flex items-center gap-4">
           <img src={logo} className="w-10 h-10" alt="Aureus Medicos CBT Logo" />

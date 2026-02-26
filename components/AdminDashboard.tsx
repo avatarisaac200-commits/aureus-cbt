@@ -1442,7 +1442,7 @@ Rules:
   };
 
   return (
-    <div className="flex-1 w-full bg-slate-50 flex flex-col overflow-hidden">
+    <div className="v2-page flex-1 w-full bg-slate-50 flex flex-col overflow-hidden">
       <div className="bg-white border-b border-slate-100 p-6 flex justify-between items-center shrink-0 safe-top shadow-sm z-10">
         <div className="flex items-center gap-4">
           <img src={logo} className="w-10 h-10" alt="Logo" />

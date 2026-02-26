@@ -142,4 +142,4 @@ export interface TestAttempt {
   questionIds: string[];
 }
 
-export type ViewState = 'auth' | 'verify-email' | 'dashboard' | 'exam' | 'admin' | 'root-admin' | 'results' | 'review';
+export type ViewState = 'auth' | 'verify-email' | 'dashboard' | 'exam' | 'admin' | 'root-admin' | 'results' | 'review' | 'update-manual';

@@ -105,7 +105,7 @@ const RootAdminDashboard: React.FC<RootAdminDashboardProps> = ({ user, onLogout,
   };
 
   return (
-    <div className="flex-1 w-full bg-slate-50 flex flex-col overflow-hidden">
+    <div className="v2-page flex-1 w-full bg-slate-50 flex flex-col overflow-hidden">
       <div className="bg-white border-b border-slate-100 p-6 flex flex-col md:flex-row justify-between items-center gap-4 shrink-0 safe-top">
         <div className="flex items-center gap-4">
           <img src={logo} className="w-14 h-14" alt="Logo" />

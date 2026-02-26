@@ -366,7 +366,7 @@ const AdminAnalytics: React.FC = () => {
   const maxTrendScore = Math.max(...trendRows.map(row => row.avgScore), 1);
 
   return (
-    <div className="space-y-6">
+    <div className="v2-page space-y-6">
       <div className="bg-white border border-slate-100 rounded-[2rem] p-6 shadow-sm">
         <div className="flex flex-col lg:flex-row gap-3">
           <select className="p-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold" value={rangeFilter} onChange={(e) => setRangeFilter(e.target.value as RangeFilter)}>

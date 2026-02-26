@@ -22,7 +22,7 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ result, onClose, onReview }
   const feedback = getFeedback();
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6 pb-20 safe-top safe-bottom">
+    <div className="v2-page min-h-screen bg-slate-50 flex items-center justify-center p-6 pb-20 safe-top safe-bottom">
        <div className="max-w-3xl w-full bg-white rounded-[2rem] shadow-2xl overflow-hidden border border-slate-100 animate-in zoom-in-95 fade-in duration-700">
           <div className="bg-slate-950 p-10 text-center relative border-b-8 border-amber-500">
              <div className="flex justify-center mb-6">

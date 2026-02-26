@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect, useRef } from 'react';
-import { User, MockTest, ExamResult, Question, TestSection, TestAttempt, DifficultyLevel, SharedQuiz } from './types';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { User, MockTest, ExamResult, Question, TestSection, TestAttempt, DifficultyLevel, SharedQuiz, ViewState } from './types';
 import { auth, db } from './firebase';
 import { onAuthStateChanged, sendEmailVerification } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 import { doc, getDoc, getDocFromServer, collection, getDocs, query, where, limit, documentId, updateDoc, addDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
@@ -11,6 +11,7 @@ import RootAdminDashboard from './components/RootAdminDashboard';
 import ExamInterface from './components/ExamInterface';
 import ResultScreen from './components/ResultScreen';
 import ReviewInterface from './components/ReviewInterface';
+import UpdateManual from './components/UpdateManual';
 import logo from './assets/logo.png';
 
 const DEFAULT_FREE_ACCESS_ENDS_AT_ISO = '2026-04-01T23:00:00.000Z'; // April 2, 2026 00:00 WAT
@@ -138,8 +139,15 @@ const MonetizationModal: React.FC<MonetizationModalProps> = ({
 };
 
 const App: React.FC = () => {
+  type ContextMenuState = {
+    x: number;
+    y: number;
+    selectedText: string;
+  } | null;
+
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [currentView, setCurrentView] = useState('auth');
+  const [currentView, setCurrentView] = useState<ViewState>('auth');
+  const [lastMainView, setLastMainView] = useState<ViewState>('dashboard');
   const [adminDefaultTab, setAdminDefaultTab] = useState<string>('questions');
   const [activeTest, setActiveTest] = useState<MockTest | null>(null);
   const [activeResolvedSections, setActiveResolvedSections] = useState<TestSection[] | null>(null);
@@ -156,6 +164,8 @@ const App: React.FC = () => {
   const [activationKey, setActivationKey] = useState('');
   const [isActivatingKey, setIsActivatingKey] = useState(false);
   const [freeAccessEndsAtIso, setFreeAccessEndsAtIso] = useState(DEFAULT_FREE_ACCESS_ENDS_AT_ISO);
+  const [contextMenuState, setContextMenuState] = useState<ContextMenuState>(null);
+  const [isDesktopRightClickEnabled, setIsDesktopRightClickEnabled] = useState(false);
   const isFlushingQueueRef = useRef(false);
 
   const getDefaultViewForRole = (role: User['role']) => {
@@ -225,6 +235,140 @@ const App: React.FC = () => {
     if (isStaffUser(user) || hasActiveSubscription(user)) return false;
     const deadlineMs = Date.parse(freeAccessEndsAtIso);
     return Number.isFinite(deadlineMs) && Date.now() > deadlineMs;
+  };
+
+  const checkDesktopRightClickSupport = useCallback(() => {
+    if (typeof window === 'undefined') return false;
+    const hasFinePointer = window.matchMedia?.('(pointer: fine)').matches ?? false;
+    const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+    const isMobileUa = /android|iphone|ipad|ipod|mobile/i.test(userAgent);
+    const mobileByViewport = window.innerWidth < 820;
+    return hasFinePointer && !isMobileUa && !mobileByViewport;
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const refreshSupport = () => setIsDesktopRightClickEnabled(checkDesktopRightClickSupport());
+    refreshSupport();
+    window.addEventListener('resize', refreshSupport);
+    return () => window.removeEventListener('resize', refreshSupport);
+  }, [checkDesktopRightClickSupport]);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const closeMenu = () => setContextMenuState(null);
+
+    const onContextMenu = (event: MouseEvent) => {
+      if (!isDesktopRightClickEnabled) return;
+      event.preventDefault();
+      const selectedText = (window.getSelection?.()?.toString() || '').trim();
+      const menuWidth = 280;
+      const menuHeight = 280;
+      const x = Math.min(event.clientX, Math.max(12, window.innerWidth - menuWidth - 12));
+      const y = Math.min(event.clientY, Math.max(12, window.innerHeight - menuHeight - 12));
+      setContextMenuState({ x: Math.max(12, x), y: Math.max(12, y), selectedText });
+    };
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') closeMenu();
+    };
+
+    document.addEventListener('contextmenu', onContextMenu);
+    document.addEventListener('click', closeMenu);
+    document.addEventListener('scroll', closeMenu, true);
+    window.addEventListener('resize', closeMenu);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('contextmenu', onContextMenu);
+      document.removeEventListener('click', closeMenu);
+      document.removeEventListener('scroll', closeMenu, true);
+      window.removeEventListener('resize', closeMenu);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [isDesktopRightClickEnabled]);
+
+  const runContextAction = async (action: 'copy' | 'paste' | 'reload' | 'back' | 'forward' | 'top' | 'fullscreen') => {
+    setContextMenuState(null);
+    if (typeof window === 'undefined') return;
+
+    if (action === 'reload') {
+      window.location.reload();
+      return;
+    }
+    if (action === 'back') {
+      window.history.back();
+      return;
+    }
+    if (action === 'forward') {
+      window.history.forward();
+      return;
+    }
+    if (action === 'top') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+    if (action === 'fullscreen') {
+      if (!document.fullscreenElement) {
+        await document.documentElement.requestFullscreen?.();
+      } else {
+        await document.exitFullscreen?.();
+      }
+      return;
+    }
+    if (action === 'copy') {
+      const text = contextMenuState?.selectedText || window.location.href;
+      try {
+        await navigator.clipboard?.writeText(text);
+      } catch {
+        if (document.execCommand) document.execCommand('copy');
+      }
+      return;
+    }
+    if (action === 'paste') {
+      const active = document.activeElement as HTMLInputElement | HTMLTextAreaElement | null;
+      const isEditable =
+        active &&
+        (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable);
+      if (!isEditable) return;
+      try {
+        const clip = await navigator.clipboard?.readText();
+        if (typeof clip !== 'string') return;
+        if (active.isContentEditable) {
+          document.execCommand('insertText', false, clip);
+        } else {
+          const input = active as HTMLInputElement | HTMLTextAreaElement;
+          const start = input.selectionStart ?? input.value.length;
+          const end = input.selectionEnd ?? input.value.length;
+          input.value = `${input.value.slice(0, start)}${clip}${input.value.slice(end)}`;
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+      } catch {
+        // Clipboard read may be blocked by browser permissions.
+      }
+    }
+  };
+
+  const renderDesktopContextMenu = () => {
+    if (!isDesktopRightClickEnabled || !contextMenuState) return null;
+    return (
+      <div
+        className="desktop-context-menu"
+        style={{ top: contextMenuState.y, left: contextMenuState.x }}
+        role="menu"
+        aria-label="Page actions"
+      >
+        <p className="desktop-context-title">Quick Actions</p>
+        <button type="button" onClick={() => runContextAction('copy')}>
+          {contextMenuState.selectedText ? 'Copy Selection' : 'Copy Page Link'}
+        </button>
+        <button type="button" onClick={() => runContextAction('paste')}>Paste</button>
+        <button type="button" onClick={() => runContextAction('reload')}>Reload</button>
+        <button type="button" onClick={() => runContextAction('back')}>Back</button>
+        <button type="button" onClick={() => runContextAction('forward')}>Forward</button>
+        <button type="button" onClick={() => runContextAction('top')}>Scroll To Top</button>
+        <button type="button" onClick={() => runContextAction('fullscreen')}>Toggle Fullscreen</button>
+      </div>
+    );
   };
 
   const getPromptDeferredUntil = (): number | null => {
@@ -949,52 +1093,73 @@ const App: React.FC = () => {
     }
   };
 
+  const openUpdateManual = () => {
+    if (currentView !== 'update-manual') {
+      setLastMainView(currentView);
+    }
+    setCurrentView('update-manual');
+  };
+
+  const closeUpdateManual = () => {
+    const fallback: ViewState = currentUser ? getDefaultViewForRole(currentUser.role) : 'auth';
+    setCurrentView(lastMainView === 'update-manual' ? fallback : lastMainView);
+  };
+
   if (isLoading) {
     return (
-      <div className="h-full w-full flex flex-col items-center justify-center bg-slate-950">
-        <img src={logo} className="w-20 h-20 animate-pulse mb-6" alt="Aureus Medicos CBT Logo" />
-        <div className="flex flex-col items-center">
-          <p className="text-amber-500 text-[10px] font-black uppercase tracking-[0.5em] mb-2">Aureus Medicos CBT</p>
-          <div className="w-32 h-1 bg-slate-900 rounded-full overflow-hidden">
-            <div className="h-full bg-amber-500 w-1/2 animate-shimmer"></div>
+      <>
+        <div className="h-full w-full flex flex-col items-center justify-center bg-slate-950">
+          <img src={logo} className="w-20 h-20 animate-pulse mb-6" alt="Aureus Medicos CBT Logo" />
+          <div className="flex flex-col items-center">
+            <p className="text-amber-500 text-[10px] font-black uppercase tracking-[0.5em] mb-2">Aureus Medicos CBT</p>
+            <div className="w-32 h-1 bg-slate-900 rounded-full overflow-hidden">
+              <div className="h-full bg-amber-500 w-1/2 animate-shimmer"></div>
+            </div>
           </div>
         </div>
-      </div>
+        {renderDesktopContextMenu()}
+      </>
     );
   }
 
   if (packagingState) {
     return (
-      <div className="h-full w-full flex flex-col items-center justify-center bg-slate-950 p-8 text-center">
-        <img src={logo} className="w-16 h-16 animate-pulse mb-6" alt="Aureus Medicos CBT Logo" />
-        <p className="text-amber-500 text-[10px] font-black uppercase tracking-[0.4em] mb-4">{packagingState.message}</p>
-        <div className="w-64 h-2 bg-slate-900 rounded-full overflow-hidden mb-3">
-          <div className="h-full bg-amber-500 transition-all duration-300" style={{ width: `${packagingState.progress}%` }}></div>
+      <>
+        <div className="h-full w-full flex flex-col items-center justify-center bg-slate-950 p-8 text-center">
+          <img src={logo} className="w-16 h-16 animate-pulse mb-6" alt="Aureus Medicos CBT Logo" />
+          <p className="text-amber-500 text-[10px] font-black uppercase tracking-[0.4em] mb-4">{packagingState.message}</p>
+          <div className="w-64 h-2 bg-slate-900 rounded-full overflow-hidden mb-3">
+            <div className="h-full bg-amber-500 transition-all duration-300" style={{ width: `${packagingState.progress}%` }}></div>
+          </div>
+          <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">{packagingState.progress}%</p>
         </div>
-        <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">{packagingState.progress}%</p>
-      </div>
+        {renderDesktopContextMenu()}
+      </>
     );
   }
 
   if (currentView === 'verify-email') {
     return (
-      <div className="h-full w-full flex flex-col items-center justify-center bg-slate-50 p-6 text-center">
-        <img src={logo} className="w-16 h-16 mb-6" alt="Logo" />
-        <h2 className="text-2xl font-black text-slate-950 uppercase tracking-tight mb-2">Verify Your Email</h2>
-        <p className="text-slate-500 text-sm max-w-sm mb-8 leading-relaxed">
-          We sent a verification link to your email. Open it to activate your account, and check spam/junk if you do not see it.
-        </p>
-        <div className="flex flex-col gap-3 w-full max-w-xs">
-          <button onClick={handleManualVerifyCheck} className="w-full py-4 bg-slate-950 text-amber-500 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-lg">I Verified</button>
-          <button onClick={() => auth.currentUser && sendEmailVerification(auth.currentUser).then(() => alert('Verification email resent!'))} className="w-full py-4 bg-white text-slate-600 border border-slate-200 rounded-2xl font-black uppercase text-[10px] tracking-widest">Resend Link</button>
-          <button onClick={() => auth.signOut()} className="mt-4 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-red-500">Log Out</button>
+      <>
+        <div className="h-full w-full flex flex-col items-center justify-center bg-slate-50 p-6 text-center">
+          <img src={logo} className="w-16 h-16 mb-6" alt="Logo" />
+          <h2 className="text-2xl font-black text-slate-950 uppercase tracking-tight mb-2">Verify Your Email</h2>
+          <p className="text-slate-500 text-sm max-w-sm mb-8 leading-relaxed">
+            We sent a verification link to your email. Open it to activate your account, and check spam/junk if you do not see it.
+          </p>
+          <div className="flex flex-col gap-3 w-full max-w-xs">
+            <button onClick={handleManualVerifyCheck} className="w-full py-4 bg-slate-950 text-amber-500 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-lg">I Verified</button>
+            <button onClick={() => auth.currentUser && sendEmailVerification(auth.currentUser).then(() => alert('Verification email resent!'))} className="w-full py-4 bg-white text-slate-600 border border-slate-200 rounded-2xl font-black uppercase text-[10px] tracking-widest">Resend Link</button>
+            <button onClick={() => auth.signOut()} className="mt-4 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-red-500">Log Out</button>
+          </div>
         </div>
-      </div>
+        {renderDesktopContextMenu()}
+      </>
     );
   }
 
   return (
-    <div className="min-h-[100dvh] w-full overflow-x-hidden flex flex-col">
+    <div className="v2-app min-h-[100dvh] w-full overflow-x-hidden flex flex-col">
       {currentView === 'auth' && <Auth onLogin={checkUserStatus} />}
       {currentView === 'dashboard' && currentUser && (
         <Dashboard 
@@ -1074,6 +1239,9 @@ const App: React.FC = () => {
       {currentView === 'review' && reviewResult && (
         <ReviewInterface result={reviewResult} onExit={() => setCurrentView('dashboard')} />
       )}
+      {currentView === 'update-manual' && (
+        <UpdateManual onClose={closeUpdateManual} />
+      )}
       {showMonetizationModal && (
         <MonetizationModal
           mode={monetizationMode}
@@ -1089,6 +1257,16 @@ const App: React.FC = () => {
           onLogout={isMonetizationLocked ? () => auth.signOut() : undefined}
         />
       )}
+      {currentView !== 'exam' && currentView !== 'update-manual' && (
+        <button
+          type="button"
+          onClick={openUpdateManual}
+          className="fixed bottom-5 right-5 z-[180] px-4 py-3 rounded-xl bg-slate-950 text-amber-400 text-[10px] font-black uppercase tracking-[0.14em] shadow-2xl border border-slate-700"
+        >
+          What's New V2.0.1
+        </button>
+      )}
+      {renderDesktopContextMenu()}
     </div>
   );
 };
