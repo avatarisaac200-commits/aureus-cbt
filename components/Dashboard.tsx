@@ -14,6 +14,8 @@ interface DashboardProps {
   isReadOnly?: boolean;
   deadlineLabel?: string;
   isActivatingLicense?: boolean;
+  currentTheme?: 'classic' | 'neo' | 'gold' | 'glass' | 'neo-black';
+  onThemeChange?: (theme: 'classic' | 'neo' | 'gold' | 'glass' | 'neo-black') => void;
   onActivateLicense?: (key: string) => Promise<void>;
   onOpenActivationSupport?: () => void;
 }
@@ -108,6 +110,8 @@ const Dashboard: React.FC<DashboardProps> = ({
   isReadOnly = false,
   deadlineLabel,
   isActivatingLicense = false,
+  currentTheme = 'classic',
+  onThemeChange,
   onActivateLicense,
   onOpenActivationSupport
 }) => {
@@ -265,6 +269,44 @@ const Dashboard: React.FC<DashboardProps> = ({
       window.localStorage.setItem(`lowDataMode:${user.id}`, next ? 'on' : 'off');
     }
   };
+
+  const themeOptions: Array<{
+    id: 'classic' | 'neo' | 'gold' | 'glass' | 'neo-black';
+    name: string;
+    description: string;
+    previewClass: string;
+  }> = [
+    {
+      id: 'classic',
+      name: 'Classic',
+      description: 'Current slate and amber look.',
+      previewClass: 'from-slate-950 via-slate-900 to-amber-500'
+    },
+    {
+      id: 'neo',
+      name: 'Neo',
+      description: 'Cyan and lime with a sharper digital feel.',
+      previewClass: 'from-cyan-500 via-sky-500 to-lime-400'
+    },
+    {
+      id: 'gold',
+      name: 'Gold',
+      description: 'Warmer brass palette with cream surfaces.',
+      previewClass: 'from-amber-700 via-yellow-600 to-orange-300'
+    },
+    {
+      id: 'glass',
+      name: 'Glass',
+      description: 'Bright frosted panes with icy highlights.',
+      previewClass: 'from-white/95 via-sky-100 to-cyan-200'
+    },
+    {
+      id: 'neo-black',
+      name: 'Neo Black',
+      description: 'Black and white with a sharp monochrome shell.',
+      previewClass: 'from-black via-zinc-900 to-white'
+    }
+  ];
 
   const handleActivateFromSettings = async () => {
     const key = activationInput.trim().toUpperCase();
@@ -1096,6 +1138,35 @@ const Dashboard: React.FC<DashboardProps> = ({
                       {lowDataMode ? 'On' : 'Off'}
                     </button>
                   </div>
+                </div>
+              </section>
+
+              <section className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
+                <h2 className="text-lg font-bold text-slate-950 uppercase mb-2">Theme</h2>
+                <p className="text-xs text-slate-500 mb-5">Pick the app look for this device.</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                  {themeOptions.map((theme) => {
+                    const isActive = currentTheme === theme.id;
+                    return (
+                      <button
+                        key={theme.id}
+                        type="button"
+                        onClick={() => onThemeChange?.(theme.id)}
+                        className={`text-left p-4 rounded-2xl border-2 transition-all ${
+                          isActive ? 'border-amber-500 bg-amber-50' : 'border-slate-100 bg-slate-50 hover:border-slate-300'
+                        }`}
+                      >
+                        <div className={`h-16 rounded-xl bg-gradient-to-br ${theme.previewClass} mb-4 shadow-sm`}></div>
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-sm font-black uppercase text-slate-900">{theme.name}</span>
+                          {isActive && <span className="text-[9px] font-black uppercase tracking-widest text-amber-700">Active</span>}
+                        </div>
+                        <p className="mt-2 text-[10px] font-bold uppercase tracking-widest text-slate-400 leading-relaxed">
+                          {theme.description}
+                        </p>
+                      </button>
+                    );
+                  })}
                 </div>
               </section>
 

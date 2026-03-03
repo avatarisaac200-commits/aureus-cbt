@@ -22,8 +22,10 @@ const WHATSAPP_URL = `https://wa.me/${WHATSAPP_PHONE}?text=${encodeURIComponent(
 const OFFLINE_PACKAGE_KEY_PREFIX = 'testpkg:offline:';
 const PENDING_RESULTS_QUEUE_KEY = 'pendingResultsQueue';
 const QUESTION_FETCH_LIMIT = 3000;
+const APP_THEME_STORAGE_KEY = 'appTheme';
 
 type MonetizationMode = 'pre-deadline' | 'post-deadline';
+type AppTheme = 'classic' | 'neo' | 'gold' | 'glass' | 'neo-black';
 
 interface MonetizationModalProps {
   mode: MonetizationMode;
@@ -166,6 +168,7 @@ const App: React.FC = () => {
   const [freeAccessEndsAtIso, setFreeAccessEndsAtIso] = useState(DEFAULT_FREE_ACCESS_ENDS_AT_ISO);
   const [contextMenuState, setContextMenuState] = useState<ContextMenuState>(null);
   const [isDesktopRightClickEnabled, setIsDesktopRightClickEnabled] = useState(false);
+  const [theme, setTheme] = useState<AppTheme>('classic');
   const isFlushingQueueRef = useRef(false);
 
   const getDefaultViewForRole = (role: User['role']) => {
@@ -286,6 +289,20 @@ const App: React.FC = () => {
       document.removeEventListener('keydown', onKeyDown);
     };
   }, [isDesktopRightClickEnabled]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const storedTheme = window.localStorage.getItem(APP_THEME_STORAGE_KEY);
+    if (storedTheme === 'classic' || storedTheme === 'neo' || storedTheme === 'gold' || storedTheme === 'glass' || storedTheme === 'neo-black') {
+      setTheme(storedTheme);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof document === 'undefined' || typeof window === 'undefined') return;
+    document.body.setAttribute('data-theme', theme);
+    window.localStorage.setItem(APP_THEME_STORAGE_KEY, theme);
+  }, [theme]);
 
   const runContextAction = async (action: 'copy' | 'paste' | 'reload' | 'back' | 'forward' | 'top' | 'fullscreen') => {
     setContextMenuState(null);
@@ -1159,7 +1176,7 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="v2-app min-h-[100dvh] w-full overflow-x-hidden flex flex-col">
+    <div className={`v2-app theme-${theme} min-h-[100dvh] w-full overflow-x-hidden flex flex-col`}>
       {currentView === 'auth' && <Auth onLogin={checkUserStatus} />}
       {currentView === 'dashboard' && currentUser && (
         <Dashboard 
@@ -1194,6 +1211,8 @@ const App: React.FC = () => {
           isReadOnly={isReadOnlyForUnactivatedUser(currentUser)}
           deadlineLabel={deadlineLabel}
           isActivatingLicense={isActivatingKey}
+          currentTheme={theme}
+          onThemeChange={setTheme}
           onActivateLicense={async (key) => {
             const activated = await activateLicenseKey(key);
             if (activated) {
