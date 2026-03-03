@@ -118,6 +118,9 @@ export interface ExamResult {
   testName: string;
   score: number;
   maxScore: number;
+  correctAnsweredCount?: number;
+  answeredQuestionCount?: number;
+  totalQuestionCount?: number;
   completedAt: string;
   status: 'completed' | 'abandoned' | 'auto-submitted';
   userAnswers: Record<string, number>;

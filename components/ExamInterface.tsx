@@ -122,6 +122,15 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
   }, [test, packagedQuestions, effectiveSections]);
 
   const calculateResult = useCallback(async (status: ExamResult['status']) => {
+    const allQuestionIds = effectiveSections.flatMap(section => section.questionIds);
+    const answeredQuestionCount = allQuestionIds.reduce((count, qId) => (
+      Object.prototype.hasOwnProperty.call(answers, qId) ? count + 1 : count
+    ), 0);
+    const correctAnsweredCount = allQuestionIds.reduce((count, qId) => {
+      const question = allQuestions[qId];
+      if (!question) return count;
+      return answers[qId] === question.correctAnswerIndex ? count + 1 : count;
+    }, 0);
     const sectionBreakdown = effectiveSections.map((section) => {
       let sectionScore = 0;
       section.questionIds.forEach(qId => {
@@ -143,6 +152,9 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
       testName: test.name,
       score: totalScore,
       maxScore: maxScore,
+      correctAnsweredCount,
+      answeredQuestionCount,
+      totalQuestionCount: allQuestionIds.length,
       completedAt: new Date().toISOString(),
       status: status,
       userAnswers: answers,

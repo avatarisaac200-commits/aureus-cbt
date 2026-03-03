@@ -1,29 +1,73 @@
-const CACHE_NAME = 'aureus-medicos-cbt-v3';
-const ASSETS = [
+const CACHE_NAME = 'aureus-medicos-cbt-v4';
+const STATIC_PATHS = [
   '/',
   '/index.html',
+  '/manifest.json',
   '/assets/logo.png',
-  '/manifest.json'
+  '/index.css'
 ];
 
+const CACHEABLE_CORS_ORIGINS = [
+  'https://cdn.jsdelivr.net',
+  'https://fonts.googleapis.com',
+  'https://fonts.gstatic.com',
+  'https://www.gstatic.com',
+  'https://esm.sh'
+];
+
+const isCacheableResponse = (response) => {
+  return Boolean(response) && (response.status === 200 || response.type === 'opaque');
+};
+
+const normalizeAssetUrl = (assetPath) => {
+  try {
+    return new URL(assetPath, self.location.origin).toString();
+  } catch {
+    return null;
+  }
+};
+
+const extractShellAssets = async () => {
+  try {
+    const response = await fetch('/index.html', { cache: 'no-cache' });
+    if (!response.ok) return [];
+
+    const html = await response.text();
+    const discovered = new Set(STATIC_PATHS);
+    const assetPattern = /<(?:script|link|img|source)[^>]+(?:src|href)=["']([^"']+)["']/gi;
+    let match;
+
+    while ((match = assetPattern.exec(html)) !== null) {
+      const raw = match[1];
+      if (!raw || raw.startsWith('data:')) continue;
+      const absoluteUrl = normalizeAssetUrl(raw);
+      if (!absoluteUrl) continue;
+      const url = new URL(absoluteUrl);
+      if (url.origin !== self.location.origin) continue;
+      discovered.add(url.pathname);
+    }
+
+    return Array.from(discovered);
+  } catch {
+    return [...STATIC_PATHS];
+  }
+};
+
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(ASSETS);
-    })
-  );
-  self.skipWaiting();
+  event.waitUntil((async () => {
+    const cache = await caches.open(CACHE_NAME);
+    const shellAssets = await extractShellAssets();
+    await cache.addAll(shellAssets);
+    self.skipWaiting();
+  })());
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys().then((keys) => {
-      return Promise.all(
-        keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
-      );
-    })
-  );
-  self.clients.claim();
+  event.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)));
+    self.clients.claim();
+  })());
 });
 
 self.addEventListener('fetch', (event) => {
@@ -32,48 +76,43 @@ self.addEventListener('fetch', (event) => {
 
   const requestUrl = new URL(request.url);
   const isSameOrigin = requestUrl.origin === self.location.origin;
+  const isCacheableCors = CACHEABLE_CORS_ORIGINS.includes(requestUrl.origin);
 
-  // Navigation requests: network-first with offline shell fallback.
   if (request.mode === 'navigate') {
-    event.respondWith(
-      fetch(request)
-        .then((response) => {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put('/index.html', copy));
-          return response;
-        })
-        .catch(async () => {
-          const cache = await caches.open(CACHE_NAME);
-          return (await cache.match('/index.html')) || (await cache.match('/'));
-        })
-    );
+    event.respondWith((async () => {
+      try {
+        const response = await fetch(request);
+        const cache = await caches.open(CACHE_NAME);
+        cache.put('/index.html', response.clone());
+        return response;
+      } catch {
+        const cache = await caches.open(CACHE_NAME);
+        return (await cache.match('/index.html')) || (await cache.match('/'));
+      }
+    })());
     return;
   }
 
-  // App shell/static files: stale-while-revalidate.
-  if (isSameOrigin) {
-    event.respondWith(
-      caches.match(request).then(async (cachedResponse) => {
-        const networkFetch = fetch(request)
-          .then((networkResponse) => {
-            if (networkResponse && networkResponse.status === 200) {
-              const copy = networkResponse.clone();
-              caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
-            }
-            return networkResponse;
-          })
-          .catch(() => cachedResponse);
+  if (isSameOrigin || isCacheableCors) {
+    event.respondWith((async () => {
+      const cache = await caches.open(CACHE_NAME);
+      const cachedResponse = await cache.match(request);
 
-        return cachedResponse || networkFetch;
-      })
-    );
+      const networkFetch = fetch(request)
+        .then((networkResponse) => {
+          if (isCacheableResponse(networkResponse)) {
+            cache.put(request, networkResponse.clone());
+          }
+          return networkResponse;
+        })
+        .catch(() => cachedResponse);
+
+      return cachedResponse || networkFetch;
+    })());
     return;
   }
 
-  // Cross-origin GET requests: network-first with cached fallback.
   event.respondWith(
-    fetch(request)
-      .then((response) => response)
-      .catch(() => caches.match(request))
+    fetch(request).catch(() => caches.match(request))
   );
 });

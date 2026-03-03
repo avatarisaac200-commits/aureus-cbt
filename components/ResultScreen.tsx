@@ -11,6 +11,12 @@ interface ResultScreenProps {
 
 const ResultScreen: React.FC<ResultScreenProps> = ({ result, onClose, onReview }) => {
   const percentage = Math.round((result.score / result.maxScore) * 100);
+  const hasAnsweredAccuracy = typeof result.answeredQuestionCount === 'number' && typeof result.correctAnsweredCount === 'number';
+  const answeredQuestionCount = result.answeredQuestionCount ?? Object.keys(result.userAnswers || {}).length;
+  const correctAnsweredCount = result.correctAnsweredCount ?? 0;
+  const answeredAccuracy = hasAnsweredAccuracy && answeredQuestionCount > 0
+    ? Math.round((correctAnsweredCount / answeredQuestionCount) * 100)
+    : 0;
   
   const getFeedback = () => {
     if (result.status === 'abandoned') return { text: "SESSION ENDED", color: "text-red-600", bg: "bg-red-50" };
@@ -35,12 +41,27 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ result, onClose, onReview }
           <div className="p-8 md:p-12 text-center">
              <div className="mb-10">
                 <h2 className={`text-4xl font-bold mb-4 ${feedback.color}`}>{feedback.text}</h2>
-                <div className="flex justify-center items-center gap-6">
+                <div className="flex flex-col sm:flex-row justify-center items-stretch gap-4 sm:gap-6">
                    <div className={`px-8 py-4 rounded-2xl font-bold text-5xl ${feedback.bg} ${feedback.color} shadow-lg`}>
                       {percentage}%
                    </div>
                    <div className="text-left text-slate-400 text-[10px] font-bold uppercase leading-relaxed">
                      Score: {result.score} / {result.maxScore}
+                   </div>
+                   <div className="px-6 py-4 rounded-2xl bg-emerald-50 text-left shadow-lg">
+                     <p className="text-[9px] font-bold uppercase tracking-widest text-emerald-600 mb-1">Answered Accuracy</p>
+                     {hasAnsweredAccuracy ? (
+                       <>
+                         <p className="text-3xl font-bold text-emerald-700 leading-none">{answeredAccuracy}%</p>
+                         <p className="text-[10px] font-bold uppercase text-emerald-700/80 mt-2">
+                           {correctAnsweredCount} correct / {answeredQuestionCount} answered
+                         </p>
+                       </>
+                     ) : (
+                       <p className="text-[10px] font-bold uppercase text-emerald-700/80 mt-2">
+                         Available for new results only
+                       </p>
+                     )}
                    </div>
                 </div>
              </div>
