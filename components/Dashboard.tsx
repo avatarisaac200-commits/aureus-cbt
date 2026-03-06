@@ -18,6 +18,7 @@ interface DashboardProps {
   onThemeChange?: (theme: 'classic' | 'neo' | 'gold' | 'glass' | 'neo-black') => void;
   onActivateLicense?: (key: string) => Promise<void>;
   onOpenActivationSupport?: () => void;
+  onOpenUpdateManual?: () => void;
 }
 
 type TestSortMode = 'updated' | 'name' | 'duration' | 'attempts';
@@ -113,7 +114,8 @@ const Dashboard: React.FC<DashboardProps> = ({
   currentTheme = 'classic',
   onThemeChange,
   onActivateLicense,
-  onOpenActivationSupport
+  onOpenActivationSupport,
+  onOpenUpdateManual
 }) => {
   const parseIsoDate = (value?: string) => {
     const ms = Date.parse(value || '');
@@ -1172,6 +1174,12 @@ const Dashboard: React.FC<DashboardProps> = ({
 
               <section className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
                 <h2 className="text-lg font-bold text-slate-950 uppercase mb-5">App Data</h2>
+                <button
+                  onClick={onOpenUpdateManual}
+                  className="w-full py-4 mb-3 bg-sky-50 border border-sky-100 text-sky-700 rounded-2xl text-[10px] font-black uppercase tracking-widest"
+                >
+                  Open What's New
+                </button>
                 <button
                   onClick={async () => {
                     if (typeof window !== 'undefined') {

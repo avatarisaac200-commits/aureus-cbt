@@ -27,6 +27,12 @@ const APP_THEME_STORAGE_KEY = 'appTheme';
 type MonetizationMode = 'pre-deadline' | 'post-deadline';
 type AppTheme = 'classic' | 'neo' | 'gold' | 'glass' | 'neo-black';
 
+const isValidAppTheme = (value: string | null): value is AppTheme => {
+  return value === 'classic' || value === 'neo' || value === 'gold' || value === 'glass' || value === 'neo-black';
+};
+
+const getThemeStorageKey = (userId: string) => `${APP_THEME_STORAGE_KEY}:${userId}`;
+
 interface MonetizationModalProps {
   mode: MonetizationMode;
   isLocked: boolean;
@@ -292,17 +298,24 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const storedTheme = window.localStorage.getItem(APP_THEME_STORAGE_KEY);
-    if (storedTheme === 'classic' || storedTheme === 'neo' || storedTheme === 'gold' || storedTheme === 'glass' || storedTheme === 'neo-black') {
-      setTheme(storedTheme);
+    if (!currentUser?.id) {
+      setTheme('classic');
+      return;
     }
-  }, []);
+    const storedTheme = window.localStorage.getItem(getThemeStorageKey(currentUser.id));
+    if (isValidAppTheme(storedTheme)) {
+      setTheme(storedTheme);
+    } else {
+      setTheme('classic');
+    }
+  }, [currentUser?.id]);
 
   useEffect(() => {
-    if (typeof document === 'undefined' || typeof window === 'undefined') return;
+    if (typeof document === 'undefined') return;
     document.body.setAttribute('data-theme', theme);
-    window.localStorage.setItem(APP_THEME_STORAGE_KEY, theme);
-  }, [theme]);
+    if (typeof window === 'undefined' || !currentUser?.id) return;
+    window.localStorage.setItem(getThemeStorageKey(currentUser.id), theme);
+  }, [theme, currentUser?.id]);
 
   const runContextAction = async (action: 'copy' | 'paste' | 'reload' | 'back' | 'forward' | 'top' | 'fullscreen') => {
     setContextMenuState(null);
@@ -1220,6 +1233,7 @@ const App: React.FC = () => {
             }
           }}
           onOpenActivationSupport={handleOpenWhatsApp}
+          onOpenUpdateManual={openUpdateManual}
         />
       )}
       {currentView === 'admin' && currentUser && (
@@ -1275,15 +1289,6 @@ const App: React.FC = () => {
           onClose={monetizationMode === 'post-deadline' && !isMonetizationLocked ? () => setShowMonetizationModal(false) : undefined}
           onLogout={isMonetizationLocked ? () => auth.signOut() : undefined}
         />
-      )}
-      {currentView !== 'exam' && currentView !== 'update-manual' && (
-        <button
-          type="button"
-          onClick={openUpdateManual}
-          className="fixed bottom-5 right-5 z-[180] px-4 py-3 rounded-xl bg-slate-950 text-amber-400 text-[10px] font-black uppercase tracking-[0.14em] shadow-2xl border border-slate-700"
-        >
-          What's New V2.0.1
-        </button>
       )}
       {renderDesktopContextMenu()}
     </div>

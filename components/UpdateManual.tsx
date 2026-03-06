@@ -7,35 +7,35 @@ interface UpdateManualProps {
 
 const sections = [
   {
-    title: 'Visual Refresh',
+    title: 'How To Access Updates',
     items: [
-      'New V2 visual language with cleaner spacing, typography, and modern surfaces.',
-      'Consistent shell styling across student, admin, and root-admin pages.',
-      'Improved contrast and readability for long sessions.'
+      'The floating "What\'s New" button has been removed from the main app shell.',
+      'You can now open this page manually from Settings whenever you want.',
+      'This keeps exam flow cleaner and avoids extra UI during focused sessions.'
     ]
   },
   {
-    title: 'Navigation And Usability',
+    title: 'Themes And Readability',
     items: [
-      'Added a dedicated update manual page for release notes.',
-      'Improved page structure and layout hierarchy for faster scanning.',
-      'Desktop context actions remain available on right-click for computer users.'
+      'Theme palettes were refreshed with more modern, complementary colors.',
+      'Neo Black readability has been improved with better contrast and accent tuning.',
+      'Theme previews remain available in Settings under the Theme section.'
     ]
   },
   {
-    title: 'Question Bank And Dashboard',
+    title: 'Per-User Theme Memory',
     items: [
-      'Folder-based test organization on the first page with strict max of 10 folders.',
-      'Sorting controls for tighter test discovery (latest, name, duration, popularity).',
-      'Per-user persistence for folder assignments and sort preferences.'
+      'Theme choice is now saved per user profile on the same browser.',
+      'Logging out no longer forces the next user to inherit the previous user\'s theme.',
+      'Each account now loads its own saved theme preference after login.'
     ]
   },
   {
-    title: 'Stability And Compatibility',
+    title: 'Admin Test Editing',
     items: [
-      'No core exam behavior changed, including section-by-section test flow.',
-      'All critical workflows preserved: auth, test packaging, attempts, review, analytics.',
-      'UI redesign implemented without altering grading logic or data contracts.'
+      'CSV dynamic tests now support inline content editing from Admin > Tests > Edit.',
+      'After CSV pool edits are saved, affected stored result scores are recalculated.',
+      'CSV per-user count, marks, and bundle settings can be updated while editing.'
     ]
   }
 ];
@@ -48,9 +48,9 @@ const UpdateManual: React.FC<UpdateManualProps> = ({ onClose }) => {
           <div className="flex items-center gap-4">
             <img src={logo} alt="Aureus Medicos CBT Logo" className="w-14 h-14" />
             <div>
-              <p className="text-[11px] font-black uppercase tracking-[0.25em] text-amber-600">Version 2.0.1</p>
+              <p className="text-[11px] font-black uppercase tracking-[0.25em] text-amber-600">Version 2.0.2</p>
               <h1 className="text-2xl md:text-3xl font-black text-slate-900 leading-tight">Update Manual</h1>
-              <p className="text-sm text-slate-500 mt-1">What is new in the redesigned release</p>
+              <p className="text-sm text-slate-500 mt-1">Recent improvements and behavior updates</p>
             </div>
           </div>
           <button

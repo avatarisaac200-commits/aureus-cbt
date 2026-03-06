@@ -17,6 +17,7 @@ interface AdminDashboardProps {
 
 type AdminTab = 'questions' | 'create-test' | 'tests' | 'import' | 'analytics' | 'license-keys';
 type StagedQuestion = Omit<Question, 'id' | 'createdAt' | 'createdBy'> & { selected?: boolean };
+type EditableCsvQuestion = StagedQuestion & { id: string };
 
 const normalizeText = (text: string) => text.toLowerCase().trim().replace(/\s+/g, ' ');
 const normalizeOptions = (options: string[]) => options.map(opt => opt.trim());
@@ -409,9 +410,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
   const [managedTests, setManagedTests] = useState<MockTest[]>([]);
   const [managedTestsLoading, setManagedTestsLoading] = useState(false);
   const [editingTestId, setEditingTestId] = useState<string | null>(null);
+  const [editingTest, setEditingTest] = useState<MockTest | null>(null);
   const [editTestName, setEditTestName] = useState('');
   const [editTestDesc, setEditTestDesc] = useState('');
   const [editTestDuration, setEditTestDuration] = useState(60);
+  const [editingCsvQuestions, setEditingCsvQuestions] = useState<EditableCsvQuestion[]>([]);
+  const [editingCsvLoading, setEditingCsvLoading] = useState(false);
+  const [editingCsvQuestionCount, setEditingCsvQuestionCount] = useState(20);
+  const [editingCsvMarksPerQuestion, setEditingCsvMarksPerQuestion] = useState(1);
+  const [editingCsvBundleEnabled, setEditingCsvBundleEnabled] = useState(false);
+  const [editingCsvBundleCategoryField, setEditingCsvBundleCategoryField] = useState<CsvBundleCategoryField>('subject');
+  const [editingCsvBundleSize, setEditingCsvBundleSize] = useState(100);
   
   // Test Builder State
   const [testName, setTestName] = useState('');
@@ -490,6 +499,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
     const staged = csvDynamicQuestions.map((q, idx) => ({ id: `preview_${idx}`, question: q }));
     return buildCsvBundles(staged, csvBundleCategoryField, csvBundleSize);
   }, [csvBundleEnabled, csvDynamicQuestions, csvBundleCategoryField, csvBundleSize]);
+
+  const editingCsvBundlePreview = useMemo(() => {
+    if (!editingCsvBundleEnabled || editingCsvQuestions.length === 0) return [];
+    const staged = editingCsvQuestions.map((q) => ({ id: q.id, question: q as StagedQuestion }));
+    return buildCsvBundles(staged, editingCsvBundleCategoryField, editingCsvBundleSize);
+  }, [editingCsvBundleEnabled, editingCsvQuestions, editingCsvBundleCategoryField, editingCsvBundleSize]);
 
   useEffect(() => {
     if (activeTab === 'tests') {
@@ -1280,32 +1295,221 @@ Rules:
     }
   };
 
-  const startEditTest = (test: MockTest) => {
+  const startEditTest = async (test: MockTest) => {
     setEditingTestId(test.id);
+    setEditingTest(test);
     setEditTestName(test.name || '');
     setEditTestDesc(test.description || '');
     setEditTestDuration(Math.max(1, Math.floor((test.totalDurationSeconds || 3600) / 60)));
+    const primarySection = test.sections?.[0];
+    const csvCountFallback = primarySection
+      ? Math.max(1, Number(primarySection.questionCount || primarySection.questionIds.length || 1))
+      : 1;
+    setEditingCsvQuestionCount(csvCountFallback);
+    setEditingCsvMarksPerQuestion(Math.max(1, Number(primarySection?.marksPerQuestion || 1)));
+    setEditingCsvBundleEnabled(Boolean((test as any).csvBundlesEnabled));
+    setEditingCsvBundleCategoryField(((test as any).csvBundleCategoryField || 'subject') as CsvBundleCategoryField);
+    setEditingCsvBundleSize(Math.max(1, Number((test as any).csvBundleSize || 100)));
+
+    if ((test.generationMode || 'fixed') !== 'csv-dynamic') {
+      setEditingCsvQuestions([]);
+      return;
+    }
+
+    setEditingCsvLoading(true);
+    setEditingCsvQuestions([]);
+    try {
+      const ids = Array.from(new Set((test.sections || []).flatMap(section => section.questionIds || [])));
+      if (ids.length === 0) {
+        setEditingCsvQuestions([]);
+        return;
+      }
+      const map: Record<string, Question> = {};
+      for (const chunk of chunkArray(ids, 10)) {
+        const qSnap = await getDocs(query(collection(db, 'questions'), where(documentId(), 'in', chunk)));
+        qSnap.docs.forEach((d) => {
+          map[d.id] = { ...d.data(), id: d.id } as Question;
+        });
+      }
+
+      const rows: EditableCsvQuestion[] = ids
+        .map((id) => map[id])
+        .filter(Boolean)
+        .map((q) => ({
+          id: q.id,
+          subject: q.subject || 'General',
+          topic: q.topic || 'General',
+          text: q.text || '',
+          options: Array.isArray(q.options) ? q.options.slice(0, 4) : ['', '', '', ''],
+          correctAnswerIndex: Number.isFinite(Number(q.correctAnswerIndex)) ? Number(q.correctAnswerIndex) : 0,
+          explanation: q.explanation || '',
+          difficulty: normalizeDifficulty(String(q.difficulty || DEFAULT_DIFFICULTY)),
+          tags: Array.isArray(q.tags) ? q.tags : [],
+          source: q.source || '',
+          year: q.year ?? null,
+          examType: q.examType || '',
+          status: q.status || 'approved',
+          isActive: q.isActive !== false,
+          normalizedText: q.normalizedText || normalizeText(q.text || '')
+        }));
+
+      const missing = ids.length - rows.length;
+      if (missing > 0) {
+        alert(`Loaded ${rows.length} CSV question(s). ${missing} question(s) were missing from the bank.`);
+      }
+      setEditingCsvQuestions(rows);
+    } catch (err: any) {
+      alert('Could not load CSV question pool for editing. ' + (err?.message || ''));
+      setEditingCsvQuestions([]);
+    } finally {
+      setEditingCsvLoading(false);
+    }
   };
 
   const cancelEditTest = () => {
     setEditingTestId(null);
+    setEditingTest(null);
     setEditTestName('');
     setEditTestDesc('');
     setEditTestDuration(60);
+    setEditingCsvQuestions([]);
+    setEditingCsvLoading(false);
+    setEditingCsvQuestionCount(20);
+    setEditingCsvMarksPerQuestion(1);
+    setEditingCsvBundleEnabled(false);
+    setEditingCsvBundleCategoryField('subject');
+    setEditingCsvBundleSize(100);
   };
 
   const saveEditedTest = async (testId: string) => {
+    const activeEditTest = managedTests.find((test) => test.id === testId) || editingTest;
+    if (!activeEditTest) {
+      alert('Could not find selected test.');
+      return;
+    }
+    const isCsvDynamic = (activeEditTest.generationMode || 'fixed') === 'csv-dynamic';
+    setLoading(true);
     try {
-      await updateDoc(doc(db, 'tests', testId), {
-        name: editTestName.trim(),
-        description: editTestDesc.trim(),
-        totalDurationSeconds: Math.max(1, editTestDuration) * 60,
-        updatedAt: new Date().toISOString()
-      });
+      if (isCsvDynamic) {
+        if (editingCsvQuestions.length === 0) {
+          alert('No CSV questions loaded for this test.');
+          return;
+        }
+        if (editingCsvQuestionCount <= 0 || editingCsvQuestionCount > editingCsvQuestions.length) {
+          alert(`Question count must be between 1 and ${editingCsvQuestions.length}.`);
+          return;
+        }
+        if (editingCsvBundleEnabled && (editingCsvBundleSize <= 0 || editingCsvBundleSize > editingCsvQuestions.length)) {
+          alert(`Bundle size must be between 1 and ${editingCsvQuestions.length}.`);
+          return;
+        }
+
+        for (let i = 0; i < editingCsvQuestions.length; i++) {
+          const row = editingCsvQuestions[i];
+          const options = Array.isArray(row.options) ? row.options.map(opt => String(opt || '').trim()) : [];
+          if (!String(row.text || '').trim()) {
+            alert(`Question ${i + 1} has empty text.`);
+            return;
+          }
+          if (options.length !== 4 || options.some(opt => !opt)) {
+            alert(`Question ${i + 1} must have exactly 4 non-empty options.`);
+            return;
+          }
+          const answerIndex = Number(row.correctAnswerIndex);
+          if (!Number.isFinite(answerIndex) || answerIndex < 0 || answerIndex > 3) {
+            alert(`Question ${i + 1} has an invalid correct answer index.`);
+            return;
+          }
+        }
+
+        let batch = writeBatch(db);
+        let writes = 0;
+        const nowIso = new Date().toISOString();
+        for (const row of editingCsvQuestions) {
+          const cleanedText = String(row.text || '').trim();
+          const cleanedOptions = row.options.map(opt => String(opt || '').trim()).slice(0, 4);
+          batch.update(doc(db, 'questions', row.id), {
+            subject: String(row.subject || 'General').trim() || 'General',
+            topic: String(row.topic || 'General').trim() || 'General',
+            text: cleanedText,
+            options: cleanedOptions,
+            correctAnswerIndex: Number(row.correctAnswerIndex),
+            explanation: String(row.explanation || '').trim(),
+            difficulty: normalizeDifficulty(String(row.difficulty || DEFAULT_DIFFICULTY)),
+            tags: Array.isArray(row.tags) ? row.tags.map(tag => String(tag || '').trim()).filter(Boolean) : [],
+            source: String(row.source || (activeEditTest as any).csvPoolSourceFile || 'csv-dynamic').trim() || 'csv-dynamic',
+            year: row.year ?? null,
+            examType: String(row.examType || '').trim(),
+            status: 'approved',
+            isActive: row.isActive !== false,
+            normalizedText: normalizeText(cleanedText),
+            updatedAt: nowIso
+          });
+          writes++;
+          if (writes >= 450) {
+            await batch.commit();
+            batch = writeBatch(db);
+            writes = 0;
+          }
+        }
+        if (writes > 0) {
+          await batch.commit();
+        }
+
+        const nextSection: TestSection = activeEditTest.sections?.[0]
+          ? {
+            ...activeEditTest.sections[0],
+            questionIds: editingCsvQuestions.map(item => item.id),
+            marksPerQuestion: Math.max(1, Number(editingCsvMarksPerQuestion) || 1),
+            questionCount: Math.max(1, Number(editingCsvQuestionCount) || 1)
+          }
+          : {
+            id: 'sec_csv_' + Date.now(),
+            name: 'CSV Section',
+            questionIds: editingCsvQuestions.map(item => item.id),
+            marksPerQuestion: Math.max(1, Number(editingCsvMarksPerQuestion) || 1),
+            questionCount: Math.max(1, Number(editingCsvQuestionCount) || 1),
+            sampleFilters: { subjects: [], topics: [], difficulties: ['easy', 'medium', 'hard'], tags: [] },
+            difficultyMix: { easy: 30, medium: 50, hard: 20 }
+          };
+        const nextSections = [nextSection];
+        const nextBundles = editingCsvBundleEnabled
+          ? buildCsvBundles(
+            editingCsvQuestions.map((item) => ({ id: item.id, question: item as StagedQuestion })),
+            editingCsvBundleCategoryField,
+            editingCsvBundleSize
+          )
+          : [];
+
+        await updateDoc(doc(db, 'tests', testId), {
+          name: editTestName.trim(),
+          description: editTestDesc.trim(),
+          totalDurationSeconds: Math.max(1, editTestDuration) * 60,
+          sections: nextSections,
+          csvPoolSize: editingCsvQuestions.length,
+          csvBundlesEnabled: editingCsvBundleEnabled,
+          csvBundleCategoryField: editingCsvBundleCategoryField,
+          csvBundleSize: Math.max(1, Number(editingCsvBundleSize) || 1),
+          csvBundles: nextBundles,
+          updatedAt: nowIso
+        });
+
+        const changedResults = await recalculateResultsForTests([{ ...activeEditTest, sections: nextSections }]);
+        alert(`Test updated. Recalculated ${changedResults} result(s).`);
+      } else {
+        await updateDoc(doc(db, 'tests', testId), {
+          name: editTestName.trim(),
+          description: editTestDesc.trim(),
+          totalDurationSeconds: Math.max(1, editTestDuration) * 60,
+          updatedAt: new Date().toISOString()
+        });
+      }
       await loadManagedTests();
       cancelEditTest();
     } catch (err: any) {
       alert('Failed to update test. ' + (err?.message || ''));
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -1992,9 +2196,172 @@ Rules:
                           <span className="text-[10px] font-bold uppercase text-slate-400">Time (mins)</span>
                           <input type="number" min={1} value={editTestDuration} onChange={(e) => setEditTestDuration(parseInt(e.target.value) || 1)} className="bg-transparent font-bold w-full text-center text-xl outline-none" />
                         </div>
+                        {(test.generationMode || 'fixed') === 'csv-dynamic' && (
+                          <div className="space-y-4 rounded-2xl border border-slate-100 p-4 bg-slate-50/50">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                              <label className="p-3 bg-white rounded-xl border border-slate-100">
+                                <span className="text-[10px] font-bold uppercase text-slate-400">CSV Questions</span>
+                                <p className="text-lg font-black text-slate-900 mt-1">{editingCsvQuestions.length}</p>
+                              </label>
+                              <label className="p-3 bg-white rounded-xl border border-slate-100">
+                                <span className="text-[10px] font-bold uppercase text-slate-400">Per User</span>
+                                <input
+                                  type="number"
+                                  min={1}
+                                  max={Math.max(1, editingCsvQuestions.length || 1)}
+                                  value={editingCsvQuestionCount}
+                                  onChange={(e) => setEditingCsvQuestionCount(Math.max(1, Number(e.target.value) || 1))}
+                                  className="w-full mt-2 p-2 bg-slate-50 border rounded-xl text-xs font-bold"
+                                />
+                              </label>
+                              <label className="p-3 bg-white rounded-xl border border-slate-100">
+                                <span className="text-[10px] font-bold uppercase text-slate-400">Marks / Question</span>
+                                <input
+                                  type="number"
+                                  min={1}
+                                  value={editingCsvMarksPerQuestion}
+                                  onChange={(e) => setEditingCsvMarksPerQuestion(Math.max(1, Number(e.target.value) || 1))}
+                                  className="w-full mt-2 p-2 bg-slate-50 border rounded-xl text-xs font-bold"
+                                />
+                              </label>
+                            </div>
+
+                            <div className="rounded-xl border border-slate-100 bg-white p-4 space-y-3">
+                              <label className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                                <input
+                                  type="checkbox"
+                                  checked={editingCsvBundleEnabled}
+                                  onChange={(e) => setEditingCsvBundleEnabled(e.target.checked)}
+                                  className="w-4 h-4 accent-amber-500"
+                                />
+                                Enable CSV Bundles
+                              </label>
+                              {editingCsvBundleEnabled && (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                  <label className="text-[10px] font-bold uppercase text-slate-500">
+                                    Bundle By
+                                    <select
+                                      value={editingCsvBundleCategoryField}
+                                      onChange={(e) => setEditingCsvBundleCategoryField(e.target.value as CsvBundleCategoryField)}
+                                      className="w-full mt-2 p-2 bg-slate-50 border rounded-xl text-xs font-bold"
+                                    >
+                                      {CSV_BUNDLE_CATEGORY_OPTIONS.map((opt) => (
+                                        <option key={opt} value={opt}>{opt}</option>
+                                      ))}
+                                    </select>
+                                  </label>
+                                  <label className="text-[10px] font-bold uppercase text-slate-500">
+                                    Bundle Size
+                                    <input
+                                      type="number"
+                                      min={1}
+                                      max={Math.max(1, editingCsvQuestions.length || 1)}
+                                      value={editingCsvBundleSize}
+                                      onChange={(e) => setEditingCsvBundleSize(Math.max(1, Number(e.target.value) || 1))}
+                                      className="w-full mt-2 p-2 bg-slate-50 border rounded-xl text-xs font-bold"
+                                    />
+                                  </label>
+                                  <p className="md:col-span-2 text-[10px] font-bold uppercase tracking-widest text-sky-700 bg-sky-50 border border-sky-100 rounded-xl p-3">
+                                    Bundle Preview: {editingCsvBundlePreview.length} bundle(s)
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+
+                            {editingCsvLoading ? (
+                              <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 py-3">Loading CSV pool...</div>
+                            ) : (
+                              <div className="space-y-3 max-h-[55vh] overflow-y-auto pr-1">
+                                {editingCsvQuestions.map((q, idx) => (
+                                  <div key={q.id} className="rounded-xl border border-slate-100 bg-white p-4 space-y-3">
+                                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Question {idx + 1}</p>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                                      <input
+                                        value={q.subject || ''}
+                                        onChange={(e) => setEditingCsvQuestions(prev => prev.map((item, i) => i === idx ? { ...item, subject: e.target.value } : item))}
+                                        className="p-2 bg-slate-50 border rounded-xl text-xs font-bold"
+                                        placeholder="Subject"
+                                      />
+                                      <input
+                                        value={q.topic || ''}
+                                        onChange={(e) => setEditingCsvQuestions(prev => prev.map((item, i) => i === idx ? { ...item, topic: e.target.value } : item))}
+                                        className="p-2 bg-slate-50 border rounded-xl text-xs font-bold"
+                                        placeholder="Topic"
+                                      />
+                                      <select
+                                        value={q.difficulty || DEFAULT_DIFFICULTY}
+                                        onChange={(e) => setEditingCsvQuestions(prev => prev.map((item, i) => i === idx ? { ...item, difficulty: normalizeDifficulty(e.target.value) } : item))}
+                                        className="p-2 bg-slate-50 border rounded-xl text-xs font-bold"
+                                      >
+                                        <option value="easy">easy</option>
+                                        <option value="medium">medium</option>
+                                        <option value="hard">hard</option>
+                                      </select>
+                                    </div>
+                                    <textarea
+                                      value={q.text || ''}
+                                      onChange={(e) => setEditingCsvQuestions(prev => prev.map((item, i) => i === idx ? { ...item, text: e.target.value } : item))}
+                                      className="w-full p-3 bg-slate-50 border rounded-xl text-xs h-24"
+                                      placeholder="Question text"
+                                    />
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                      {[0, 1, 2, 3].map((optIdx) => (
+                                        <input
+                                          key={optIdx}
+                                          value={q.options?.[optIdx] || ''}
+                                          onChange={(e) => setEditingCsvQuestions(prev => prev.map((item, i) => {
+                                            if (i !== idx) return item;
+                                            const nextOptions = [...(item.options || ['', '', '', ''])];
+                                            nextOptions[optIdx] = e.target.value;
+                                            return { ...item, options: nextOptions };
+                                          }))}
+                                          className="p-2 bg-slate-50 border rounded-xl text-xs"
+                                          placeholder={`Option ${String.fromCharCode(65 + optIdx)}`}
+                                        />
+                                      ))}
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                                      <select
+                                        value={Number(q.correctAnswerIndex)}
+                                        onChange={(e) => setEditingCsvQuestions(prev => prev.map((item, i) => i === idx ? { ...item, correctAnswerIndex: Number(e.target.value) } : item))}
+                                        className="p-2 bg-slate-50 border rounded-xl text-xs font-bold"
+                                      >
+                                        <option value={0}>Correct: A</option>
+                                        <option value={1}>Correct: B</option>
+                                        <option value={2}>Correct: C</option>
+                                        <option value={3}>Correct: D</option>
+                                      </select>
+                                      <input
+                                        value={(q.tags || []).join(', ')}
+                                        onChange={(e) => setEditingCsvQuestions(prev => prev.map((item, i) => i === idx ? { ...item, tags: parseList(e.target.value) } : item))}
+                                        className="p-2 bg-slate-50 border rounded-xl text-xs"
+                                        placeholder="Tags"
+                                      />
+                                      <label className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-slate-500 p-2 bg-slate-50 border rounded-xl">
+                                        <input
+                                          type="checkbox"
+                                          checked={q.isActive !== false}
+                                          onChange={(e) => setEditingCsvQuestions(prev => prev.map((item, i) => i === idx ? { ...item, isActive: e.target.checked } : item))}
+                                          className="w-4 h-4 accent-amber-500"
+                                        />
+                                        Active
+                                      </label>
+                                    </div>
+                                    <textarea
+                                      value={q.explanation || ''}
+                                      onChange={(e) => setEditingCsvQuestions(prev => prev.map((item, i) => i === idx ? { ...item, explanation: e.target.value } : item))}
+                                      className="w-full p-3 bg-slate-50 border rounded-xl text-xs h-20"
+                                      placeholder="Explanation"
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
                         <div className="flex gap-2">
-                          <button onClick={() => saveEditedTest(test.id)} className="px-6 py-3 bg-slate-950 text-amber-500 rounded-xl text-[10px] font-bold uppercase tracking-widest">Save</button>
-                          <button onClick={cancelEditTest} className="px-6 py-3 bg-slate-100 text-slate-700 rounded-xl text-[10px] font-bold uppercase tracking-widest">Cancel</button>
+                          <button disabled={loading || editingCsvLoading} onClick={() => saveEditedTest(test.id)} className="px-6 py-3 bg-slate-950 text-amber-500 rounded-xl text-[10px] font-bold uppercase tracking-widest disabled:opacity-40">Save</button>
+                          <button disabled={loading} onClick={cancelEditTest} className="px-6 py-3 bg-slate-100 text-slate-700 rounded-xl text-[10px] font-bold uppercase tracking-widest disabled:opacity-40">Cancel</button>
                         </div>
                       </div>
                     )}
