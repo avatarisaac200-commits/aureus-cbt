@@ -105,8 +105,8 @@ const RootAdminDashboard: React.FC<RootAdminDashboardProps> = ({ user, onLogout,
   };
 
   return (
-    <div className="v2-page flex-1 w-full bg-slate-50 flex flex-col overflow-hidden">
-      <div className="bg-white border-b border-slate-100 p-6 flex flex-col md:flex-row justify-between items-center gap-4 shrink-0 safe-top">
+    <div className="v2-page flex-1 w-full bg-slate-50 flex flex-col overflow-hidden min-h-0">
+      <div className="v2-shell bg-white border-b border-slate-100 p-6 flex flex-col md:flex-row justify-between items-center gap-4 shrink-0 safe-top">
         <div className="flex items-center gap-4">
           <img src={logo} className="w-14 h-14" alt="Logo" />
           <div>
@@ -126,7 +126,7 @@ const RootAdminDashboard: React.FC<RootAdminDashboardProps> = ({ user, onLogout,
         <button onClick={() => setActiveView('tools')} className={`px-8 py-4 text-[10px] font-bold uppercase tracking-widest transition-all ${activeView === 'tools' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50/50' : 'text-slate-400 hover:text-slate-600'}`}>System Tools</button>
       </nav>
 
-      <div className="flex-1 p-6 md:p-10 overflow-y-auto no-scrollbar safe-bottom">
+      <div className="flex-1 p-6 md:p-10 v2-scroll safe-bottom">
         {activeView === 'tools' ? (
           <div className="max-w-4xl mx-auto">
              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

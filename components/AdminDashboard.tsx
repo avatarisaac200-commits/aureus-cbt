@@ -1705,8 +1705,8 @@ Rules:
   };
 
   return (
-    <div className="v2-page flex-1 w-full bg-slate-50 flex flex-col overflow-hidden">
-      <div className="bg-white border-b border-slate-100 p-6 flex justify-between items-center shrink-0 safe-top shadow-sm z-10">
+    <div className="v2-page flex-1 w-full bg-slate-50 flex flex-col overflow-hidden min-h-0">
+      <div className="v2-shell bg-white border-b border-slate-100 p-6 flex justify-between items-center shrink-0 safe-top shadow-sm z-10">
         <div className="flex items-center gap-4">
           <img src={logo} className="w-10 h-10" alt="Logo" />
           <div>
@@ -1723,7 +1723,7 @@ Rules:
         </div>
       </div>
 
-      <nav className="flex bg-white px-6 border-b border-slate-100 shrink-0">
+      <nav className="flex bg-white px-6 border-b border-slate-100 shrink-0 overflow-x-auto no-scrollbar">
         <button onClick={() => setActiveTab('analytics')} className={`px-8 py-4 text-[10px] font-bold uppercase tracking-widest transition-all ${activeTab === 'analytics' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50' : 'text-slate-400'}`}>Analytics</button>
         <button onClick={() => setActiveTab('questions')} className={`px-8 py-4 text-[10px] font-bold uppercase tracking-widest transition-all ${activeTab === 'questions' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50' : 'text-slate-400'}`}>Question Bank</button>
         <button onClick={() => setActiveTab('create-test')} className={`px-8 py-4 text-[10px] font-bold uppercase tracking-widest transition-all ${activeTab === 'create-test' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50' : 'text-slate-400'}`}>Create Test</button>
@@ -1734,7 +1734,7 @@ Rules:
         )}
       </nav>
 
-      <div className="flex-1 overflow-y-auto p-6 md:p-10 no-scrollbar safe-bottom">
+      <div className="flex-1 v2-scroll p-6 md:p-10 safe-bottom">
         {dbError && (
           <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-2xl flex items-center gap-3 text-red-600 font-bold text-[10px] uppercase tracking-widest">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
@@ -1746,7 +1746,7 @@ Rules:
 
         {activeTab === 'questions' && (
           <div className="space-y-6">
-            <div className="bg-white rounded-[2rem] border border-amber-100 shadow-sm p-6">
+            <div className="v2-panel bg-white rounded-[2rem] border border-amber-100 shadow-sm p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-[11px] font-black uppercase tracking-widest text-slate-900">Tagged Insights</h3>
                 <span className="text-[10px] font-black uppercase tracking-widest text-amber-700 bg-amber-50 px-3 py-1 rounded-full">
@@ -1756,13 +1756,13 @@ Rules:
               {tagInsights.length === 0 && !tagInsightsLoading ? (
                 <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">No pending tagged questions.</p>
               ) : (
-                <div className="space-y-2 max-h-72 overflow-y-auto no-scrollbar">
+                <div className="space-y-2 max-h-72 v2-scroll">
                   {tagInsights.map((tag) => (
                     <div key={tag.id} className="p-4 bg-amber-50/40 border border-amber-100 rounded-2xl">
                       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                         <div className="space-y-1">
                           <p className="text-[10px] font-black uppercase tracking-widest text-amber-700">
-                            {tag.testName || 'Unknown Test'} • {tag.userName || 'Unknown User'}
+                            {tag.testName || 'Unknown Test'} - {tag.userName || 'Unknown User'}
                           </p>
                           <p className="text-[10px] font-bold text-slate-500">
                             Question ID: {tag.questionId}
@@ -2080,7 +2080,7 @@ Rules:
                </div>
 
                {testGenerationMode === 'fixed' ? (
-                 <div className="flex-1 overflow-y-auto pr-2 space-y-3 no-scrollbar pb-10">
+                 <div className="flex-1 v2-scroll pr-2 space-y-3 pb-10">
                     {questions.length === 0 && (
                       <div className="bg-white p-16 rounded-[2rem] border border-dashed text-center text-slate-300 font-bold uppercase text-[10px] tracking-[0.2em]">
                         Search the bank to load questions
@@ -2100,7 +2100,7 @@ Rules:
                     })}
                  </div>
                ) : testGenerationMode === 'dynamic' ? (
-                 <div className="flex-1 overflow-y-auto pr-2 no-scrollbar pb-10">
+                 <div className="flex-1 v2-scroll pr-2 pb-10">
                    <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm space-y-4">
                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                        <label className="text-[10px] font-bold uppercase text-slate-400">
@@ -2190,7 +2190,7 @@ Rules:
                    </div>
                  </div>
                ) : (
-                 <div className="flex-1 overflow-y-auto pr-2 no-scrollbar pb-10">
+                 <div className="flex-1 v2-scroll pr-2 pb-10">
                    <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm space-y-4">
                      <p className="text-xs text-slate-600">
                        Upload your CSV in the setup panel. The full CSV becomes the private pool for this test,
@@ -2762,7 +2762,7 @@ Rules:
               {generatedKeys.length === 0 ? (
                 <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">No new keys generated this session.</p>
               ) : (
-                <div className="max-h-72 overflow-y-auto no-scrollbar space-y-2">
+                <div className="max-h-72 v2-scroll space-y-2">
                   {generatedKeys.map((key) => (
                     <div key={key} className="px-4 py-3 rounded-xl border border-slate-100 bg-slate-50 font-mono text-sm font-bold tracking-wide text-slate-900">
                       {key}

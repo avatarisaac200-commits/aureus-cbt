@@ -316,8 +316,8 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
 
   if (view === 'lobby') {
     return (
-      <div className="v2-page h-full w-full bg-slate-50 flex flex-col overflow-hidden safe-top">
-        <header className="bg-slate-950 p-6 flex justify-between items-center border-b-4 border-amber-500 text-white shadow-2xl">
+      <div className="v2-page h-full w-full bg-slate-50 flex flex-col overflow-hidden min-h-0 safe-top">
+        <header className="v2-shell bg-slate-950 p-6 flex justify-between items-center border-b-4 border-amber-500 text-white shadow-2xl">
           <div className="flex items-center gap-4">
             <img src={logo} className="w-10 h-10" alt="Logo" />
             <div>
@@ -330,7 +330,7 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-6 md:p-12 no-scrollbar safe-bottom">
+        <main className="flex-1 v2-scroll p-6 md:p-12 safe-bottom">
           <div className="max-w-4xl mx-auto bg-white rounded-[2rem] shadow-xl border border-slate-100 p-8 md:p-12">
             <h2 className="text-2xl font-bold text-slate-950 mb-2 uppercase tracking-tight">Test Instructions</h2>
             <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-3">You can move between sections anytime from the lobby.</p>
@@ -376,8 +376,8 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
   }
 
   return (
-    <div className="v2-page flex flex-col h-full bg-slate-50 select-none overflow-hidden safe-top">
-      <header className="bg-slate-950 text-white px-6 py-4 flex justify-between items-center border-b-4 border-amber-500 z-30 shrink-0">
+    <div className="v2-page flex flex-col h-full bg-slate-50 select-none overflow-hidden min-h-0 safe-top">
+      <header className="v2-shell bg-slate-950 text-white px-6 py-4 flex justify-between items-center border-b-4 border-amber-500 z-30 shrink-0">
         <div className="flex items-center gap-4">
           <img src={logo} className="w-8 h-8" alt="Logo" />
           <div className="hidden sm:block">
@@ -391,9 +391,9 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
         </div>
       </header>
 
-      <div className="flex-1 flex overflow-hidden relative">
-        <main className="flex-1 flex flex-col p-4 md:p-8 overflow-hidden">
-          <div className="flex-1 bg-white rounded-[2rem] md:rounded-[3rem] shadow-sm border border-slate-100 overflow-y-auto p-8 md:p-12 no-scrollbar">
+      <div className="flex-1 flex overflow-hidden relative min-h-0">
+        <main className="flex-1 flex flex-col p-4 md:p-8 overflow-hidden min-h-0">
+          <div className="flex-1 bg-white rounded-[2rem] md:rounded-[3rem] shadow-sm border border-slate-100 v2-scroll p-8 md:p-12">
             <div className="mb-8 border-b border-slate-50 pb-4 flex justify-between items-center">
                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Question {currentQuestionIndex + 1} of {activeSection.questionIds.length}</span>
                <div className="flex items-center gap-2">
@@ -473,7 +473,7 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
               <h3 className="text-[10px] font-bold text-slate-950 uppercase tracking-widest">Questions</h3>
               <button onClick={() => setShowNav(false)} className="md:hidden text-slate-400"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
             </div>
-            <div className="p-4 grid grid-cols-4 gap-2 content-start overflow-y-auto no-scrollbar flex-1">
+            <div className="p-4 grid grid-cols-4 gap-2 content-start v2-scroll flex-1">
               {activeSection.questionIds.map((id, idx) => (
                 <button key={id} onClick={() => { setCurrentQuestionIndex(idx); setShowNav(false); }} className={`h-10 rounded-xl text-[10px] font-bold border transition-all ${idx === currentQuestionIndex ? 'border-amber-500 bg-amber-500 text-slate-950' : answers[id] !== undefined ? 'border-slate-300 bg-slate-100 text-slate-800' : 'border-slate-100 text-slate-300 bg-white hover:border-slate-300'}`}>{idx + 1}</button>
               ))}
@@ -485,7 +485,7 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
         </aside>
       </div>
 
-      <footer className="bg-white border-t border-slate-100 p-6 flex flex-col sm:flex-row gap-4 justify-between items-center z-20 shrink-0 safe-bottom">
+      <footer className="v2-shell bg-white border-t border-slate-100 p-6 flex flex-col sm:flex-row gap-4 justify-between items-center z-20 shrink-0 safe-bottom">
          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">You can return to lobby anytime</div>
          <div className="flex gap-2 w-full sm:w-auto">
            <button onClick={returnToLobby} className="flex-1 sm:flex-none px-6 py-3 border-2 border-slate-100 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-slate-50">Lobby</button>

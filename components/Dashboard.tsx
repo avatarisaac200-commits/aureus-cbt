@@ -687,8 +687,8 @@ const Dashboard: React.FC<DashboardProps> = ({
     });
 
   return (
-    <div className="v2-page flex-1 w-full bg-slate-50 flex flex-col overflow-hidden relative">
-      <div className="bg-slate-950 text-amber-500 py-3 px-8 flex justify-between items-center text-[10px] font-black uppercase tracking-widest shrink-0 border-b border-slate-900 shadow-xl z-50 safe-top">
+    <div className="v2-page flex-1 w-full bg-slate-50 flex flex-col overflow-hidden min-h-0 relative">
+      <div className="v2-shell bg-slate-950 text-amber-500 py-3 px-8 flex justify-between items-center text-[10px] font-black uppercase tracking-widest shrink-0 border-b border-slate-900 shadow-xl z-50 safe-top">
          <div className="flex items-center gap-3"><span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-sm"></span>Connection Stable</div>
          <div className="hidden sm:block">Aureus Medicos CBT</div>
          <button onClick={onLogout} className="text-white hover:text-red-500 transition-colors uppercase text-[9px] font-bold">Sign Out</button>
@@ -713,7 +713,7 @@ const Dashboard: React.FC<DashboardProps> = ({
 
       {showLeaderboard && <LeaderboardModal test={showLeaderboard} onClose={() => setShowLeaderboard(null)} />}
 
-      <div className="flex-1 overflow-y-auto p-6 md:p-12 pb-24 no-scrollbar safe-bottom">
+      <div className="flex-1 v2-scroll p-6 md:p-12 pb-24 safe-bottom">
         <div className="max-w-6xl mx-auto">
           <div className="flex flex-col lg:flex-row justify-between items-center mb-6 gap-6 bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
             <div className="flex items-center gap-6">

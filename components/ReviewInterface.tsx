@@ -201,8 +201,8 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
   }
 
   return (
-    <div className="v2-page flex flex-col h-full bg-slate-50 select-none overflow-hidden safe-top">
-      <header className="bg-slate-950 text-white px-6 py-5 flex justify-between items-center border-b-4 border-amber-500 z-30 shrink-0">
+    <div className="v2-page flex flex-col h-full bg-slate-50 select-none overflow-hidden min-h-0 safe-top">
+      <header className="v2-shell bg-slate-950 text-white px-6 py-5 flex justify-between items-center border-b-4 border-amber-500 z-30 shrink-0">
         <div className="flex items-center gap-4">
           <img src={logo} className="w-10 h-10" alt="Aureus Medicos CBT Logo" />
           <div>
@@ -218,12 +218,12 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
         </button>
       </header>
 
-      <div className="flex-1 flex overflow-hidden relative">
+      <div className="flex-1 flex overflow-hidden relative min-h-0">
         <aside className="hidden md:flex md:flex-col w-80 bg-white border-r border-slate-100 shrink-0">
            <div className="p-6 border-b border-slate-50 bg-slate-50/50">
               <h3 className="text-[10px] font-black text-slate-950 uppercase tracking-[0.3em]">Question List</h3>
            </div>
-           <div className="flex-1 overflow-y-auto p-6 space-y-8 no-scrollbar">
+           <div className="flex-1 v2-scroll p-6 space-y-8">
               {test.sections.map((section, sIdx) => (
                 <div key={sIdx}>
                   <p className="text-[9px] font-black text-amber-600 uppercase mb-3 tracking-widest">{section.name}</p>
@@ -260,11 +260,11 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
            </div>
         </aside>
 
-        <main className="flex-1 flex flex-col p-4 md:p-10 overflow-hidden">
-          <div className="flex-1 bg-white rounded-[2.5rem] md:rounded-[4rem] shadow-sm border border-slate-100 overflow-y-auto p-10 md:p-20 no-scrollbar">
+        <main className="flex-1 flex flex-col p-4 md:p-10 overflow-hidden min-h-0">
+          <div className="flex-1 bg-white rounded-[2.5rem] md:rounded-[4rem] shadow-sm border border-slate-100 v2-scroll p-10 md:p-20">
             <div className="mb-12 border-b border-slate-50 pb-6 flex justify-between items-center">
                <span className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">
-                  {activeSection?.name} • Item {currentQuestionIndex + 1}
+                  {activeSection?.name} - Item {currentQuestionIndex + 1}
                </span>
                <div className="flex gap-3">
                  <button
@@ -356,7 +356,7 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
         </main>
       </div>
 
-      <footer className="bg-white border-t border-slate-100 p-6 md:p-10 px-10 md:px-20 flex justify-between items-center z-20 shrink-0 safe-bottom">
+      <footer className="v2-shell bg-white border-t border-slate-100 p-6 md:p-10 px-10 md:px-20 flex justify-between items-center z-20 shrink-0 safe-bottom">
         <div className="hidden sm:block text-[10px] font-black text-slate-400 uppercase tracking-[0.4em]">
            Aureus Medicos CBT Review
          </div>

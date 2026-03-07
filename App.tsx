@@ -1342,7 +1342,7 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className={`v2-app theme-${theme} min-h-[100dvh] w-full overflow-x-hidden flex flex-col`}>
+    <div className={`v2-app theme-${theme} min-h-[100dvh] h-[100dvh] w-full overflow-x-hidden flex flex-col`}>
       {currentView === 'auth' && <Auth onLogin={checkUserStatus} />}
       {currentView === 'dashboard' && currentUser && (
         <Dashboard 
