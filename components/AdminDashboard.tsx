@@ -1,8 +1,8 @@
 
 import React, { useState, useRef, useMemo, useEffect } from 'react';
-import { User, Question, TestSection, MockTest, ExamResult, DifficultyLevel, TestGenerationMode, CsvBundleCategoryField, CsvQuestionBundle } from '../types';
+import { User, Question, TestSection, MockTest, ExamResult, DifficultyLevel, TestGenerationMode, CsvBundleCategoryField, CsvQuestionBundle, QuestionTagInsight } from '../types';
 import { db } from '../firebase';
-import { collection, addDoc, getDocs, getDoc, deleteDoc, doc, query, updateDoc, setDoc, writeBatch, limit, where, documentId } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+import { collection, addDoc, getDocs, getDoc, deleteDoc, doc, query, updateDoc, setDoc, writeBatch, limit, where, documentId, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import { GoogleGenAI } from '@google/genai';
 import ScientificText from './ScientificText';
 import AdminAnalytics from './AdminAnalytics';
@@ -406,6 +406,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
   const [builderSearchQuery, setBuilderSearchQuery] = useState('');
   const [hasSearched, setHasSearched] = useState(false);
   const [collapsedSubjects, setCollapsedSubjects] = useState<Record<string, boolean>>({});
+  const [tagInsights, setTagInsights] = useState<QuestionTagInsight[]>([]);
+  const [tagInsightsLoading, setTagInsightsLoading] = useState(false);
   const [isQuestionModalOpen, setIsQuestionModalOpen] = useState(false);
   const [managedTests, setManagedTests] = useState<MockTest[]>([]);
   const [managedTestsLoading, setManagedTestsLoading] = useState(false);
@@ -517,6 +519,27 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
       setActiveTab('questions');
     }
   }, [activeTab, canManageKeys]);
+
+  useEffect(() => {
+    if (activeTab !== 'questions') return;
+    setTagInsightsLoading(true);
+    const unsub = onSnapshot(
+      query(collection(db, 'questionTagInsights'), limit(100)),
+      (snap) => {
+        const rows = snap.docs
+          .map((d) => ({ ...(d.data() as Omit<QuestionTagInsight, 'id'>), id: d.id } as QuestionTagInsight))
+          .filter((row) => row.status !== 'reviewed')
+          .sort((a, b) => Date.parse(b.createdAt || '') - Date.parse(a.createdAt || ''));
+        setTagInsights(rows);
+        setTagInsightsLoading(false);
+      },
+      () => {
+        setTagInsights([]);
+        setTagInsightsLoading(false);
+      }
+    );
+    return () => unsub();
+  }, [activeTab]);
 
   useEffect(() => {
     const loadDeadline = async () => {
@@ -1104,7 +1127,7 @@ Rules:
         };
       }
 
-      await addDoc(collection(db, 'tests'), {
+      const createdTestRef = await addDoc(collection(db, 'tests'), {
         name: testName,
         description: testDesc,
         totalDurationSeconds: testDuration * 60,
@@ -1117,6 +1140,16 @@ Rules:
         isApproved: true,
         createdAt: new Date().toISOString(),
         ...csvMeta
+      });
+      await addDoc(collection(db, 'broadcastNotifications'), {
+        type: 'new-test',
+        title: 'New test available',
+        message: `${testName} is now available.`,
+        testId: createdTestRef.id,
+        testName: testName,
+        createdAt: new Date().toISOString(),
+        createdBy: user.id,
+        createdByName: user.name
       });
       alert("Test published.");
       if (testGenerationMode === 'csv-dynamic') {
@@ -1202,6 +1235,32 @@ Rules:
     setQTags((q.tags || []).join(', '));
     setQIsActive(q.isActive !== false);
     setIsQuestionModalOpen(true);
+  };
+
+  const openTaggedQuestion = async (questionId: string) => {
+    try {
+      const snap = await getDoc(doc(db, 'questions', questionId));
+      if (!snap.exists()) {
+        alert('Question no longer exists.');
+        return;
+      }
+      const question = { ...snap.data(), id: snap.id } as Question;
+      openEditModal(question);
+    } catch (err: any) {
+      alert('Could not open question. ' + (err?.message || ''));
+    }
+  };
+
+  const markTagInsightReviewed = async (tag: QuestionTagInsight) => {
+    try {
+      await updateDoc(doc(db, 'questionTagInsights', tag.id), {
+        status: 'reviewed',
+        reviewedAt: new Date().toISOString(),
+        reviewedBy: user.id
+      });
+    } catch (err: any) {
+      alert('Could not mark as reviewed. ' + (err?.message || ''));
+    }
   };
 
   const toggleSubjectCollapse = (subject: string) => {
@@ -1687,6 +1746,54 @@ Rules:
 
         {activeTab === 'questions' && (
           <div className="space-y-6">
+            <div className="bg-white rounded-[2rem] border border-amber-100 shadow-sm p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-[11px] font-black uppercase tracking-widest text-slate-900">Tagged Insights</h3>
+                <span className="text-[10px] font-black uppercase tracking-widest text-amber-700 bg-amber-50 px-3 py-1 rounded-full">
+                  {tagInsightsLoading ? 'Loading...' : `${tagInsights.length} New`}
+                </span>
+              </div>
+              {tagInsights.length === 0 && !tagInsightsLoading ? (
+                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">No pending tagged questions.</p>
+              ) : (
+                <div className="space-y-2 max-h-72 overflow-y-auto no-scrollbar">
+                  {tagInsights.map((tag) => (
+                    <div key={tag.id} className="p-4 bg-amber-50/40 border border-amber-100 rounded-2xl">
+                      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                        <div className="space-y-1">
+                          <p className="text-[10px] font-black uppercase tracking-widest text-amber-700">
+                            {tag.testName || 'Unknown Test'} • {tag.userName || 'Unknown User'}
+                          </p>
+                          <p className="text-[10px] font-bold text-slate-500">
+                            Question ID: {tag.questionId}
+                          </p>
+                          {tag.note ? (
+                            <p className="text-xs text-slate-700">{tag.note}</p>
+                          ) : (
+                            <p className="text-[10px] italic text-slate-500">No note provided (tag only).</p>
+                          )}
+                        </div>
+                        <div className="flex gap-2 shrink-0">
+                          <button
+                            onClick={() => openTaggedQuestion(tag.questionId)}
+                            className="px-3 py-2 bg-slate-950 text-amber-500 rounded-xl text-[9px] font-bold uppercase tracking-widest"
+                          >
+                            Open Question
+                          </button>
+                          <button
+                            onClick={() => markTagInsightReviewed(tag)}
+                            className="px-3 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl text-[9px] font-bold uppercase tracking-widest"
+                          >
+                            Mark Reviewed
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <div className="flex flex-col md:flex-row gap-4">
               <input
                 type="text"

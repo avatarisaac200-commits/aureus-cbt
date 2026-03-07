@@ -112,6 +112,26 @@ service cloud.firestore {
       allow create, update, delete: if isRootAdmin();
     }
 
+    match /questionTagInsights/{tagId} {
+      allow create: if
+        signedIn() &&
+        request.resource.data.userId == request.auth.uid;
+
+      allow get, list: if
+        signedIn() &&
+        (
+          isAdmin() ||
+          resource.data.userId == request.auth.uid
+        );
+
+      allow update, delete: if isAdmin();
+    }
+
+    match /broadcastNotifications/{notificationId} {
+      allow get, list: if signedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
     match /aiQuestionExplanations/{cacheId} {
       allow read: if signedIn();
 

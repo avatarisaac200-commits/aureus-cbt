@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, MockTest, ExamResult, QuizQuestion, SharedQuiz, CsvQuestionBundle } from '../types';
+import { User, MockTest, ExamResult, QuizQuestion, SharedQuiz, CsvQuestionBundle, CustomThemeConfig } from '../types';
 import { db } from '../firebase';
 import { collection, query, where, onSnapshot, getDocs, getDocsFromServer, limit, addDoc, updateDoc, deleteDoc, doc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import logo from '../assets/logo.png';
@@ -14,8 +14,10 @@ interface DashboardProps {
   isReadOnly?: boolean;
   deadlineLabel?: string;
   isActivatingLicense?: boolean;
-  currentTheme?: 'classic' | 'neo' | 'gold' | 'glass' | 'neo-black';
-  onThemeChange?: (theme: 'classic' | 'neo' | 'gold' | 'glass' | 'neo-black') => void;
+  currentTheme?: 'classic' | 'neo' | 'gold' | 'glass' | 'neo-black' | 'custom';
+  onThemeChange?: (theme: 'classic' | 'neo' | 'gold' | 'glass' | 'neo-black' | 'custom') => void;
+  customTheme?: CustomThemeConfig;
+  onCustomThemeChange?: (theme: CustomThemeConfig) => void;
   onActivateLicense?: (key: string) => Promise<void>;
   onOpenActivationSupport?: () => void;
   onOpenUpdateManual?: () => void;
@@ -29,6 +31,18 @@ interface TestFolder {
 }
 
 const MAX_TEST_FOLDERS = 10;
+const THEME_COLOR_FIELDS: Array<{ key: keyof CustomThemeConfig; label: string }> = [
+  { key: 'bgStart', label: 'Background Start' },
+  { key: 'bgEnd', label: 'Background End' },
+  { key: 'shellStart', label: 'Header Start' },
+  { key: 'shellMid', label: 'Header Mid' },
+  { key: 'shellEnd', label: 'Header End' },
+  { key: 'accent', label: 'Accent' },
+  { key: 'accentSoft', label: 'Accent Soft' },
+  { key: 'accentText', label: 'Accent Text' },
+  { key: 'card', label: 'Card' },
+  { key: 'border', label: 'Border' }
+];
 
 const LeaderboardModal: React.FC<{ test: MockTest, onClose: () => void }> = ({ test, onClose }) => {
   const [topScores, setTopScores] = useState<ExamResult[]>([]);
@@ -113,6 +127,8 @@ const Dashboard: React.FC<DashboardProps> = ({
   isActivatingLicense = false,
   currentTheme = 'classic',
   onThemeChange,
+  customTheme,
+  onCustomThemeChange,
   onActivateLicense,
   onOpenActivationSupport,
   onOpenUpdateManual
@@ -273,7 +289,7 @@ const Dashboard: React.FC<DashboardProps> = ({
   };
 
   const themeOptions: Array<{
-    id: 'classic' | 'neo' | 'gold' | 'glass' | 'neo-black';
+    id: 'classic' | 'neo' | 'gold' | 'glass' | 'neo-black' | 'custom';
     name: string;
     description: string;
     previewClass: string;
@@ -307,6 +323,12 @@ const Dashboard: React.FC<DashboardProps> = ({
       name: 'Neo Black',
       description: 'Black and white with a sharp monochrome shell.',
       previewClass: 'from-black via-zinc-900 to-white'
+    },
+    {
+      id: 'custom',
+      name: 'Custom',
+      description: 'Design your own palette.',
+      previewClass: 'from-fuchsia-500 via-orange-400 to-cyan-400'
     }
   ];
 
@@ -1170,6 +1192,27 @@ const Dashboard: React.FC<DashboardProps> = ({
                     );
                   })}
                 </div>
+                {currentTheme === 'custom' && customTheme && onCustomThemeChange && (
+                  <div className="mt-6 p-5 bg-slate-50 border border-slate-200 rounded-2xl">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-4">Custom Theme Designer</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {THEME_COLOR_FIELDS.map((field) => (
+                        <label key={field.key} className="flex items-center justify-between gap-3 text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                          <span>{field.label}</span>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="color"
+                              value={customTheme[field.key]}
+                              onChange={(e) => onCustomThemeChange({ ...customTheme, [field.key]: e.target.value })}
+                              className="w-9 h-9 rounded-lg border border-slate-300 bg-white p-0.5"
+                            />
+                            <span className="font-mono text-[10px] text-slate-700">{customTheme[field.key]}</span>
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </section>
 
               <section className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
@@ -1186,6 +1229,8 @@ const Dashboard: React.FC<DashboardProps> = ({
                       window.sessionStorage.clear();
                       window.localStorage.removeItem(`notifications:${user.id}`);
                       window.localStorage.removeItem(`lowDataMode:${user.id}`);
+                      window.localStorage.removeItem(`appTheme:${user.id}`);
+                      window.localStorage.removeItem(`appThemeCustom:${user.id}`);
                       Object.keys(window.localStorage).forEach((key) => {
                         if (key.startsWith('testpkg:offline:') || key === 'pendingResultsQueue') {
                           window.localStorage.removeItem(key);

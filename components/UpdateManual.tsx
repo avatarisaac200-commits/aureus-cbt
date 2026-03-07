@@ -35,7 +35,8 @@ const sections = [
     items: [
       'CSV dynamic tests now support inline content editing from Admin > Tests > Edit.',
       'After CSV pool edits are saved, affected stored result scores are recalculated.',
-      'CSV per-user count, marks, and bundle settings can be updated while editing.'
+      'CSV per-user count, marks, and bundle settings can be updated while editing.',
+      'Enable Test Bundles splits a CSV dynamic pool into grouped bundles (by subject, topic, difficulty, or exam type) so learners can launch a specific bundle instead of one large pool.'
     ]
   }
 ];

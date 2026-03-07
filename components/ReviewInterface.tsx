@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { ExamResult, MockTest, Question } from '../types';
 import { db } from '../firebase';
-import { collection, getDocs, doc, getDoc, query, where, documentId } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+import { collection, getDocs, doc, getDoc, query, where, documentId, addDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import ScientificText from './ScientificText';
 import logo from '../assets/logo.png';
 import { getOrCreateAiExplanation } from './aiExplanationService';
@@ -23,6 +23,9 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState('');
   const [aiSource, setAiSource] = useState<'cache' | 'generated' | 'fallback' | ''>('');
+  const [isTagDialogOpen, setIsTagDialogOpen] = useState(false);
+  const [tagNote, setTagNote] = useState('');
+  const [isSubmittingTag, setIsSubmittingTag] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -151,6 +154,32 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
     return () => { cancelled = true; };
   }, [showMoreInfo, currentQuestionId]);
 
+  const submitQuestionTag = async (includeNote: boolean) => {
+    if (!currentQuestion || !currentQuestionId || isSubmittingTag) return;
+    setIsSubmittingTag(true);
+    try {
+      const noteValue = includeNote ? tagNote.trim() : '';
+      await addDoc(collection(db, 'questionTagInsights'), {
+        questionId: currentQuestionId,
+        testId: result.testId,
+        testName: result.testName,
+        resultId: result.id,
+        userId: result.userId,
+        userName: result.userName,
+        note: noteValue,
+        createdAt: new Date().toISOString(),
+        status: 'new'
+      });
+      alert(noteValue ? 'Tag submitted with note.' : 'Tag submitted.');
+      setIsTagDialogOpen(false);
+      setTagNote('');
+    } catch (err: any) {
+      alert(`Could not submit tag. ${err?.message || ''}`.trim());
+    } finally {
+      setIsSubmittingTag(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="v2-page h-full w-full flex flex-col items-center justify-center bg-slate-950 safe-top safe-bottom">
@@ -238,6 +267,13 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
                   {activeSection?.name} • Item {currentQuestionIndex + 1}
                </span>
                <div className="flex gap-3">
+                 <button
+                   type="button"
+                   onClick={() => setIsTagDialogOpen(true)}
+                   className="text-[10px] font-black px-4 py-1.5 rounded-full uppercase tracking-widest border text-amber-700 bg-amber-50 border-amber-200"
+                 >
+                   Add Tag
+                 </button>
                  <button
                    type="button"
                    onClick={() => setShowMoreInfo(prev => !prev)}
@@ -355,6 +391,44 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
            </button>
          </div>
       </footer>
+      {isTagDialogOpen && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm safe-top safe-bottom">
+          <div className="w-full max-w-lg bg-white rounded-[2rem] shadow-2xl overflow-hidden border border-slate-100">
+            <div className="bg-slate-950 px-6 py-5 text-white flex justify-between items-center">
+              <h3 className="text-sm font-bold uppercase tracking-widest">Tag This Question</h3>
+              <button onClick={() => { if (!isSubmittingTag) setIsTagDialogOpen(false); }} className="text-slate-300 hover:text-white">Close</button>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-xs text-slate-600">
+                Flag this question for admin review. You can add only a tag, or include a note with your insight.
+              </p>
+              <textarea
+                rows={4}
+                value={tagNote}
+                onChange={(e) => setTagNote(e.target.value)}
+                placeholder="Optional note: What should admins check in this question?"
+                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs outline-none"
+              />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <button
+                  onClick={() => submitQuestionTag(false)}
+                  disabled={isSubmittingTag}
+                  className="py-3 bg-white border border-slate-200 text-slate-700 rounded-xl text-[10px] font-black uppercase tracking-widest disabled:opacity-40"
+                >
+                  {isSubmittingTag ? 'Submitting...' : 'Add Tag Only'}
+                </button>
+                <button
+                  onClick={() => submitQuestionTag(true)}
+                  disabled={isSubmittingTag || !tagNote.trim()}
+                  className="py-3 bg-slate-950 text-amber-500 rounded-xl text-[10px] font-black uppercase tracking-widest disabled:opacity-40"
+                >
+                  {isSubmittingTag ? 'Submitting...' : 'Add Tag + Note'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

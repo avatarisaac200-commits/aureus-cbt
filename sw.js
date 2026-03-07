@@ -116,3 +116,48 @@ self.addEventListener('fetch', (event) => {
     fetch(request).catch(() => caches.match(request))
   );
 });
+
+self.addEventListener('push', (event) => {
+  let payload = { title: 'Aureus Medicos CBT', body: 'You have a new notification.', url: '/' };
+  try {
+    const data = event.data?.json?.();
+    if (data && typeof data === 'object') {
+      payload = {
+        title: String(data.title || payload.title),
+        body: String(data.body || payload.body),
+        url: String(data.url || payload.url)
+      };
+    } else if (event.data) {
+      payload.body = event.data.text();
+    }
+  } catch {
+    if (event.data) payload.body = event.data.text();
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(payload.title, {
+      body: payload.body,
+      data: { url: payload.url },
+      icon: '/assets/logo.png',
+      badge: '/assets/logo.png'
+    })
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const targetUrl = event.notification?.data?.url || '/';
+  event.waitUntil((async () => {
+    const allClients = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const client of allClients) {
+      if ('focus' in client) {
+        client.focus();
+        client.navigate(targetUrl);
+        return;
+      }
+    }
+    if (clients.openWindow) {
+      await clients.openWindow(targetUrl);
+    }
+  })());
+});

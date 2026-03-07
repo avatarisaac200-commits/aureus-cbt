@@ -145,4 +145,44 @@ export interface TestAttempt {
   questionIds: string[];
 }
 
+export interface QuestionTagInsight {
+  id: string;
+  questionId: string;
+  testId: string;
+  testName: string;
+  resultId: string;
+  userId: string;
+  userName: string;
+  note?: string;
+  createdAt: string;
+  status: 'new' | 'reviewed';
+  reviewedAt?: string;
+  reviewedBy?: string;
+}
+
+export interface BroadcastNotification {
+  id: string;
+  type: 'new-test';
+  title: string;
+  message: string;
+  testId: string;
+  testName: string;
+  createdAt: string;
+  createdBy: string;
+  createdByName: string;
+}
+
+export interface CustomThemeConfig {
+  bgStart: string;
+  bgEnd: string;
+  shellStart: string;
+  shellMid: string;
+  shellEnd: string;
+  accent: string;
+  accentSoft: string;
+  accentText: string;
+  card: string;
+  border: string;
+}
+
 export type ViewState = 'auth' | 'verify-email' | 'dashboard' | 'exam' | 'admin' | 'root-admin' | 'results' | 'review' | 'update-manual';

@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { User, MockTest, ExamResult, Question, TestSection, TestAttempt, DifficultyLevel, SharedQuiz, ViewState } from './types';
+import { User, MockTest, ExamResult, Question, TestSection, TestAttempt, DifficultyLevel, SharedQuiz, ViewState, BroadcastNotification, CustomThemeConfig } from './types';
 import { auth, db } from './firebase';
 import { onAuthStateChanged, sendEmailVerification } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
-import { doc, getDoc, getDocFromServer, collection, getDocs, query, where, limit, documentId, updateDoc, addDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+import { doc, getDoc, getDocFromServer, collection, getDocs, query, where, limit, documentId, updateDoc, addDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import Auth from './components/Auth';
 import Dashboard from './components/Dashboard';
 import AdminDashboard from './components/AdminDashboard';
@@ -23,15 +23,52 @@ const OFFLINE_PACKAGE_KEY_PREFIX = 'testpkg:offline:';
 const PENDING_RESULTS_QUEUE_KEY = 'pendingResultsQueue';
 const QUESTION_FETCH_LIMIT = 3000;
 const APP_THEME_STORAGE_KEY = 'appTheme';
+const APP_CUSTOM_THEME_STORAGE_KEY = 'appThemeCustom';
+const BROADCAST_NOTIFICATIONS_SEEN_AT_PREFIX = 'broadcastSeenAt';
 
 type MonetizationMode = 'pre-deadline' | 'post-deadline';
-type AppTheme = 'classic' | 'neo' | 'gold' | 'glass' | 'neo-black';
+type AppTheme = 'classic' | 'neo' | 'gold' | 'glass' | 'neo-black' | 'custom';
+
+const DEFAULT_CUSTOM_THEME: CustomThemeConfig = {
+  bgStart: '#f8fafc',
+  bgEnd: '#e8eef8',
+  shellStart: '#0b1224',
+  shellMid: '#172554',
+  shellEnd: '#1e3a8a',
+  accent: '#f59e0b',
+  accentSoft: '#ffedd5',
+  accentText: '#9a3412',
+  card: '#ffffff',
+  border: '#cbd5e1'
+};
 
 const isValidAppTheme = (value: string | null): value is AppTheme => {
-  return value === 'classic' || value === 'neo' || value === 'gold' || value === 'glass' || value === 'neo-black';
+  return value === 'classic' || value === 'neo' || value === 'gold' || value === 'glass' || value === 'neo-black' || value === 'custom';
 };
 
 const getThemeStorageKey = (userId: string) => `${APP_THEME_STORAGE_KEY}:${userId}`;
+const getCustomThemeStorageKey = (userId: string) => `${APP_CUSTOM_THEME_STORAGE_KEY}:${userId}`;
+
+const sanitizeHex = (value: string, fallback: string) => {
+  const v = String(value || '').trim();
+  return /^#([0-9a-fA-F]{6})$/.test(v) ? v : fallback;
+};
+
+const normalizeCustomTheme = (value: any): CustomThemeConfig => {
+  const source = value && typeof value === 'object' ? value : {};
+  return {
+    bgStart: sanitizeHex(source.bgStart, DEFAULT_CUSTOM_THEME.bgStart),
+    bgEnd: sanitizeHex(source.bgEnd, DEFAULT_CUSTOM_THEME.bgEnd),
+    shellStart: sanitizeHex(source.shellStart, DEFAULT_CUSTOM_THEME.shellStart),
+    shellMid: sanitizeHex(source.shellMid, DEFAULT_CUSTOM_THEME.shellMid),
+    shellEnd: sanitizeHex(source.shellEnd, DEFAULT_CUSTOM_THEME.shellEnd),
+    accent: sanitizeHex(source.accent, DEFAULT_CUSTOM_THEME.accent),
+    accentSoft: sanitizeHex(source.accentSoft, DEFAULT_CUSTOM_THEME.accentSoft),
+    accentText: sanitizeHex(source.accentText, DEFAULT_CUSTOM_THEME.accentText),
+    card: sanitizeHex(source.card, DEFAULT_CUSTOM_THEME.card),
+    border: sanitizeHex(source.border, DEFAULT_CUSTOM_THEME.border)
+  };
+};
 
 interface MonetizationModalProps {
   mode: MonetizationMode;
@@ -175,12 +212,21 @@ const App: React.FC = () => {
   const [contextMenuState, setContextMenuState] = useState<ContextMenuState>(null);
   const [isDesktopRightClickEnabled, setIsDesktopRightClickEnabled] = useState(false);
   const [theme, setTheme] = useState<AppTheme>('classic');
+  const [customTheme, setCustomTheme] = useState<CustomThemeConfig>(DEFAULT_CUSTOM_THEME);
+  const [broadcastToasts, setBroadcastToasts] = useState<Array<{ id: string; title: string; message: string }>>([]);
   const isFlushingQueueRef = useRef(false);
 
   const getDefaultViewForRole = (role: User['role']) => {
     if (role === 'root-admin') return 'root-admin';
     if (role === 'admin') return 'admin';
     return 'dashboard';
+  };
+
+  const getBroadcastSeenStorageKey = (userId: string) => `${BROADCAST_NOTIFICATIONS_SEEN_AT_PREFIX}:${userId}`;
+
+  const notificationsAllowedForUser = (userId: string) => {
+    if (typeof window === 'undefined') return true;
+    return window.localStorage.getItem(`notifications:${userId}`) !== 'off';
   };
 
   const isDynamicGenerationMode = (mode?: string) => {
@@ -300,6 +346,7 @@ const App: React.FC = () => {
     if (typeof window === 'undefined') return;
     if (!currentUser?.id) {
       setTheme('classic');
+      setCustomTheme(DEFAULT_CUSTOM_THEME);
       return;
     }
     const storedTheme = window.localStorage.getItem(getThemeStorageKey(currentUser.id));
@@ -308,14 +355,51 @@ const App: React.FC = () => {
     } else {
       setTheme('classic');
     }
+    try {
+      const rawCustom = window.localStorage.getItem(getCustomThemeStorageKey(currentUser.id));
+      if (!rawCustom) {
+        setCustomTheme(DEFAULT_CUSTOM_THEME);
+      } else {
+        setCustomTheme(normalizeCustomTheme(JSON.parse(rawCustom)));
+      }
+    } catch {
+      setCustomTheme(DEFAULT_CUSTOM_THEME);
+    }
   }, [currentUser?.id]);
 
   useEffect(() => {
     if (typeof document === 'undefined') return;
     document.body.setAttribute('data-theme', theme);
+    const customVars = [
+      '--v2-bg-start',
+      '--v2-bg-end',
+      '--v2-shell-start',
+      '--v2-shell-mid',
+      '--v2-shell-end',
+      '--v2-accent',
+      '--v2-accent-soft',
+      '--v2-accent-text',
+      '--v2-card',
+      '--v2-border'
+    ];
+    if (theme === 'custom') {
+      document.body.style.setProperty('--v2-bg-start', customTheme.bgStart);
+      document.body.style.setProperty('--v2-bg-end', customTheme.bgEnd);
+      document.body.style.setProperty('--v2-shell-start', customTheme.shellStart);
+      document.body.style.setProperty('--v2-shell-mid', customTheme.shellMid);
+      document.body.style.setProperty('--v2-shell-end', customTheme.shellEnd);
+      document.body.style.setProperty('--v2-accent', customTheme.accent);
+      document.body.style.setProperty('--v2-accent-soft', customTheme.accentSoft);
+      document.body.style.setProperty('--v2-accent-text', customTheme.accentText);
+      document.body.style.setProperty('--v2-card', customTheme.card);
+      document.body.style.setProperty('--v2-border', customTheme.border);
+    } else {
+      customVars.forEach((varName) => document.body.style.removeProperty(varName));
+    }
     if (typeof window === 'undefined' || !currentUser?.id) return;
     window.localStorage.setItem(getThemeStorageKey(currentUser.id), theme);
-  }, [theme, currentUser?.id]);
+    window.localStorage.setItem(getCustomThemeStorageKey(currentUser.id), JSON.stringify(customTheme));
+  }, [theme, customTheme, currentUser?.id]);
 
   const runContextAction = async (action: 'copy' | 'paste' | 'reload' | 'back' | 'forward' | 'top' | 'fullscreen') => {
     setContextMenuState(null);
@@ -985,6 +1069,75 @@ const App: React.FC = () => {
   }, [currentUser]);
 
   useEffect(() => {
+    if (!currentUser) {
+      setBroadcastToasts([]);
+      return;
+    }
+    if (!notificationsAllowedForUser(currentUser.id)) return;
+
+    const seenKey = getBroadcastSeenStorageKey(currentUser.id);
+    const rawSeen = typeof window !== 'undefined' ? window.localStorage.getItem(seenKey) : null;
+    const seenMsInitial = Number(rawSeen || 0);
+    let seenMs = Number.isFinite(seenMsInitial) ? seenMsInitial : 0;
+
+    const unsub = onSnapshot(
+      query(collection(db, 'broadcastNotifications'), limit(50)),
+      async (snap) => {
+        const notifications = snap.docs
+          .map((d) => ({ ...(d.data() as Omit<BroadcastNotification, 'id'>), id: d.id } as BroadcastNotification))
+          .sort((a, b) => Date.parse(a.createdAt || '') - Date.parse(b.createdAt || ''));
+
+        const unseen = notifications.filter((item) => {
+          const createdMs = Date.parse(item.createdAt || '');
+          return Number.isFinite(createdMs) && createdMs > seenMs && item.createdBy !== currentUser.id;
+        });
+        if (unseen.length === 0) return;
+
+        setBroadcastToasts((prev) => {
+          const existing = new Set(prev.map((p) => p.id));
+          const nextItems = unseen
+            .filter((item) => !existing.has(item.id))
+            .map((item) => ({ id: item.id, title: item.title, message: item.message }));
+          return [...prev, ...nextItems].slice(-4);
+        });
+
+        const maxSeenMs = unseen.reduce((mx, item) => {
+          const t = Date.parse(item.createdAt || '');
+          return Number.isFinite(t) ? Math.max(mx, t) : mx;
+        }, seenMs);
+        seenMs = maxSeenMs;
+        if (typeof window !== 'undefined') {
+          window.localStorage.setItem(seenKey, String(maxSeenMs));
+        }
+
+        if (typeof window === 'undefined' || !('Notification' in window)) return;
+        if (Notification.permission === 'default') {
+          try { await Notification.requestPermission(); } catch { /* noop */ }
+        }
+        if (Notification.permission !== 'granted') return;
+
+        unseen.forEach((item) => {
+          try {
+            new Notification(item.title || 'Notification', { body: item.message || '' });
+          } catch {
+            // Ignore browser notification failures.
+          }
+        });
+      }
+    );
+
+    return () => unsub();
+  }, [currentUser]);
+
+  useEffect(() => {
+    if (broadcastToasts.length === 0) return;
+    const timer = window.setTimeout(() => {
+      setBroadcastToasts((prev) => prev.slice(1));
+    }, 9000);
+    return () => window.clearTimeout(timer);
+  }, [broadcastToasts]);
+
+  useEffect(() => {
     if (isLoading) return;
     if (!currentUser) {
       setShowMonetizationModal(false);
@@ -1226,6 +1379,8 @@ const App: React.FC = () => {
           isActivatingLicense={isActivatingKey}
           currentTheme={theme}
           onThemeChange={setTheme}
+          customTheme={customTheme}
+          onCustomThemeChange={setCustomTheme}
           onActivateLicense={async (key) => {
             const activated = await activateLicenseKey(key);
             if (activated) {
@@ -1289,6 +1444,21 @@ const App: React.FC = () => {
           onClose={monetizationMode === 'post-deadline' && !isMonetizationLocked ? () => setShowMonetizationModal(false) : undefined}
           onLogout={isMonetizationLocked ? () => auth.signOut() : undefined}
         />
+      )}
+      {broadcastToasts.length > 0 && (
+        <div className="fixed right-4 top-4 z-[210] space-y-2 w-[min(360px,calc(100vw-2rem))]">
+          {broadcastToasts.map((toast) => (
+            <button
+              key={toast.id}
+              type="button"
+              onClick={() => setBroadcastToasts((prev) => prev.filter((item) => item.id !== toast.id))}
+              className="w-full text-left bg-white border border-slate-200 shadow-xl rounded-2xl p-4"
+            >
+              <p className="text-[10px] font-black uppercase tracking-widest text-amber-700 mb-1">{toast.title}</p>
+              <p className="text-xs text-slate-700">{toast.message}</p>
+            </button>
+          ))}
+        </div>
       )}
       {renderDesktopContextMenu()}
     </div>
