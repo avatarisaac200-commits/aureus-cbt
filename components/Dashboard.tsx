@@ -24,6 +24,8 @@ interface DashboardProps {
   onActivateLicense?: (key: string) => Promise<void>;
   onOpenActivationSupport?: () => void;
   onOpenUpdateManual?: () => void;
+  currentUiMode?: MobileUiMode;
+  onUiModeChange?: (mode: MobileUiMode) => void;
 }
 
 type TestSortMode = 'updated' | 'name' | 'duration' | 'attempts';
@@ -144,7 +146,9 @@ const Dashboard: React.FC<DashboardProps> = ({
   onCustomThemeChange,
   onActivateLicense,
   onOpenActivationSupport,
-  onOpenUpdateManual
+  onOpenUpdateManual,
+  currentUiMode = 'light',
+  onUiModeChange
 }) => {
   const parseIsoDate = (value?: string) => {
     const ms = Date.parse(value || '');
@@ -162,7 +166,6 @@ const Dashboard: React.FC<DashboardProps> = ({
   const getFolderAssignmentsStorageKey = () => `testFolderAssignments:${user.id}`;
   const getSortModeStorageKey = () => `testSortMode:${user.id}`;
   const getSelectedFolderStorageKey = () => `selectedTestFolder:${user.id}`;
-  const getMobileUiModeStorageKey = () => `mobileUiMode:${user.id}`;
 
   const normalizeFolderList = (value: any): TestFolder[] => {
     if (!Array.isArray(value)) return [];
@@ -207,7 +210,6 @@ const Dashboard: React.FC<DashboardProps> = ({
   const [rankRows, setRankRows] = useState<RankRow[]>([]);
   const [rankLoading, setRankLoading] = useState(false);
   const [rankError, setRankError] = useState<string | null>(null);
-  const [mobileUiMode, setMobileUiMode] = useState<MobileUiMode>('light');
   const isStudent = user.role === 'student';
   const licenseEndsMs = Date.parse(user.subscriptionEndsAt || '');
   const licenseEndsLabel = Number.isFinite(licenseEndsMs)
@@ -248,10 +250,6 @@ const Dashboard: React.FC<DashboardProps> = ({
     if (storedSelectedFolder) {
       setSelectedFolderId(storedSelectedFolder as 'all' | 'unfiled' | string);
     }
-    const storedMobileUiMode = window.localStorage.getItem(getMobileUiModeStorageKey());
-    if (storedMobileUiMode === 'light' || storedMobileUiMode === 'dark') {
-      setMobileUiMode(storedMobileUiMode);
-    }
   }, [user.id]);
 
   useEffect(() => {
@@ -273,11 +271,6 @@ const Dashboard: React.FC<DashboardProps> = ({
     if (typeof window === 'undefined') return;
     window.localStorage.setItem(getSelectedFolderStorageKey(), selectedFolderId);
   }, [selectedFolderId, user.id]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    window.localStorage.setItem(getMobileUiModeStorageKey(), mobileUiMode);
-  }, [mobileUiMode, user.id]);
 
   const copyTestLink = async (test: MockTest) => {
     if (isReadOnly) return;
@@ -772,7 +765,7 @@ const Dashboard: React.FC<DashboardProps> = ({
   };
 
   return (
-    <div className={`v2-page v3-mobile-shell mobile-ui-${mobileUiMode} flex-1 w-full bg-slate-50 overflow-hidden min-h-0 relative shell md:grid md:grid-cols-[72px_1fr]`}>
+    <div className={`v2-page v3-mobile-shell ui-mode-${currentUiMode} flex-1 w-full bg-slate-50 overflow-hidden min-h-0 relative shell md:grid md:grid-cols-[72px_1fr]`}>
       <aside className="sidebar hidden md:flex flex-col items-center justify-between py-5 px-3 bg-[var(--surface)] border-r border-[var(--edge)] sticky top-0 h-screen">
         <div className="w-10 h-10 rounded-xl bg-[var(--gold)] text-[var(--ink)] font-display text-lg font-black flex items-center justify-center shadow-[var(--shadow-gold)]">A</div>
         <div className="flex flex-col gap-3">
@@ -1368,8 +1361,11 @@ const Dashboard: React.FC<DashboardProps> = ({
                   </div>
                   <div className="flex items-center justify-between bg-slate-50 border border-slate-100 rounded-2xl p-4">
                     <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Mobile UI Mode</span>
-                    <button onClick={() => setMobileUiMode((prev) => (prev === 'dark' ? 'light' : 'dark'))} className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest bg-slate-200 text-slate-700">
-                      {mobileUiMode === 'dark' ? 'Dark Mode' : 'Light Mode'}
+                    <button
+                      onClick={() => onUiModeChange?.(currentUiMode === 'dark' ? 'light' : 'dark')}
+                      className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest bg-slate-200 text-slate-700"
+                    >
+                      {currentUiMode === 'dark' ? 'Dark Mode' : 'Light Mode'}
                     </button>
                   </div>
                 </div>

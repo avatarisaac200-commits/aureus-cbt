@@ -1,5 +1,5 @@
 ﻿
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { User, MockTest, ExamResult, Question, TestSection, TestAttempt, DifficultyLevel, SharedQuiz, ViewState, BroadcastNotification, CustomThemeConfig } from './types';
 import { auth, db } from './firebase';
 import { onAuthStateChanged, sendEmailVerification } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
@@ -28,6 +28,7 @@ const QUESTION_FETCH_LIMIT = 3000;
 const APP_THEME_STORAGE_KEY = 'appTheme';
 const APP_CUSTOM_THEME_STORAGE_KEY = 'appThemeCustom';
 const APP_THEME_LAST_USED_KEY = 'appTheme:lastUsed';
+const APP_UI_MODE_STORAGE_KEY = 'appUiMode';
 const BROADCAST_NOTIFICATIONS_SEEN_AT_PREFIX = 'broadcastSeenAt';
 
 type MonetizationMode = 'pre-deadline' | 'post-deadline';
@@ -51,6 +52,7 @@ const isValidAppTheme = (value: string | null): value is AppTheme => {
 
 const getThemeStorageKey = (userId: string) => `${APP_THEME_STORAGE_KEY}:${userId}`;
 const getCustomThemeStorageKey = (userId: string) => `${APP_CUSTOM_THEME_STORAGE_KEY}:${userId}`;
+const getUiModeStorageKey = (userId: string) => `${APP_UI_MODE_STORAGE_KEY}:${userId}`;
 
 const sanitizeHex = (value: string, fallback: string) => {
   const v = String(value || '').trim();
@@ -187,12 +189,6 @@ const MonetizationModal: React.FC<MonetizationModalProps> = ({
 };
 
 const App: React.FC = () => {
-  type ContextMenuState = {
-    x: number;
-    y: number;
-    selectedText: string;
-  } | null;
-
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentView, setCurrentView] = useState<ViewState>('auth');
   const [lastMainView, setLastMainView] = useState<ViewState>('dashboard');
@@ -212,9 +208,8 @@ const App: React.FC = () => {
   const [activationKey, setActivationKey] = useState('');
   const [isActivatingKey, setIsActivatingKey] = useState(false);
   const [freeAccessEndsAtIso, setFreeAccessEndsAtIso] = useState(DEFAULT_FREE_ACCESS_ENDS_AT_ISO);
-  const [contextMenuState, setContextMenuState] = useState<ContextMenuState>(null);
-  const [isDesktopRightClickEnabled, setIsDesktopRightClickEnabled] = useState(false);
   const [theme, setTheme] = useState<AppTheme>('classic');
+  const [uiMode, setUiMode] = useState<'light' | 'dark'>('light');
   const [customTheme, setCustomTheme] = useState<CustomThemeConfig>(DEFAULT_CUSTOM_THEME);
   const [broadcastToasts, setBroadcastToasts] = useState<Array<{ id: string; title: string; message: string }>>([]);
   const isFlushingQueueRef = useRef(false);
@@ -295,62 +290,14 @@ const App: React.FC = () => {
     return Number.isFinite(deadlineMs) && Date.now() > deadlineMs;
   };
 
-  const checkDesktopRightClickSupport = useCallback(() => {
-    if (typeof window === 'undefined') return false;
-    const hasFinePointer = window.matchMedia?.('(pointer: fine)').matches ?? false;
-    const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : '';
-    const isMobileUa = /android|iphone|ipad|ipod|mobile/i.test(userAgent);
-    const mobileByViewport = window.innerWidth < 820;
-    return hasFinePointer && !isMobileUa && !mobileByViewport;
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const refreshSupport = () => setIsDesktopRightClickEnabled(checkDesktopRightClickSupport());
-    refreshSupport();
-    window.addEventListener('resize', refreshSupport);
-    return () => window.removeEventListener('resize', refreshSupport);
-  }, [checkDesktopRightClickSupport]);
-
-  useEffect(() => {
-    if (typeof document === 'undefined') return;
-    const closeMenu = () => setContextMenuState(null);
-
-    const onContextMenu = (event: MouseEvent) => {
-      if (!isDesktopRightClickEnabled) return;
-      event.preventDefault();
-      const selectedText = (window.getSelection?.()?.toString() || '').trim();
-      const menuWidth = 280;
-      const menuHeight = 280;
-      const x = Math.min(event.clientX, Math.max(12, window.innerWidth - menuWidth - 12));
-      const y = Math.min(event.clientY, Math.max(12, window.innerHeight - menuHeight - 12));
-      setContextMenuState({ x: Math.max(12, x), y: Math.max(12, y), selectedText });
-    };
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') closeMenu();
-    };
-
-    document.addEventListener('contextmenu', onContextMenu);
-    document.addEventListener('click', closeMenu);
-    document.addEventListener('scroll', closeMenu, true);
-    window.addEventListener('resize', closeMenu);
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('contextmenu', onContextMenu);
-      document.removeEventListener('click', closeMenu);
-      document.removeEventListener('scroll', closeMenu, true);
-      window.removeEventListener('resize', closeMenu);
-      document.removeEventListener('keydown', onKeyDown);
-    };
-  }, [isDesktopRightClickEnabled]);
-
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (!currentUser?.id) {
       const lastTheme = window.localStorage.getItem(APP_THEME_LAST_USED_KEY);
       setTheme(isValidAppTheme(lastTheme) ? lastTheme : 'classic');
       setCustomTheme(DEFAULT_CUSTOM_THEME);
+      const lastUiMode = window.localStorage.getItem(APP_UI_MODE_STORAGE_KEY);
+      setUiMode(lastUiMode === 'dark' ? 'dark' : 'light');
       return;
     }
     const storedTheme = window.localStorage.getItem(getThemeStorageKey(currentUser.id))
@@ -370,6 +317,9 @@ const App: React.FC = () => {
     } catch {
       setCustomTheme(DEFAULT_CUSTOM_THEME);
     }
+    const storedUiMode = window.localStorage.getItem(getUiModeStorageKey(currentUser.id))
+      || window.localStorage.getItem(APP_UI_MODE_STORAGE_KEY);
+    setUiMode(storedUiMode === 'dark' ? 'dark' : 'light');
   }, [currentUser?.id]);
 
   useEffect(() => {
@@ -414,89 +364,15 @@ const App: React.FC = () => {
     window.localStorage.setItem(getCustomThemeStorageKey(currentUser.id), JSON.stringify(customTheme));
   }, [theme, customTheme, currentUser?.id]);
 
-  const runContextAction = async (action: 'copy' | 'paste' | 'reload' | 'back' | 'forward' | 'top' | 'fullscreen') => {
-    setContextMenuState(null);
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    document.documentElement.setAttribute('data-ui-mode', uiMode);
+    document.body.setAttribute('data-ui-mode', uiMode);
     if (typeof window === 'undefined') return;
-
-    if (action === 'reload') {
-      window.location.reload();
-      return;
-    }
-    if (action === 'back') {
-      window.history.back();
-      return;
-    }
-    if (action === 'forward') {
-      window.history.forward();
-      return;
-    }
-    if (action === 'top') {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-      return;
-    }
-    if (action === 'fullscreen') {
-      if (!document.fullscreenElement) {
-        await document.documentElement.requestFullscreen?.();
-      } else {
-        await document.exitFullscreen?.();
-      }
-      return;
-    }
-    if (action === 'copy') {
-      const text = contextMenuState?.selectedText || window.location.href;
-      try {
-        await navigator.clipboard?.writeText(text);
-      } catch {
-        if (document.execCommand) document.execCommand('copy');
-      }
-      return;
-    }
-    if (action === 'paste') {
-      const active = document.activeElement as HTMLInputElement | HTMLTextAreaElement | null;
-      const isEditable =
-        active &&
-        (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable);
-      if (!isEditable) return;
-      try {
-        const clip = await navigator.clipboard?.readText();
-        if (typeof clip !== 'string') return;
-        if (active.isContentEditable) {
-          document.execCommand('insertText', false, clip);
-        } else {
-          const input = active as HTMLInputElement | HTMLTextAreaElement;
-          const start = input.selectionStart ?? input.value.length;
-          const end = input.selectionEnd ?? input.value.length;
-          input.value = `${input.value.slice(0, start)}${clip}${input.value.slice(end)}`;
-          input.dispatchEvent(new Event('input', { bubbles: true }));
-        }
-      } catch {
-        // Clipboard read may be blocked by browser permissions.
-      }
-    }
-  };
-
-  const renderDesktopContextMenu = () => {
-    if (!isDesktopRightClickEnabled || !contextMenuState) return null;
-    return (
-      <div
-        className="desktop-context-menu"
-        style={{ top: contextMenuState.y, left: contextMenuState.x }}
-        role="menu"
-        aria-label="Page actions"
-      >
-        <p className="desktop-context-title">Quick Actions</p>
-        <button type="button" onClick={() => runContextAction('copy')}>
-          {contextMenuState.selectedText ? 'Copy Selection' : 'Copy Page Link'}
-        </button>
-        <button type="button" onClick={() => runContextAction('paste')}>Paste</button>
-        <button type="button" onClick={() => runContextAction('reload')}>Reload</button>
-        <button type="button" onClick={() => runContextAction('back')}>Back</button>
-        <button type="button" onClick={() => runContextAction('forward')}>Forward</button>
-        <button type="button" onClick={() => runContextAction('top')}>Scroll To Top</button>
-        <button type="button" onClick={() => runContextAction('fullscreen')}>Toggle Fullscreen</button>
-      </div>
-    );
-  };
+    window.localStorage.setItem(APP_UI_MODE_STORAGE_KEY, uiMode);
+    if (!currentUser?.id) return;
+    window.localStorage.setItem(getUiModeStorageKey(currentUser.id), uiMode);
+  }, [uiMode, currentUser?.id]);
 
   const getPromptDeferredUntil = (): number | null => {
     const raw = typeof window !== 'undefined' ? window.localStorage.getItem('licensePromptDeferredUntil') : null;
@@ -1303,59 +1179,50 @@ const App: React.FC = () => {
 
   if (isLoading) {
     return (
-      <>
-        <div className="h-full w-full flex flex-col items-center justify-center bg-slate-950">
-          <img src={logo} className="w-20 h-20 animate-pulse mb-6" alt="Aureus Medicos CBT Logo" />
-          <div className="flex flex-col items-center">
-            <p className="text-amber-500 text-xs font-black uppercase tracking-[0.5em] mb-2">Aureus Medicos CBT</p>
-            <div className="w-32 h-1 bg-slate-900 rounded-full overflow-hidden">
-              <div className="h-full bg-amber-500 w-1/2 animate-shimmer"></div>
-            </div>
+      <div className="h-full w-full flex flex-col items-center justify-center bg-slate-950">
+        <img src={logo} className="w-20 h-20 animate-pulse mb-6" alt="Aureus Medicos CBT Logo" />
+        <div className="flex flex-col items-center">
+          <p className="text-amber-500 text-xs font-black uppercase tracking-[0.5em] mb-2">Aureus Medicos CBT</p>
+          <div className="w-32 h-1 bg-slate-900 rounded-full overflow-hidden">
+            <div className="h-full bg-amber-500 w-1/2 animate-shimmer"></div>
           </div>
         </div>
-        {renderDesktopContextMenu()}
-      </>
+      </div>
     );
   }
 
   if (packagingState) {
     return (
-      <>
-        <div className="h-full w-full flex flex-col items-center justify-center bg-slate-950 p-8 text-center">
-          <img src={logo} className="w-16 h-16 animate-pulse mb-6" alt="Aureus Medicos CBT Logo" />
-          <p className="text-amber-500 text-xs font-black uppercase tracking-[0.4em] mb-4">{packagingState.message}</p>
-          <div className="w-64 h-2 bg-slate-900 rounded-full overflow-hidden mb-3">
-            <div className="h-full bg-amber-500 transition-all duration-300" style={{ width: `${packagingState.progress}%` }}></div>
-          </div>
-          <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">{packagingState.progress}%</p>
+      <div className="h-full w-full flex flex-col items-center justify-center bg-slate-950 p-8 text-center">
+        <img src={logo} className="w-16 h-16 animate-pulse mb-6" alt="Aureus Medicos CBT Logo" />
+        <p className="text-amber-500 text-xs font-black uppercase tracking-[0.4em] mb-4">{packagingState.message}</p>
+        <div className="w-64 h-2 bg-slate-900 rounded-full overflow-hidden mb-3">
+          <div className="h-full bg-amber-500 transition-all duration-300" style={{ width: `${packagingState.progress}%` }}></div>
         </div>
-        {renderDesktopContextMenu()}
-      </>
+        <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">{packagingState.progress}%</p>
+      </div>
     );
   }
 
   if (currentView === 'verify-email') {
     return (
-      <>
-        <div className="h-full w-full flex flex-col items-center justify-center bg-slate-50 p-6 text-center">
-          <img src={logo} className="w-16 h-16 mb-6" alt="Logo" />
-          <h2 className="text-2xl font-black text-slate-950 uppercase tracking-tight mb-2">Verify Your Email</h2>
-          <p className="text-slate-500 text-sm max-w-sm mb-8 leading-relaxed">
-            We sent a verification link to your email. Open it to activate your account, and check spam/junk if you do not see it.
-          </p>
-          <div className="flex flex-col gap-3 w-full max-w-xs">
-            <button onClick={handleManualVerifyCheck} className="w-full py-4 bg-slate-950 text-amber-500 rounded-2xl font-black uppercase text-xs tracking-widest shadow-lg">I Verified</button>
-            <button onClick={() => auth.currentUser && sendEmailVerification(auth.currentUser).then(() => toast.success('Verification email resent'))} className="w-full py-4 bg-white text-slate-600 border border-slate-200 rounded-2xl font-black uppercase text-xs tracking-widest">Resend Link</button>
-            <button onClick={() => auth.signOut()} className="mt-4 text-xs font-black text-slate-400 uppercase tracking-widest hover:text-red-500">Log Out</button>
-          </div>
+      <div className="h-full w-full flex flex-col items-center justify-center bg-slate-50 p-6 text-center">
+        <img src={logo} className="w-16 h-16 mb-6" alt="Logo" />
+        <h2 className="text-2xl font-black text-slate-950 uppercase tracking-tight mb-2">Verify Your Email</h2>
+        <p className="text-slate-500 text-sm max-w-sm mb-8 leading-relaxed">
+          We sent a verification link to your email. Open it to activate your account, and check spam/junk if you do not see it.
+        </p>
+        <div className="flex flex-col gap-3 w-full max-w-xs">
+          <button onClick={handleManualVerifyCheck} className="w-full py-4 bg-slate-950 text-amber-500 rounded-2xl font-black uppercase text-xs tracking-widest shadow-lg">I Verified</button>
+          <button onClick={() => auth.currentUser && sendEmailVerification(auth.currentUser).then(() => toast.success('Verification email resent'))} className="w-full py-4 bg-white text-slate-600 border border-slate-200 rounded-2xl font-black uppercase text-xs tracking-widest">Resend Link</button>
+          <button onClick={() => auth.signOut()} className="mt-4 text-xs font-black text-slate-400 uppercase tracking-widest hover:text-red-500">Log Out</button>
         </div>
-        {renderDesktopContextMenu()}
-      </>
+      </div>
     );
   }
 
   return (
-    <div className={`v2-app theme-${theme} min-h-[100dvh] h-[100dvh] w-full overflow-x-hidden flex flex-col`}>
+    <div className={`v2-app theme-${theme} ui-mode-${uiMode} min-h-[100dvh] h-[100dvh] w-full overflow-x-hidden flex flex-col`}>
       {currentView === 'auth' && <Auth onLogin={checkUserStatus} />}
       {currentView === 'dashboard' && currentUser && (
         <Dashboard 
@@ -1402,6 +1269,8 @@ const App: React.FC = () => {
           }}
           onOpenActivationSupport={handleOpenWhatsApp}
           onOpenUpdateManual={openUpdateManual}
+          currentUiMode={uiMode}
+          onUiModeChange={setUiMode}
         />
       )}
       {currentView === 'admin' && currentUser && (
@@ -1473,7 +1342,6 @@ const App: React.FC = () => {
           ))}
         </div>
       )}
-      {renderDesktopContextMenu()}
     </div>
   );
 };

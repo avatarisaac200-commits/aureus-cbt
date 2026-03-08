@@ -84,7 +84,7 @@
   --subtle: rgba(15, 23, 42, 0.4);
 }
 
-.mobile-ui-dark {
+.ui-mode-dark {
   --ink: #0A0C14;
   --surface: #0F1320;
   --panel: #161B2E;
