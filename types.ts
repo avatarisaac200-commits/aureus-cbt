@@ -125,6 +125,8 @@ export interface ExamResult {
   status: 'completed' | 'abandoned' | 'auto-submitted';
   userAnswers: Record<string, number>;
   resolvedSections?: TestSection[];
+  attemptSections?: TestSection[];
+  attemptQuestionIds?: string[];
   questionSnapshot?: Record<string, Question>;
   attemptId?: string;
   sectionBreakdown: {

@@ -123,7 +123,8 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
   }, [test, packagedQuestions, effectiveSections]);
 
   const calculateResult = useCallback(async (status: ExamResult['status']) => {
-    const allQuestionIds = effectiveSections.flatMap(section => section.questionIds);
+    const sectionsForResult = shuffledSections.length > 0 ? shuffledSections : effectiveSections;
+    const allQuestionIds = sectionsForResult.flatMap(section => section.questionIds);
     const answeredQuestionCount = allQuestionIds.reduce((count, qId) => (
       Object.prototype.hasOwnProperty.call(answers, qId) ? count + 1 : count
     ), 0);
@@ -132,7 +133,7 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
       if (!question) return count;
       return answers[qId] === question.correctAnswerIndex ? count + 1 : count;
     }, 0);
-    const sectionBreakdown = effectiveSections.map((section) => {
+    const sectionBreakdown = sectionsForResult.map((section) => {
       let sectionScore = 0;
       section.questionIds.forEach(qId => {
         const question = allQuestions[qId];
@@ -165,6 +166,8 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
       status: status,
       userAnswers: answers,
       resolvedSections: effectiveSections,
+      attemptSections: sectionsForResult,
+      attemptQuestionIds: allQuestionIds,
       questionSnapshot,
       attemptId: attemptId || undefined,
       sectionBreakdown
@@ -177,7 +180,7 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
       queuePendingResult(result);
       onFinish({ ...result, id: 'temp-' + Date.now() } as ExamResult);
     }
-  }, [allQuestions, answers, onFinish, test, user.id, user.name, effectiveSections, attemptId]);
+  }, [allQuestions, answers, onFinish, test, user.id, user.name, effectiveSections, attemptId, shuffledSections]);
 
   useEffect(() => {
     if (!hasStarted) return;

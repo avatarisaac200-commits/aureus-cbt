@@ -374,6 +374,26 @@ const App: React.FC = () => {
     window.localStorage.setItem(getUiModeStorageKey(currentUser.id), uiMode);
   }, [uiMode, currentUser?.id]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof document === 'undefined') return;
+    const applyViewportHeight = () => {
+      const viewportHeight = window.visualViewport?.height || window.innerHeight;
+      const vh = viewportHeight * 0.01;
+      document.documentElement.style.setProperty('--app-vh', `${vh}px`);
+    };
+    applyViewportHeight();
+    window.addEventListener('resize', applyViewportHeight);
+    window.addEventListener('orientationchange', applyViewportHeight);
+    window.visualViewport?.addEventListener('resize', applyViewportHeight);
+    window.visualViewport?.addEventListener('scroll', applyViewportHeight);
+    return () => {
+      window.removeEventListener('resize', applyViewportHeight);
+      window.removeEventListener('orientationchange', applyViewportHeight);
+      window.visualViewport?.removeEventListener('resize', applyViewportHeight);
+      window.visualViewport?.removeEventListener('scroll', applyViewportHeight);
+    };
+  }, []);
+
   const getPromptDeferredUntil = (): number | null => {
     const raw = typeof window !== 'undefined' ? window.localStorage.getItem('licensePromptDeferredUntil') : null;
     if (!raw) return null;
@@ -1222,7 +1242,10 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className={`v2-app theme-${theme} ui-mode-${uiMode} min-h-[100dvh] h-[100dvh] w-full overflow-x-hidden flex flex-col`}>
+    <div
+      className={`v2-app theme-${theme} ui-mode-${uiMode} min-h-[100svh] w-full overflow-x-hidden flex flex-col`}
+      style={{ minHeight: 'calc(var(--app-vh, 1vh) * 100)', height: 'calc(var(--app-vh, 1vh) * 100)' }}
+    >
       {currentView === 'auth' && <Auth onLogin={checkUserStatus} />}
       {currentView === 'dashboard' && currentUser && (
         <Dashboard 

@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
-import { ExamResult, MockTest, Question } from '../types';
+import { ExamResult, MockTest, Question, TestAttempt, TestSection } from '../types';
 import { db } from '../firebase';
-import { collection, getDocs, doc, getDoc, query, where, documentId, addDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+import { collection, getDocs, doc, getDoc, query, where, documentId, addDoc, updateDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import ScientificText from './ScientificText';
 import logo from '../assets/logo.png';
 import { getOrCreateAiExplanation } from './aiExplanationService';
@@ -33,6 +33,14 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
       try {
         setLoading(true);
         const snapshotMap = result.questionSnapshot || {};
+        const tryBackfillResultArtifacts = async (patch: Record<string, any>) => {
+          if (!result.id || Object.keys(patch).length === 0) return;
+          try {
+            await updateDoc(doc(db, 'results', result.id), patch);
+          } catch {
+            // Ignore backfill failures (e.g., permission-denied for students).
+          }
+        };
         if (result.testId.startsWith('quiz:')) {
           const quizId = result.testId.replace(/^quiz:/, '');
           const quizDoc = await getDoc(doc(db, 'quizzes', quizId));
@@ -78,13 +86,26 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
           }
         }
 
+        let sectionsFromAttempt: TestSection[] | null = null;
+        if (result.attemptSections && result.attemptSections.length > 0) {
+          sectionsFromAttempt = result.attemptSections;
+        } else if (result.attemptId) {
+          const attemptDoc = await getDoc(doc(db, 'testAttempts', result.attemptId));
+          if (attemptDoc.exists()) {
+            const attemptData = attemptDoc.data() as TestAttempt;
+            if (Array.isArray(attemptData.sections) && attemptData.sections.length > 0) {
+              sectionsFromAttempt = attemptData.sections;
+            }
+          }
+        }
+
         const testDoc = await getDoc(doc(db, 'tests', result.testId));
         if (testDoc.exists()) {
           const testData = { ...testDoc.data(), id: testDoc.id } as MockTest;
-          setTest(testData);
-          const sectionsToUse = result.resolvedSections && result.resolvedSections.length > 0
-            ? result.resolvedSections
-            : testData.sections;
+          const sectionsToUse = sectionsFromAttempt
+            || (result.resolvedSections && result.resolvedSections.length > 0 ? result.resolvedSections : null)
+            || testData.sections;
+          setTest({ ...testData, sections: sectionsToUse });
           const ids = Array.from(new Set(sectionsToUse.flatMap(section => section.questionIds)));
           const qMap: Record<string, Question> = {};
           for (let i = 0; i < ids.length; i += 10) {
@@ -92,16 +113,38 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
             const qSnap = await getDocs(query(collection(db, 'questions'), where(documentId(), 'in', chunk)));
             qSnap.docs.forEach(d => { qMap[d.id] = { ...d.data(), id: d.id } as Question; });
           }
-          setQuestions({ ...qMap, ...snapshotMap });
+          const mergedSnapshot = { ...qMap, ...snapshotMap };
+          setQuestions(mergedSnapshot);
+          const backfillPatch: Record<string, any> = {};
+          if ((!result.attemptSections || result.attemptSections.length === 0) && sectionsFromAttempt && sectionsFromAttempt.length > 0) {
+            backfillPatch.attemptSections = sectionsFromAttempt;
+          }
+          if ((!result.attemptQuestionIds || result.attemptQuestionIds.length === 0) && sectionsToUse.length > 0) {
+            backfillPatch.attemptQuestionIds = Array.from(new Set(sectionsToUse.flatMap(section => section.questionIds)));
+          }
+          if ((!result.questionSnapshot || Object.keys(result.questionSnapshot).length === 0) && Object.keys(mergedSnapshot).length > 0) {
+            backfillPatch.questionSnapshot = mergedSnapshot;
+          }
+          await tryBackfillResultArtifacts(backfillPatch);
           return;
         }
 
-        if (result.resolvedSections && result.questionSnapshot) {
+        if ((sectionsFromAttempt && sectionsFromAttempt.length > 0) || (result.resolvedSections && result.resolvedSections.length > 0) || result.questionSnapshot) {
+          const fallbackSections = (sectionsFromAttempt && sectionsFromAttempt.length > 0)
+            ? sectionsFromAttempt
+            : (result.resolvedSections && result.resolvedSections.length > 0)
+              ? result.resolvedSections
+              : [{
+                id: 'answered_only',
+                name: 'Answered Questions',
+                questionIds: Object.keys(result.userAnswers || {}),
+                marksPerQuestion: 1
+              }];
           setTest({
             id: result.testId,
             name: result.testName,
             description: '',
-            sections: result.resolvedSections,
+            sections: fallbackSections,
             totalDurationSeconds: 0,
             allowRetake: true,
             maxAttempts: null,
@@ -111,7 +154,19 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
             createdAt: result.completedAt,
             generationMode: 'fixed'
           });
-          setQuestions(result.questionSnapshot);
+          const fallbackSnapshot = result.questionSnapshot || {};
+          setQuestions(fallbackSnapshot);
+          const fallbackBackfillPatch: Record<string, any> = {};
+          if ((!result.attemptSections || result.attemptSections.length === 0) && sectionsFromAttempt && sectionsFromAttempt.length > 0) {
+            fallbackBackfillPatch.attemptSections = sectionsFromAttempt;
+          }
+          if ((!result.attemptQuestionIds || result.attemptQuestionIds.length === 0) && fallbackSections.length > 0) {
+            fallbackBackfillPatch.attemptQuestionIds = Array.from(new Set(fallbackSections.flatMap(section => section.questionIds)));
+          }
+          if ((!result.questionSnapshot || Object.keys(result.questionSnapshot).length === 0) && Object.keys(fallbackSnapshot).length > 0) {
+            fallbackBackfillPatch.questionSnapshot = fallbackSnapshot;
+          }
+          await tryBackfillResultArtifacts(fallbackBackfillPatch);
         }
       } catch (err) {
         console.error("Error fetching review data:", err);
