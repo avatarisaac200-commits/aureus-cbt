@@ -3,6 +3,7 @@ import { User, MockTest, ExamResult, QuizQuestion, SharedQuiz, CsvQuestionBundle
 import { db } from '../firebase';
 import { collection, query, where, onSnapshot, getDocs, getDocsFromServer, limit, addDoc, updateDoc, deleteDoc, doc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import logo from '../assets/logo.png';
+import { AppTheme, THEMES } from '../theme';
 
 interface DashboardProps {
   user: User;
@@ -14,8 +15,8 @@ interface DashboardProps {
   isReadOnly?: boolean;
   deadlineLabel?: string;
   isActivatingLicense?: boolean;
-  currentTheme?: 'classic' | 'neo' | 'gold' | 'glass' | 'neo-black' | 'custom';
-  onThemeChange?: (theme: 'classic' | 'neo' | 'gold' | 'glass' | 'neo-black' | 'custom') => void;
+  currentTheme?: AppTheme;
+  onThemeChange?: (theme: AppTheme) => void;
   customTheme?: CustomThemeConfig;
   onCustomThemeChange?: (theme: CustomThemeConfig) => void;
   onActivateLicense?: (key: string) => Promise<void>;
@@ -287,50 +288,6 @@ const Dashboard: React.FC<DashboardProps> = ({
       window.localStorage.setItem(`lowDataMode:${user.id}`, next ? 'on' : 'off');
     }
   };
-
-  const themeOptions: Array<{
-    id: 'classic' | 'neo' | 'gold' | 'glass' | 'neo-black' | 'custom';
-    name: string;
-    description: string;
-    previewClass: string;
-  }> = [
-    {
-      id: 'classic',
-      name: 'Classic',
-      description: 'Current slate and amber look.',
-      previewClass: 'from-slate-950 via-slate-900 to-amber-500'
-    },
-    {
-      id: 'neo',
-      name: 'Neo',
-      description: 'Cyan and lime with a sharper digital feel.',
-      previewClass: 'from-cyan-500 via-sky-500 to-lime-400'
-    },
-    {
-      id: 'gold',
-      name: 'Gold',
-      description: 'Warmer brass palette with cream surfaces.',
-      previewClass: 'from-amber-700 via-yellow-600 to-orange-300'
-    },
-    {
-      id: 'glass',
-      name: 'Glass',
-      description: 'Bright frosted panes with icy highlights.',
-      previewClass: 'from-white/95 via-sky-100 to-cyan-200'
-    },
-    {
-      id: 'neo-black',
-      name: 'Neo Black',
-      description: 'Black and white with a sharp monochrome shell.',
-      previewClass: 'from-black via-zinc-900 to-white'
-    },
-    {
-      id: 'custom',
-      name: 'Custom',
-      description: 'Design your own palette.',
-      previewClass: 'from-fuchsia-500 via-orange-400 to-cyan-400'
-    }
-  ];
 
   const handleActivateFromSettings = async () => {
     const key = activationInput.trim().toUpperCase();
@@ -1169,7 +1126,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                 <h2 className="text-lg font-bold text-slate-950 uppercase mb-2">Theme</h2>
                 <p className="text-xs text-slate-500 mb-5">Pick the app look for this device.</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-                  {themeOptions.map((theme) => {
+                  {THEMES.map((theme) => {
                     const isActive = currentTheme === theme.id;
                     return (
                       <button

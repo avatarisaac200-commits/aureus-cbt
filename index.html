@@ -5,6 +5,35 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Aureus Medicos</title>
+    <script>
+      (function () {
+        try {
+          var allowed = {
+            classic: true,
+            neo: true,
+            gold: true,
+            glass: true,
+            'neo-black': true,
+            custom: true
+          };
+          var theme = localStorage.getItem('appTheme:lastUsed');
+          if (!allowed[theme]) {
+            for (var i = 0; i < localStorage.length; i++) {
+              var key = localStorage.key(i) || '';
+              if (key.indexOf('appTheme:') !== 0) continue;
+              var candidate = localStorage.getItem(key);
+              if (allowed[candidate]) {
+                theme = candidate;
+                break;
+              }
+            }
+          }
+          document.documentElement.setAttribute('data-theme', allowed[theme] ? theme : 'classic');
+        } catch (_) {
+          document.documentElement.setAttribute('data-theme', 'classic');
+        }
+      })();
+    </script>
     
     <!-- PWA & Mobile Icons -->
     <link rel="icon" type="image/png" href="/assets/logo.png">

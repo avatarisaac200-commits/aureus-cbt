@@ -64,6 +64,7 @@ body {
   flex: 1 1 auto;
 }
 
+html[data-theme="neo"],
 body[data-theme="neo"] {
   --v2-card: rgba(238, 253, 251, 0.92);
   --v2-border: rgba(13, 148, 136, 0.25);
@@ -94,6 +95,7 @@ body[data-theme="neo"] {
   --v2-danger-contrast: #ffffff;
 }
 
+html[data-theme="gold"],
 body[data-theme="gold"] {
   --v2-card: rgba(255, 248, 238, 0.93);
   --v2-border: rgba(180, 83, 9, 0.22);
@@ -124,36 +126,39 @@ body[data-theme="gold"] {
   --v2-danger-contrast: #ffffff;
 }
 
+html[data-theme="glass"],
 body[data-theme="glass"] {
-  --v2-card: rgba(255, 255, 255, 0.74);
-  --v2-border: rgba(186, 230, 253, 0.68);
-  --v2-shadow: 0 18px 46px rgba(15, 23, 42, 0.12);
-  --v2-shadow-lg: 0 30px 76px rgba(15, 23, 42, 0.16);
-  --v2-bg-top: rgba(224, 242, 254, 0.88);
-  --v2-bg-side: rgba(165, 243, 252, 0.42);
-  --v2-bg-start: #f5fbff;
-  --v2-bg-end: #dbeafe;
-  --v2-shell-start: #0f172a;
-  --v2-shell-mid: #1e3a8a;
-  --v2-shell-end: #0369a1;
-  --v2-accent: #0284c7;
-  --v2-accent-soft: rgba(224, 242, 254, 0.9);
-  --v2-accent-text: #075985;
-  --v2-accent-contrast: #f8fafc;
-  --v2-positive: #14b8a6;
-  --v2-positive-soft: rgba(204, 251, 241, 0.88);
-  --v2-positive-text: #0f766e;
-  --v2-positive-contrast: #042f2e;
-  --v2-info: #0ea5e9;
-  --v2-info-soft: rgba(224, 242, 254, 0.9);
-  --v2-info-text: #075985;
-  --v2-info-contrast: #082f49;
-  --v2-danger: #f43f5e;
-  --v2-danger-soft: rgba(255, 228, 230, 0.9);
-  --v2-danger-text: #be123c;
+  --glass-accent: #ff4d94;
+  --v2-card: rgba(255, 141, 161, 0.6);
+  --v2-border: rgba(255, 255, 255, 0.72);
+  --v2-shadow: 0 16px 42px rgba(131, 24, 67, 0.24);
+  --v2-shadow-lg: 0 30px 78px rgba(131, 24, 67, 0.3);
+  --v2-bg-top: rgba(255, 154, 207, 0.56);
+  --v2-bg-side: rgba(244, 114, 182, 0.5);
+  --v2-bg-start: #ffd2e6;
+  --v2-bg-end: #ff9fbe;
+  --v2-shell-start: #ff8da1;
+  --v2-shell-mid: #ff6398;
+  --v2-shell-end: #db2777;
+  --v2-accent: var(--glass-accent, #ff4d94);
+  --v2-accent-soft: rgba(255, 213, 234, 0.72);
+  --v2-accent-text: #7a1247;
+  --v2-accent-contrast: #fff5fa;
+  --v2-positive: #f472b6;
+  --v2-positive-soft: rgba(255, 204, 230, 0.7);
+  --v2-positive-text: #831843;
+  --v2-positive-contrast: #ffffff;
+  --v2-info: #ec4899;
+  --v2-info-soft: rgba(251, 207, 232, 0.72);
+  --v2-info-text: #9d174d;
+  --v2-info-contrast: #fff1f7;
+  --v2-danger: #e11d48;
+  --v2-danger-soft: rgba(255, 206, 216, 0.7);
+  --v2-danger-text: #9f1239;
   --v2-danger-contrast: #ffffff;
 }
 
+html[data-theme="neo-black"],
 body[data-theme="neo-black"] {
   --v2-card: rgba(250, 250, 250, 0.96);
   --v2-border: rgba(63, 63, 70, 0.22);
@@ -488,6 +493,38 @@ body[data-theme="neo-black"] {
 .v2-app .no-scrollbar::-webkit-scrollbar-track,
 .v2-app .v2-scroll::-webkit-scrollbar-track {
   background: transparent;
+}
+
+html[data-theme="glass"] body {
+  background:
+    radial-gradient(1300px 680px at -12% -20%, rgba(255, 190, 223, 0.82), transparent 68%),
+    radial-gradient(900px 520px at 110% -18%, rgba(236, 72, 153, 0.64), transparent 62%),
+    linear-gradient(140deg, #ffd5e8 0%, #ffb2d0 38%, #ff8da1 70%, #f472b6 100%);
+}
+
+html[data-theme="glass"] .v2-page,
+html[data-theme="glass"] .v2-app {
+  background: transparent;
+}
+
+html[data-theme="glass"] .v2-app .v2-surface,
+html[data-theme="glass"] .v2-app .v2-shell,
+html[data-theme="glass"] .v2-app .v2-panel,
+html[data-theme="glass"] .v2-app .bg-white,
+html[data-theme="glass"] .v2-app header,
+html[data-theme="glass"] .v2-app nav,
+html[data-theme="glass"] .v2-app aside {
+  background: rgba(255, 141, 161, 0.6) !important;
+  border: 0.5px solid rgba(255, 255, 255, 0.78) !important;
+  backdrop-filter: blur(18px) saturate(135%);
+  -webkit-backdrop-filter: blur(18px) saturate(135%);
+  box-shadow: 0 18px 46px rgba(131, 24, 67, 0.24) !important;
+}
+
+html[data-theme="glass"] .v2-app [class*="bg-slate-950"],
+html[data-theme="glass"] .v2-app [class*="bg-slate-900"] {
+  background: linear-gradient(135deg, rgba(236, 72, 153, 0.72), rgba(219, 39, 119, 0.76)) !important;
+  border-color: rgba(255, 255, 255, 0.72) !important;
 }
 
 @keyframes paywallPopIn {

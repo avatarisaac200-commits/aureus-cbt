@@ -31,6 +31,7 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
     const fetchData = async () => {
       try {
         setLoading(true);
+        const snapshotMap = result.questionSnapshot || {};
         if (result.testId.startsWith('quiz:')) {
           const quizId = result.testId.replace(/^quiz:/, '');
           const quizDoc = await getDoc(doc(db, 'quizzes', quizId));
@@ -71,7 +72,7 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
                 createdAt: quizData.createdAt || new Date().toISOString()
               } as Question;
             });
-            setQuestions(qMap);
+            setQuestions({ ...qMap, ...snapshotMap });
             return;
           }
         }
@@ -90,7 +91,7 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
             const qSnap = await getDocs(query(collection(db, 'questions'), where(documentId(), 'in', chunk)));
             qSnap.docs.forEach(d => { qMap[d.id] = { ...d.data(), id: d.id } as Question; });
           }
-          setQuestions(qMap);
+          setQuestions({ ...qMap, ...snapshotMap });
           return;
         }
 
@@ -118,11 +119,12 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
       }
     };
     fetchData();
-  }, [result.testId]);
+  }, [result.testId, result.resolvedSections, result.questionSnapshot]);
 
   const activeSection = test?.sections[activeSectionIndex];
   const currentQuestionId = activeSection?.questionIds[currentQuestionIndex];
   const currentQuestion = questions[currentQuestionId!];
+  const isQuestionMissing = Boolean(currentQuestionId) && !currentQuestion;
   const userAnswer = result.userAnswers[currentQuestionId!];
   const isCorrect = userAnswer === currentQuestion?.correctAnswerIndex;
 
@@ -292,8 +294,14 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
             </div>
 
             <div className="text-xl md:text-3xl font-bold text-slate-900 mb-16 leading-tight tracking-tight">
-              <ScientificText text={currentQuestion?.text || "Loading question..."} />
+              <ScientificText text={currentQuestion?.text || "Question unavailable for this attempt."} />
             </div>
+
+            {isQuestionMissing && (
+              <div className="mb-8 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-xs font-bold text-red-700">
+                We could not load this question from the database. New attempts now save question snapshots, so future reviews will open correctly.
+              </div>
+            )}
 
             <div className="space-y-5">
               {currentQuestion?.options.map((option, idx) => {

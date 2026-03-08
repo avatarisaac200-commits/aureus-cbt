@@ -13,6 +13,8 @@ import ResultScreen from './components/ResultScreen';
 import ReviewInterface from './components/ReviewInterface';
 import UpdateManual from './components/UpdateManual';
 import logo from './assets/logo.png';
+import { AppTheme } from './theme';
+import { clearGlassAccent, syncGlassAccent } from './glassAccent';
 
 const DEFAULT_FREE_ACCESS_ENDS_AT_ISO = '2026-04-01T23:00:00.000Z'; // April 2, 2026 00:00 WAT
 const DEADLINE_CONFIG_DOC_ID = 'deadline_config';
@@ -24,10 +26,10 @@ const PENDING_RESULTS_QUEUE_KEY = 'pendingResultsQueue';
 const QUESTION_FETCH_LIMIT = 3000;
 const APP_THEME_STORAGE_KEY = 'appTheme';
 const APP_CUSTOM_THEME_STORAGE_KEY = 'appThemeCustom';
+const APP_THEME_LAST_USED_KEY = 'appTheme:lastUsed';
 const BROADCAST_NOTIFICATIONS_SEEN_AT_PREFIX = 'broadcastSeenAt';
 
 type MonetizationMode = 'pre-deadline' | 'post-deadline';
-type AppTheme = 'classic' | 'neo' | 'gold' | 'glass' | 'neo-black' | 'custom';
 
 const DEFAULT_CUSTOM_THEME: CustomThemeConfig = {
   bgStart: '#f8fafc',
@@ -100,17 +102,17 @@ const MonetizationModal: React.FC<MonetizationModalProps> = ({
   const isPreDeadline = mode === 'pre-deadline';
 
   return (
-    <div className="fixed inset-0 z-[200] bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-4 paywall-backdrop">
-      <div className="relative w-full max-w-xl bg-white rounded-[2rem] border border-slate-100 shadow-2xl overflow-hidden paywall-card">
+    <div className="fixed inset-0 z-[200] bg-slate-950/75 backdrop-blur-sm flex items-start sm:items-center justify-center p-3 sm:p-4 overflow-y-auto safe-top safe-bottom paywall-backdrop">
+      <div className="relative w-full max-w-xl max-h-[90dvh] bg-white rounded-[2rem] border border-slate-100 shadow-2xl overflow-hidden paywall-card v2-panel">
         <div className="absolute -top-5 -left-4 w-8 h-8 bg-amber-300/70 rounded-full blur-sm paywall-float"></div>
         <div className="absolute -bottom-4 -right-3 w-7 h-7 bg-emerald-300/60 rounded-full blur-sm paywall-float-alt"></div>
-        <div className="bg-slate-950 border-b-4 border-amber-500 px-8 py-7">
+        <div className="v2-shell bg-slate-950 border-b-4 border-amber-500 px-8 py-7 shrink-0">
           <p className="text-amber-500 text-[10px] font-black uppercase tracking-[0.3em] mb-2">Platform Update</p>
           <h2 className="text-white text-xl font-black uppercase tracking-tight">
             {isPreDeadline ? 'Free Access Is Ending Soon' : 'Free Access Has Ended'}
           </h2>
         </div>
-        <div className="p-8 space-y-5">
+        <div className="v2-scroll p-6 sm:p-8 space-y-5">
           {isPreDeadline ? (
             <p className="text-slate-600 text-sm leading-relaxed">
               This CBT platform has been running on free resources. To keep service stable for growing usage, free access
@@ -345,11 +347,13 @@ const App: React.FC = () => {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (!currentUser?.id) {
-      setTheme('classic');
+      const lastTheme = window.localStorage.getItem(APP_THEME_LAST_USED_KEY);
+      setTheme(isValidAppTheme(lastTheme) ? lastTheme : 'classic');
       setCustomTheme(DEFAULT_CUSTOM_THEME);
       return;
     }
-    const storedTheme = window.localStorage.getItem(getThemeStorageKey(currentUser.id));
+    const storedTheme = window.localStorage.getItem(getThemeStorageKey(currentUser.id))
+      || window.localStorage.getItem(APP_THEME_LAST_USED_KEY);
     if (isValidAppTheme(storedTheme)) {
       setTheme(storedTheme);
     } else {
@@ -369,6 +373,7 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (typeof document === 'undefined') return;
+    document.documentElement.setAttribute('data-theme', theme);
     document.body.setAttribute('data-theme', theme);
     const customVars = [
       '--v2-bg-start',
@@ -383,20 +388,27 @@ const App: React.FC = () => {
       '--v2-border'
     ];
     if (theme === 'custom') {
-      document.body.style.setProperty('--v2-bg-start', customTheme.bgStart);
-      document.body.style.setProperty('--v2-bg-end', customTheme.bgEnd);
-      document.body.style.setProperty('--v2-shell-start', customTheme.shellStart);
-      document.body.style.setProperty('--v2-shell-mid', customTheme.shellMid);
-      document.body.style.setProperty('--v2-shell-end', customTheme.shellEnd);
-      document.body.style.setProperty('--v2-accent', customTheme.accent);
-      document.body.style.setProperty('--v2-accent-soft', customTheme.accentSoft);
-      document.body.style.setProperty('--v2-accent-text', customTheme.accentText);
-      document.body.style.setProperty('--v2-card', customTheme.card);
-      document.body.style.setProperty('--v2-border', customTheme.border);
+      document.documentElement.style.setProperty('--v2-bg-start', customTheme.bgStart);
+      document.documentElement.style.setProperty('--v2-bg-end', customTheme.bgEnd);
+      document.documentElement.style.setProperty('--v2-shell-start', customTheme.shellStart);
+      document.documentElement.style.setProperty('--v2-shell-mid', customTheme.shellMid);
+      document.documentElement.style.setProperty('--v2-shell-end', customTheme.shellEnd);
+      document.documentElement.style.setProperty('--v2-accent', customTheme.accent);
+      document.documentElement.style.setProperty('--v2-accent-soft', customTheme.accentSoft);
+      document.documentElement.style.setProperty('--v2-accent-text', customTheme.accentText);
+      document.documentElement.style.setProperty('--v2-card', customTheme.card);
+      document.documentElement.style.setProperty('--v2-border', customTheme.border);
     } else {
-      customVars.forEach((varName) => document.body.style.removeProperty(varName));
+      customVars.forEach((varName) => document.documentElement.style.removeProperty(varName));
     }
-    if (typeof window === 'undefined' || !currentUser?.id) return;
+    if (theme === 'glass') {
+      syncGlassAccent();
+    } else {
+      clearGlassAccent();
+    }
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(APP_THEME_LAST_USED_KEY, theme);
+    if (!currentUser?.id) return;
     window.localStorage.setItem(getThemeStorageKey(currentUser.id), theme);
     window.localStorage.setItem(getCustomThemeStorageKey(currentUser.id), JSON.stringify(customTheme));
   }, [theme, customTheme, currentUser?.id]);

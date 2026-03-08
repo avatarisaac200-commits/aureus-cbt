@@ -2775,13 +2775,13 @@ Rules:
         )}
       </div>
       {isQuestionModalOpen && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm safe-top safe-bottom">
-          <div className="w-full max-w-2xl bg-white rounded-[2rem] shadow-2xl overflow-hidden border border-slate-100">
-            <div className="bg-slate-950 px-6 py-5 text-white flex justify-between items-center">
+        <div className="fixed inset-0 z-[120] flex items-start md:items-center justify-center p-3 md:p-4 bg-slate-950/70 backdrop-blur-sm overflow-y-auto safe-top safe-bottom">
+          <div className="w-full max-w-xl md:max-w-2xl max-h-[90dvh] bg-white rounded-[2rem] shadow-2xl overflow-hidden border border-slate-100 v2-panel">
+            <div className="v2-shell bg-slate-950 px-6 py-5 text-white flex justify-between items-center shrink-0">
               <h3 className="text-sm font-bold uppercase tracking-widest">{editingId ? 'Edit Question' : 'Add Question'}</h3>
               <button onClick={() => { setIsQuestionModalOpen(false); resetForm(); }} className="text-slate-300 hover:text-white">Close</button>
             </div>
-            <form onSubmit={handleSaveQuestion} className="p-6 space-y-4">
+            <form onSubmit={handleSaveQuestion} className="v2-scroll p-5 md:p-6 space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <input placeholder="Subject" className="w-full p-4 bg-slate-50 border rounded-2xl text-xs font-bold outline-none" value={qSubject} onChange={e => setQSubject(e.target.value)} required />
                 <input placeholder="Topic" className="w-full p-4 bg-slate-50 border rounded-2xl text-xs font-bold outline-none" value={qTopic} onChange={e => setQTopic(e.target.value)} />

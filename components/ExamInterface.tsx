@@ -145,6 +145,11 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
     const totalScore = sectionBreakdown.reduce((acc, curr) => acc + curr.score, 0);
     const maxScore = sectionBreakdown.reduce((acc, curr) => acc + curr.total, 0);
 
+    const snapshotEntries = allQuestionIds
+      .map((qId) => [qId, allQuestions[qId]] as const)
+      .filter((entry): entry is [string, Question] => Boolean(entry[1]));
+    const questionSnapshot = Object.fromEntries(snapshotEntries) as Record<string, Question>;
+
     const result: Omit<ExamResult, 'id'> = {
       userId: user.id,
       userName: user.name,
@@ -159,7 +164,7 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
       status: status,
       userAnswers: answers,
       resolvedSections: effectiveSections,
-      questionSnapshot: Object.keys(allQuestions).every((id) => id.startsWith('quizq_')) ? allQuestions : undefined,
+      questionSnapshot,
       attemptId: attemptId || undefined,
       sectionBreakdown
     };
