@@ -863,13 +863,19 @@ const Dashboard: React.FC<DashboardProps> = ({
              <span className="connection-dot"></span>
              <span className="hidden md:inline">Connection Stable</span>
            </div>
-           <div className="w-9 h-9 rounded-full bg-[var(--panel-2)] border border-[var(--edge)] text-xs font-bold flex items-center justify-center text-[var(--gold)]">
+           <button
+             type="button"
+             onClick={() => setActiveTab('profile')}
+             title="Open Profile"
+             aria-label="Open Profile"
+             className="w-9 h-9 rounded-full bg-[var(--panel-2)] border border-[var(--edge)] text-xs font-bold flex items-center justify-center text-[var(--gold)] overflow-hidden"
+           >
              {user.avatarUrl ? (
                <img src={user.avatarUrl} alt="Profile" className="w-full h-full rounded-full object-cover" />
              ) : (
                String(user.name || 'U').slice(0, 2).toUpperCase()
              )}
-           </div>
+           </button>
          </div>
       </div>
 

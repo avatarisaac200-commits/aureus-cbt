@@ -94,9 +94,22 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
           if (attemptDoc.exists()) {
             const attemptData = attemptDoc.data() as TestAttempt;
             if (Array.isArray(attemptData.sections) && attemptData.sections.length > 0) {
-              sectionsFromAttempt = attemptData.sections;
+              // Review should focus on attempted items only.
+              const answered = new Set(Object.keys(result.userAnswers || {}));
+              const attemptedOnly = attemptData.sections
+                .map((section) => ({ ...section, questionIds: section.questionIds.filter((id) => answered.has(id)) }))
+                .filter((section) => section.questionIds.length > 0);
+              sectionsFromAttempt = attemptedOnly.length > 0 ? attemptedOnly : attemptData.sections;
             }
           }
+        }
+        if ((!sectionsFromAttempt || sectionsFromAttempt.length === 0) && result.attemptQuestionIds && result.attemptQuestionIds.length > 0) {
+          sectionsFromAttempt = [{
+            id: 'attempted_only',
+            name: 'Attempted Questions',
+            questionIds: result.attemptQuestionIds,
+            marksPerQuestion: 1
+          }];
         }
 
         const testDoc = await getDoc(doc(db, 'tests', result.testId));

@@ -125,6 +125,14 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
   const calculateResult = useCallback(async (status: ExamResult['status']) => {
     const sectionsForResult = shuffledSections.length > 0 ? shuffledSections : effectiveSections;
     const allQuestionIds = sectionsForResult.flatMap(section => section.questionIds);
+    const answeredIdSet = new Set(Object.keys(answers || {}));
+    const attemptedSections = sectionsForResult
+      .map((section) => ({
+        ...section,
+        questionIds: section.questionIds.filter((qId) => answeredIdSet.has(qId))
+      }))
+      .filter((section) => section.questionIds.length > 0);
+    const attemptedQuestionIds = attemptedSections.flatMap((section) => section.questionIds);
     const answeredQuestionCount = allQuestionIds.reduce((count, qId) => (
       Object.prototype.hasOwnProperty.call(answers, qId) ? count + 1 : count
     ), 0);
@@ -147,7 +155,7 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
     const totalScore = sectionBreakdown.reduce((acc, curr) => acc + curr.score, 0);
     const maxScore = sectionBreakdown.reduce((acc, curr) => acc + curr.total, 0);
 
-    const snapshotEntries = allQuestionIds
+    const snapshotEntries = attemptedQuestionIds
       .map((qId) => [qId, allQuestions[qId]] as const)
       .filter((entry): entry is [string, Question] => Boolean(entry[1]));
     const questionSnapshot = Object.fromEntries(snapshotEntries) as Record<string, Question>;
@@ -166,8 +174,8 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
       status: status,
       userAnswers: answers,
       resolvedSections: effectiveSections,
-      attemptSections: sectionsForResult,
-      attemptQuestionIds: allQuestionIds,
+      attemptSections: attemptedSections,
+      attemptQuestionIds: attemptedQuestionIds,
       questionSnapshot,
       attemptId: attemptId || undefined,
       sectionBreakdown
