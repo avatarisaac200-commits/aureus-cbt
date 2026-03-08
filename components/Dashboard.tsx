@@ -207,7 +207,7 @@ const Dashboard: React.FC<DashboardProps> = ({
   const [rankRows, setRankRows] = useState<RankRow[]>([]);
   const [rankLoading, setRankLoading] = useState(false);
   const [rankError, setRankError] = useState<string | null>(null);
-  const [mobileUiMode, setMobileUiMode] = useState<MobileUiMode>('dark');
+  const [mobileUiMode, setMobileUiMode] = useState<MobileUiMode>('light');
   const isStudent = user.role === 'student';
   const licenseEndsMs = Date.parse(user.subscriptionEndsAt || '');
   const licenseEndsLabel = Number.isFinite(licenseEndsMs)
@@ -721,29 +721,81 @@ const Dashboard: React.FC<DashboardProps> = ({
       return parseIsoDate(((b as any).updatedAt || b.createdAt)) - parseIsoDate(((a as any).updatedAt || a.createdAt));
     });
 
+  const navTabs: Array<{ id: MainTab; label: string }> = [
+    { id: 'home', label: 'Home' },
+    { id: 'ranks', label: 'Ranks' },
+    { id: 'create', label: 'Create' },
+    { id: 'settings', label: 'Settings' },
+    { id: 'profile', label: 'Profile' }
+  ];
+
+  const renderTabIcon = (tabId: MainTab) => {
+    if (tabId === 'home') {
+      return (
+        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M3 10.5L12 3l9 7.5" />
+          <path d="M5.5 9.5V20h13V9.5" />
+        </svg>
+      );
+    }
+    if (tabId === 'ranks') {
+      return (
+        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M4 20h16" />
+          <rect x="6" y="11" width="3" height="7" />
+          <rect x="11" y="7" width="3" height="11" />
+          <rect x="16" y="4" width="3" height="14" />
+        </svg>
+      );
+    }
+    if (tabId === 'create') {
+      return (
+        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M12 5v14M5 12h14" />
+        </svg>
+      );
+    }
+    if (tabId === 'settings') {
+      return (
+        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M12 8.5a3.5 3.5 0 100 7 3.5 3.5 0 000-7z" />
+          <path d="M19.4 15a1 1 0 00.2 1.1l.1.1a2 2 0 01-2.8 2.8l-.1-.1a1 1 0 00-1.1-.2 1 1 0 00-.6.9V20a2 2 0 01-4 0v-.2a1 1 0 00-.6-.9 1 1 0 00-1.1.2l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1 1 0 00.2-1.1 1 1 0 00-.9-.6H4a2 2 0 010-4h.2a1 1 0 00.9-.6 1 1 0 00-.2-1.1l-.1-.1a2 2 0 112.8-2.8l.1.1a1 1 0 001.1.2h.1a1 1 0 00.6-.9V4a2 2 0 014 0v.2a1 1 0 00.6.9 1 1 0 001.1-.2l.1-.1a2 2 0 112.8 2.8l-.1.1a1 1 0 00-.2 1.1v.1a1 1 0 00.9.6H20a2 2 0 010 4h-.2a1 1 0 00-.9.6z" />
+        </svg>
+      );
+    }
+    return (
+      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <circle cx="12" cy="8" r="3.5" />
+        <path d="M4 20c1.8-3.2 5-5 8-5s6.2 1.8 8 5" />
+      </svg>
+    );
+  };
+
   return (
     <div className={`v2-page v3-mobile-shell mobile-ui-${mobileUiMode} flex-1 w-full bg-slate-50 overflow-hidden min-h-0 relative shell md:grid md:grid-cols-[72px_1fr]`}>
       <aside className="sidebar hidden md:flex flex-col items-center justify-between py-5 px-3 bg-[var(--surface)] border-r border-[var(--edge)] sticky top-0 h-screen">
         <div className="w-10 h-10 rounded-xl bg-[var(--gold)] text-[var(--ink)] font-display text-lg font-black flex items-center justify-center shadow-[var(--shadow-gold)]">A</div>
         <div className="flex flex-col gap-3">
-          {[
-            { id: 'home' as MainTab, icon: 'âŠž' },
-            { id: 'ranks' as MainTab, icon: 'â¬¡' },
-            { id: 'create' as MainTab, icon: 'âœ¦' },
-            { id: 'settings' as MainTab, icon: 'âš™' },
-            { id: 'profile' as MainTab, icon: 'â—‰' }
-          ].map((tab) => (
+          {navTabs.map((tab) => (
             <button
               key={tab.id}
               type="button"
               onClick={() => setActiveTab(tab.id)}
+              title={tab.label}
+              aria-label={tab.label}
               className={`w-11 h-11 min-h-[44px] rounded-xl border ${activeTab === tab.id ? 'bg-[var(--gold-dim)] text-[var(--gold)] border-[var(--gold)]' : 'bg-transparent text-[var(--muted)] border-[var(--edge)] hover:bg-[var(--panel)]'}`}
             >
-              <span className="text-lg">{tab.icon}</span>
+              <span className="inline-flex items-center justify-center">{renderTabIcon(tab.id)}</span>
             </button>
           ))}
         </div>
-        <button onClick={onLogout} className="w-11 h-11 min-h-[44px] rounded-xl border border-[var(--edge)] text-[var(--rose)] hover:bg-[var(--rose-dim)]">âŽ‹</button>
+        <button onClick={onLogout} title="Log Out" aria-label="Log Out" className="w-11 h-11 min-h-[44px] rounded-xl border border-[var(--edge)] text-[var(--rose)] hover:bg-[var(--rose-dim)] inline-flex items-center justify-center">
+          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M15 17l5-5-5-5" />
+            <path d="M20 12H9" />
+            <path d="M11 4H6a2 2 0 00-2 2v12a2 2 0 002 2h5" />
+          </svg>
+        </button>
       </aside>
       <div className="flex flex-col min-h-0 overflow-hidden">
       <div className="v2-shell v3-topbar topbar bg-slate-950 py-[14px] px-[18px] md:px-8 flex justify-between items-center shrink-0 border-b border-slate-900 shadow-xl z-50 safe-top sticky top-0">
@@ -1317,7 +1369,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                   <div className="flex items-center justify-between bg-slate-50 border border-slate-100 rounded-2xl p-4">
                     <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Mobile UI Mode</span>
                     <button onClick={() => setMobileUiMode((prev) => (prev === 'dark' ? 'light' : 'dark'))} className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest bg-slate-200 text-slate-700">
-                      {mobileUiMode === 'dark' ? 'Dark Glass' : 'Light Glass'}
+                      {mobileUiMode === 'dark' ? 'Dark Mode' : 'Light Mode'}
                     </button>
                   </div>
                 </div>
@@ -1415,20 +1467,14 @@ const Dashboard: React.FC<DashboardProps> = ({
           )}
         </div>
       </div>
-      <nav className="fixed bottom-0 left-0 right-0 z-50 flex justify-around items-center bg-[rgba(15,19,32,0.95)] backdrop-blur-xl border-t border-[var(--edge)] py-2 pb-safe md:hidden">
-        {[
-          { id: 'home' as MainTab, label: 'Home', icon: 'âŠž' },
-          { id: 'ranks' as MainTab, label: 'Ranks', icon: 'â¬¡' },
-          { id: 'create' as MainTab, label: 'Create', icon: 'âœ¦' },
-          { id: 'settings' as MainTab, label: 'Settings', icon: 'âš™' },
-          { id: 'profile' as MainTab, label: 'Profile', icon: 'â—‰' }
-        ].map((tab) => (
+      <nav className="fixed bottom-0 left-0 right-0 z-50 flex justify-around items-center bg-[var(--surface)] backdrop-blur-xl border-t border-[var(--edge)] py-2 pb-safe md:hidden">
+        {navTabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={`flex flex-col items-center gap-1 px-4 py-2 rounded-xl min-h-[44px] text-xs uppercase tracking-widest font-semibold transition-all ${activeTab === tab.id ? 'text-[var(--gold)]' : 'text-[var(--muted)]'}`}
           >
-            <span className="text-xl leading-none">{tab.icon}</span>
+            <span className="inline-flex items-center justify-center leading-none">{renderTabIcon(tab.id)}</span>
             <span>{tab.label}</span>
           </button>
         ))}
