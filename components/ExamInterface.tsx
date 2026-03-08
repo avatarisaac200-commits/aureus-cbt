@@ -1,4 +1,4 @@
-
+﻿
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { MockTest, Question, ExamResult, User, TestSection } from '../types';
 import { db } from '../firebase';
@@ -7,6 +7,7 @@ import Calculator from './Calculator';
 import ScientificText from './ScientificText';
 import logo from '../assets/logo.png';
 import { getOrCreateAiExplanation } from './aiExplanationService';
+import { confirmDialog } from './ui/ConfirmDialog';
 
 interface ExamInterfaceProps {
   test: MockTest;
@@ -228,16 +229,27 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
     setShowNav(false);
   };
 
-  const exitToDashboard = () => {
-    const confirmed = window.confirm('Leave this test and return to dashboard? Your current progress will not be submitted.');
+  const exitToDashboard = async () => {
+    const confirmed = await confirmDialog({
+      title: 'Exit test?',
+      message: 'Leave this test and return to dashboard? Your current progress will not be submitted.',
+      confirmText: 'Exit',
+      variant: 'danger'
+    });
     if (!confirmed) return;
     if (timerRef.current) clearInterval(timerRef.current);
     onExit();
   };
 
-  const handleSectionSubmit = () => {
+  const handleSectionSubmit = async () => {
     if (activeSectionIndex === null) return;
-    if (window.confirm("Finish this section? You cannot change your answers after this.")) {
+    const confirmed = await confirmDialog({
+      title: 'Finish section?',
+      message: 'You cannot change your answers after this.',
+      confirmText: 'Finish',
+      variant: 'primary'
+    });
+    if (confirmed) {
       setCompletedSections(prev => (
         prev.includes(activeSectionIndex) ? prev : [...prev, activeSectionIndex]
       ));
@@ -254,8 +266,14 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
     }
   };
 
-  const finalSubmit = () => {
-    if (window.confirm("Submit your entire test?")) {
+  const finalSubmit = async () => {
+    const confirmed = await confirmDialog({
+      title: 'Submit test?',
+      message: 'Submit your entire test now?',
+      confirmText: 'Submit',
+      variant: 'primary'
+    });
+    if (confirmed) {
       setIsFinishing(true);
       hasSubmittedRef.current = true;
       if (timerRef.current) clearInterval(timerRef.current);
@@ -276,6 +294,7 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
   const correctAnswerIndex = currentQuestion?.correctAnswerIndex ?? -1;
   const currentAnswer = currentQuestionId ? answers[currentQuestionId] : undefined;
   const isCurrentRevealed = currentQuestionId ? Boolean(revealedAnswers[currentQuestionId]) : false;
+  const timerToneClass = timeRemaining <= 60 ? 'text-red-500' : timeRemaining <= 300 ? 'text-amber-500' : 'text-emerald-500';
 
   useEffect(() => {
     setAiExplanation('');
@@ -309,8 +328,8 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
     return (
       <div className="v2-page h-full w-full flex flex-col items-center justify-center bg-slate-950 p-8 text-center">
         <img src={logo} className="w-12 h-12 animate-pulse mb-5" alt="Aureus Medicos CBT Logo" />
-        <p className="text-amber-500 text-[10px] font-black uppercase tracking-[0.3em] mb-2">Preparing Question Package</p>
-        <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">Please wait...</p>
+        <p className="text-amber-500 text-xs font-black uppercase tracking-[0.3em] mb-2">Preparing Question Package</p>
+        <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">Please wait...</p>
       </div>
     );
   }
@@ -319,9 +338,9 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
     return (
       <div className="v2-page h-full w-full flex flex-col items-center justify-center bg-slate-50 p-8 text-center">
         <img src={logo} className="w-14 h-14 mb-6" alt="Aureus Medicos CBT Logo" />
-        <p className="text-red-600 text-[10px] font-black uppercase tracking-[0.2em] mb-3">Could Not Open Test</p>
+        <p className="text-red-600 text-xs font-black uppercase tracking-[0.2em] mb-3">Could Not Open Test</p>
         <p className="text-slate-500 text-sm max-w-md mb-8">{questionLoadError}</p>
-        <button onClick={onExit} className="px-8 py-3 bg-slate-950 text-amber-500 rounded-xl text-[10px] font-bold uppercase tracking-widest">Back to Dashboard</button>
+        <button onClick={onExit} className="px-8 py-3 bg-slate-950 text-amber-500 rounded-xl text-xs font-bold uppercase tracking-widest">Back to Dashboard</button>
       </div>
     );
   }
@@ -333,8 +352,8 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
           <div className="flex items-center gap-4">
             <img src={logo} className="w-10 h-10" alt="Logo" />
             <div>
-              <h1 className="text-[10px] font-bold uppercase tracking-widest text-amber-500">Aureus Medicos</h1>
-              <p className="text-[8px] text-slate-400 font-bold uppercase truncate max-w-[150px]">{test.name}</p>
+              <h1 className="text-xs font-bold uppercase tracking-widest text-amber-500">Aureus Medicos</h1>
+              <p className="text-xs text-slate-400 font-bold uppercase truncate max-w-[150px]">{test.name}</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -343,7 +362,7 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
             </div>
             <button
               onClick={exitToDashboard}
-              className="px-4 py-2 border border-slate-700 text-slate-100 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-slate-900/70"
+              className="px-4 py-2 border border-slate-700 text-slate-100 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-slate-900/70"
             >
               Exit
             </button>
@@ -353,9 +372,9 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
         <main className="flex-1 v2-scroll p-6 md:p-12 safe-bottom">
           <div className="max-w-4xl mx-auto bg-white rounded-[2rem] shadow-xl border border-slate-100 p-8 md:p-12">
             <h2 className="text-2xl font-bold text-slate-950 mb-2 uppercase tracking-tight">Test Instructions</h2>
-            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-3">You can move between sections anytime from the lobby.</p>
+            <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-3">You can move between sections anytime from the lobby.</p>
             {instantFeedback && (
-              <p className="text-emerald-700 text-[10px] font-bold uppercase tracking-widest mb-10">
+              <p className="text-emerald-700 text-xs font-bold uppercase tracking-widest mb-10">
                 Quiz Mode: answers are revealed instantly after each selection.
               </p>
             )}
@@ -368,16 +387,16 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
                       <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm ${isCompleted ? 'bg-slate-200 text-slate-400' : 'bg-slate-950 text-amber-500'}`}>{idx + 1}</div>
                       <div className="text-left">
                         <h3 className="font-bold text-slate-950 text-sm uppercase">{section.name}</h3>
-                        <p className="text-[9px] text-slate-400 font-bold uppercase">{section.questionIds.length} Questions</p>
+                        <p className="text-xs text-slate-400 font-bold uppercase">{section.questionIds.length} Questions</p>
                       </div>
                     </div>
-                    <span className={`text-[9px] font-bold px-4 py-2 rounded-xl uppercase tracking-widest transition-all ${isCompleted ? 'bg-slate-100 text-slate-400' : 'bg-amber-100 text-amber-600'}`}>{isCompleted ? 'Review' : 'Start'}</span>
+                    <span className={`text-xs font-bold px-4 py-2 rounded-xl uppercase tracking-widest transition-all ${isCompleted ? 'bg-slate-100 text-slate-400' : 'bg-amber-100 text-amber-600'}`}>{isCompleted ? 'Review' : 'Start'}</span>
                   </button>
                 );
               })}
             </div>
             <div className="mt-12 pt-8 border-t border-slate-50 flex flex-col md:flex-row gap-6 justify-end items-center">
-              <button onClick={finalSubmit} disabled={!hasStarted || isFinishing} className="w-full md:w-auto px-10 py-4 bg-slate-950 text-amber-500 rounded-2xl text-[10px] font-bold uppercase tracking-widest shadow-xl hover:bg-slate-900 transition-all disabled:opacity-30">Submit Final Test</button>
+              <button onClick={finalSubmit} disabled={!hasStarted || isFinishing} className="w-full md:w-auto px-10 py-4 bg-slate-950 text-amber-500 rounded-2xl text-xs font-bold uppercase tracking-widest shadow-xl hover:bg-slate-900 transition-all disabled:opacity-30">Submit Final Test</button>
             </div>
           </div>
         </main>
@@ -389,30 +408,30 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
     return (
       <div className="v2-page h-full w-full flex flex-col items-center justify-center bg-slate-950 p-8 text-center">
         <img src={logo} className="w-12 h-12 animate-pulse mb-5" alt="Aureus Medicos CBT Logo" />
-        <p className="text-amber-500 text-[10px] font-black uppercase tracking-[0.3em] mb-2">Preparing Section</p>
-        <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">Please wait...</p>
+        <p className="text-amber-500 text-xs font-black uppercase tracking-[0.3em] mb-2">Preparing Section</p>
+        <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">Please wait...</p>
       </div>
     );
   }
 
   return (
-    <div className="v2-page flex flex-col h-full bg-slate-50 select-none overflow-hidden min-h-0 safe-top">
+    <div className="v2-page flex flex-col h-full bg-slate-50 overflow-hidden min-h-0 safe-top">
       <header className="v2-shell bg-slate-950 text-white px-6 py-4 flex justify-between items-center border-b-4 border-amber-500 z-30 shrink-0 sticky top-0">
         <div className="flex items-center gap-4">
           <img src={logo} className="w-8 h-8" alt="Logo" />
           <div className="hidden sm:block">
-            <h1 className="text-[10px] font-bold uppercase tracking-widest text-amber-500">Aureus Medicos</h1>
-            <p className="text-[9px] text-slate-400 font-bold uppercase truncate max-w-[200px] mt-0.5">{test.name}</p>
+            <h1 className="text-xs font-bold uppercase tracking-widest text-amber-500">Aureus Medicos</h1>
+            <p className="text-xs text-slate-400 font-bold uppercase truncate max-w-[200px] mt-0.5">{test.name}</p>
           </div>
         </div>
         <div className="flex items-center gap-4">
           <button
             onClick={exitToDashboard}
-            className="hidden sm:inline-flex px-4 py-2 border border-slate-700 text-slate-100 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-slate-900/70"
+            className="hidden sm:inline-flex px-4 py-2 border border-slate-700 text-slate-100 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-slate-900/70"
           >
             Exit
           </button>
-          <div className="font-mono text-xl font-bold text-amber-400 bg-slate-900 px-4 py-1.5 rounded-xl border border-slate-800">{formatTime(timeRemaining)}</div>
+          <div className={`font-mono text-xl font-bold bg-slate-900 px-4 py-1.5 rounded-xl border border-slate-800 ${timerToneClass}`}>{formatTime(timeRemaining)}</div>
           <button onClick={() => setShowNav(!showNav)} className="md:hidden p-2 text-amber-500 bg-slate-900 rounded-xl border border-slate-800"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16m-7 6h7"></path></svg></button>
         </div>
       </header>
@@ -421,21 +440,21 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
         <main className="flex-1 flex flex-col p-4 md:p-8 overflow-hidden min-h-0">
           <div className="flex-1 bg-white rounded-[2rem] md:rounded-[3rem] shadow-sm border border-slate-100 v2-scroll p-8 md:p-12">
             <div className="mb-8 border-b border-slate-50 pb-4 flex justify-between items-center">
-               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Question {currentQuestionIndex + 1} of {activeSection.questionIds.length}</span>
-               <div className="flex items-center gap-2">
+               <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Question {currentQuestionIndex + 1} of {activeSection.questionIds.length}</span>
+               <div className="flex items-center gap-2 q-action-row">
                  {instantFeedback && (
                    <button
                      type="button"
                      onClick={() => setShowMoreInfo(prev => !prev)}
-                     className={`text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-widest border ${showMoreInfo ? 'text-sky-700 bg-sky-50 border-sky-200' : 'text-slate-500 bg-white border-slate-200'}`}
+                     className={`text-xs font-bold px-3 py-1 rounded-full uppercase tracking-widest border ${showMoreInfo ? 'text-sky-700 bg-sky-50 border-sky-200' : 'text-slate-500 bg-white border-slate-200'}`}
                    >
                      {showMoreInfo ? 'Hide More Info' : 'Show More Info'}
                    </button>
                  )}
-                 <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-3 py-1 rounded-full uppercase tracking-widest">{activeSection.name}</span>
+                 <span className="text-xs font-bold text-amber-600 bg-amber-50 px-3 py-1 rounded-full uppercase tracking-widest">{activeSection.name}</span>
                </div>
             </div>
-            <div className="text-lg md:text-2xl font-bold text-slate-900 mb-12 leading-tight text-center md:text-left"><ScientificText text={currentQuestion?.text || "Loading..."} /></div>
+            <div className="question-text text-[17px] md:text-2xl font-bold text-slate-900 mb-12 leading-tight text-center md:text-left"><ScientificText text={currentQuestion?.text || "Loading..."} /></div>
             <div className="space-y-4">
               {currentQuestion?.options.map((option, idx) => (
                 <button
@@ -468,18 +487,18 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
             </div>
             {instantFeedback && isCurrentRevealed && currentQuestion && (
               <div className="mt-6 p-4 rounded-2xl border border-emerald-100 bg-emerald-50">
-                <p className={`text-[10px] font-bold uppercase tracking-widest ${currentAnswer === correctAnswerIndex ? 'text-emerald-700' : 'text-red-600'}`}>
+                <p className={`text-xs font-bold uppercase tracking-widest ${currentAnswer === correctAnswerIndex ? 'text-emerald-700' : 'text-red-600'}`}>
                   {currentAnswer === correctAnswerIndex ? 'Correct' : `Incorrect. Correct answer: ${String.fromCharCode(65 + correctAnswerIndex)}`}
                 </p>
               </div>
             )}
             {instantFeedback && showMoreInfo && isCurrentRevealed && (
               <div className="mt-6 p-5 rounded-2xl border border-sky-100 bg-sky-50">
-                <h4 className="text-[10px] font-bold uppercase tracking-widest text-sky-700 mb-3">AI More Info</h4>
-                {aiLoading && <p className="text-[10px] font-bold uppercase tracking-widest text-sky-700">Loading explanation...</p>}
-                {!aiLoading && aiError && <p className="text-[10px] font-bold uppercase tracking-widest text-red-600">{aiError}</p>}
+                <h4 className="text-xs font-bold uppercase tracking-widest text-sky-700 mb-3">AI More Info</h4>
+                {aiLoading && <p className="text-xs font-bold uppercase tracking-widest text-sky-700">Loading explanation...</p>}
+                {!aiLoading && aiError && <p className="text-xs font-bold uppercase tracking-widest text-red-600">{aiError}</p>}
                 {!aiLoading && !aiError && aiSource === 'fallback' && (
-                  <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-amber-700 bg-amber-100 border border-amber-200 rounded-lg px-3 py-2">
+                  <p className="mb-3 text-xs font-bold uppercase tracking-widest text-amber-700 bg-amber-100 border border-amber-200 rounded-lg px-3 py-2">
                     AI quota is unavailable. Showing stored local explanation.
                   </p>
                 )}
@@ -496,31 +515,31 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
         <aside className={`fixed inset-y-0 right-0 w-72 bg-white border-l border-slate-100 z-40 transform transition-transform duration-300 md:relative md:translate-x-0 ${showNav ? 'translate-x-0' : 'translate-x-full'} shadow-2xl md:shadow-none`}>
           <div className="h-full flex flex-col">
             <div className="p-6 border-b border-slate-50 bg-slate-50/50 flex justify-between items-center">
-              <h3 className="text-[10px] font-bold text-slate-950 uppercase tracking-widest">Questions</h3>
+              <h3 className="text-xs font-bold text-slate-950 uppercase tracking-widest">Questions</h3>
               <button onClick={() => setShowNav(false)} className="md:hidden text-slate-400"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
             </div>
             <div className="p-4 grid grid-cols-4 gap-2 content-start v2-scroll flex-1">
               {activeSection.questionIds.map((id, idx) => (
-                <button key={id} onClick={() => { setCurrentQuestionIndex(idx); setShowNav(false); }} className={`h-10 rounded-xl text-[10px] font-bold border transition-all ${idx === currentQuestionIndex ? 'border-amber-500 bg-amber-500 text-slate-950' : answers[id] !== undefined ? 'border-slate-300 bg-slate-100 text-slate-800' : 'border-slate-100 text-slate-300 bg-white hover:border-slate-300'}`}>{idx + 1}</button>
+                <button key={id} onClick={() => { setCurrentQuestionIndex(idx); setShowNav(false); }} className={`q-dot h-10 rounded-xl text-xs font-bold border transition-all ${idx === currentQuestionIndex ? 'active border-amber-500 bg-amber-500 text-slate-950 shadow-[var(--shadow-gold)]' : answers[id] !== undefined ? 'border-sky-200 bg-sky-50 text-sky-700' : 'border-slate-100 text-slate-300 bg-white hover:border-slate-300'}`}>{idx + 1}</button>
               ))}
             </div>
             <div className="p-6 bg-slate-50 border-t border-slate-100">
-              <button onClick={() => { setShowCalculator(!showCalculator); setShowNav(false); }} className="w-full py-4 bg-slate-950 text-amber-500 rounded-xl text-[10px] font-bold uppercase tracking-widest shadow-lg">Calculator</button>
+              <button onClick={() => { setShowCalculator(!showCalculator); setShowNav(false); }} className="w-full py-4 bg-slate-950 text-amber-500 rounded-xl text-xs font-bold uppercase tracking-widest shadow-lg">Calculator</button>
             </div>
           </div>
         </aside>
       </div>
 
       <footer className="v2-shell bg-white border-t border-slate-100 p-4 sm:p-6 flex flex-col gap-3 justify-between items-center z-20 shrink-0 safe-bottom sticky bottom-0">
-         <div className="hidden sm:block text-[10px] font-bold text-slate-400 uppercase tracking-widest">You can return to lobby anytime</div>
+         <div className="hidden sm:block text-xs font-bold text-slate-400 uppercase tracking-widest">You can return to lobby anytime</div>
          <div className="flex gap-2 w-full sm:w-auto">
-           <button onClick={() => setCurrentQuestionIndex(prev => Math.max(0, prev - 1))} disabled={currentQuestionIndex === 0} className="flex-1 px-6 py-3 border-2 border-slate-100 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-slate-50 disabled:opacity-30">Prev</button>
-           <button onClick={() => setCurrentQuestionIndex(prev => Math.min(activeSection.questionIds.length - 1, prev + 1))} disabled={currentQuestionIndex === activeSection.questionIds.length - 1} className="flex-1 px-6 py-3 border-2 border-slate-100 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-slate-50 disabled:opacity-30">Next</button>
+           <button onClick={() => setCurrentQuestionIndex(prev => Math.max(0, prev - 1))} disabled={currentQuestionIndex === 0} className="flex-1 px-6 py-3 border-2 border-slate-100 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-slate-50 disabled:opacity-30">Prev</button>
+           <button onClick={() => setCurrentQuestionIndex(prev => Math.min(activeSection.questionIds.length - 1, prev + 1))} disabled={currentQuestionIndex === activeSection.questionIds.length - 1} className="flex-1 px-6 py-3 border-2 border-slate-100 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-slate-50 disabled:opacity-30">Next</button>
          </div>
          <div className="hidden sm:flex gap-2 w-full sm:w-auto">
-           <button onClick={exitToDashboard} className="flex-1 sm:flex-none px-6 py-3 border-2 border-red-100 text-red-600 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-red-50">Exit</button>
-           <button onClick={returnToLobby} className="flex-1 sm:flex-none px-6 py-3 border-2 border-slate-100 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-slate-50">Lobby</button>
-           <button onClick={handleSectionSubmit} className="flex-1 sm:flex-none px-8 py-3 bg-amber-500 text-slate-950 rounded-xl text-[10px] font-bold uppercase tracking-widest shadow-md">Mark Done</button>
+           <button onClick={exitToDashboard} className="flex-1 sm:flex-none px-6 py-3 border-2 border-red-100 text-red-600 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-red-50">Exit</button>
+           <button onClick={returnToLobby} className="flex-1 sm:flex-none px-6 py-3 border-2 border-slate-100 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-slate-50">Lobby</button>
+           <button onClick={handleSectionSubmit} className="flex-1 sm:flex-none px-8 py-3 bg-amber-500 text-slate-950 rounded-xl text-xs font-bold uppercase tracking-widest shadow-md">Mark Done</button>
          </div>
       </footer>
 
@@ -531,3 +550,4 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
 };
 
 export default ExamInterface;
+

@@ -7,6 +7,8 @@ import { GoogleGenAI } from '@google/genai';
 import ScientificText from './ScientificText';
 import AdminAnalytics from './AdminAnalytics';
 import logo from '../assets/logo.png';
+import { toast } from './ui/Toast';
+import { confirmDialog } from './ui/ConfirmDialog';
 
 interface AdminDashboardProps {
   user: User;
@@ -396,6 +398,9 @@ Rules:
 };
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'questions', onLogout, onSwitchToStudent }) => {
+  const notify = (message: string) => {
+    toast.info('Notice', String(message));
+  };
   const canManageKeys = user.role === 'root-admin';
   const [activeTab, setActiveTab] = useState<AdminTab>(canManageKeys || initialTab !== 'license-keys' ? initialTab : 'questions');
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -702,22 +707,34 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
   };
 
   const recalculateAllScores = async () => {
-    if (!window.confirm('Recalculate all stored results using current question answers? This may take some time.')) return;
+    const shouldRecalculate = await confirmDialog({
+      title: 'Recalculate scores?',
+      message: 'Recalculate all stored results using current question answers? This may take some time.',
+      confirmText: 'Recalculate',
+      variant: 'danger'
+    });
+    if (!shouldRecalculate) return;
     setLoading(true);
     try {
       const testsSnap = await getDocs(collection(db, 'tests'));
       const tests = testsSnap.docs.map(d => ({ ...d.data(), id: d.id } as MockTest));
       const changedResults = await recalculateResultsForTests(tests);
-      alert(`Recalculation complete. Updated ${changedResults} result(s).`);
+      notify(`Recalculation complete. Updated ${changedResults} result(s).`);
     } catch (err: any) {
-      alert('Score recalculation failed. ' + (err?.message || ''));
+      notify('Score recalculation failed. ' + (err?.message || ''));
     } finally {
       setLoading(false);
     }
   };
 
   const rebuildLeaderboardPublic = async () => {
-    if (!window.confirm('Rebuild leaderboardPublic from all results now?')) return;
+    const shouldRebuild = await confirmDialog({
+      title: 'Rebuild leaderboard?',
+      message: 'Rebuild leaderboardPublic from all results now?',
+      confirmText: 'Rebuild',
+      variant: 'danger'
+    });
+    if (!shouldRebuild) return;
     setLoading(true);
     try {
       const resultsSnap = await getDocs(query(collection(db, 'results'), limit(3000)));
@@ -785,9 +802,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
         await batch.commit();
       }
 
-      alert(`leaderboardPublic rebuilt for ${Object.keys(buckets).length} user(s).`);
+      notify(`leaderboardPublic rebuilt for ${Object.keys(buckets).length} user(s).`);
     } catch (err: any) {
-      alert('Leaderboard rebuild failed. ' + (err?.message || ''));
+      notify('Leaderboard rebuild failed. ' + (err?.message || ''));
     } finally {
       setLoading(false);
     }
@@ -799,10 +816,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
       const snap = await getDocs(query(collection(db, 'tests'), limit(300)));
       const data = snap.docs
         .map(d => ({ ...d.data(), id: d.id } as MockTest))
-        .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+        .sort((a, b) => {
+          const aMs = Date.parse(((a as any).updatedAt || a.createdAt || ''));
+          const bMs = Date.parse(((b as any).updatedAt || b.createdAt || ''));
+          return (Number.isFinite(bMs) ? bMs : 0) - (Number.isFinite(aMs) ? aMs : 0);
+        });
       setManagedTests(data);
     } catch (err: any) {
-      alert('Unable to load tests. ' + (err?.message || ''));
+      notify('Unable to load tests. ' + (err?.message || ''));
     } finally {
       setManagedTestsLoading(false);
     }
@@ -821,7 +842,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
   };
 
   const runBankCleanup = async () => {
-    if (!window.confirm("Find and remove identical questions? This cannot be undone.")) return;
+    const shouldClean = await confirmDialog({
+      title: 'Clean question bank?',
+      message: 'Find and remove identical questions? This cannot be undone.',
+      confirmText: 'Clean',
+      variant: 'danger'
+    });
+    if (!shouldClean) return;
     setLoading(true);
     try {
       const snap = await getDocs(collection(db, 'questions'));
@@ -845,16 +872,16 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
           batch.delete(doc(db, 'questions', id));
         });
         await batch.commit();
-        alert(`Cleanup successful. Removed ${duplicatesToDelete.length} duplicates.`);
+        notify(`Cleanup successful. Removed ${duplicatesToDelete.length} duplicates.`);
       } else {
-        alert("No duplicate questions found.");
+        notify("No duplicate questions found.");
       }
     } catch (err: any) {
       console.error("Cleanup Error:", err);
       if (err.code === 'unavailable' || !navigator.onLine) {
-        alert("Operation failed: You are currently offline or the database is unreachable.");
+        notify("Operation failed: You are currently offline or the database is unreachable.");
       } else {
-        alert("Cleanup failed: " + err.message);
+        notify("Cleanup failed: " + err.message);
       }
     } finally {
       setLoading(false);
@@ -864,7 +891,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
   const processPDF = async (file: File) => {
     const apiKey = import.meta.env.VITE_GEMINI_API_KEY as string | undefined;
     if (!apiKey) {
-      alert('Missing Gemini API key. Add VITE_GEMINI_API_KEY to .env.local.');
+      notify('Missing Gemini API key. Add VITE_GEMINI_API_KEY to .env.local.');
       return;
     }
 
@@ -952,7 +979,7 @@ Rules:
         if (fallbackQuestions.length > 0) {
           setStagedQuestions(fallbackQuestions);
           setImportStatus('review');
-          alert(`AI extraction failed, but fallback parser found ${fallbackQuestions.length} question(s). Please review carefully.`);
+          notify(`AI extraction failed, but fallback parser found ${fallbackQuestions.length} question(s). Please review carefully.`);
           return;
         }
 
@@ -964,7 +991,7 @@ Rules:
             if (imageQuestions.length > 0) {
               setStagedQuestions(imageQuestions);
               setImportStatus('review');
-              alert(`AI PDF parser failed, but OCR/vision fallback found ${imageQuestions.length} question(s). Please review carefully.`);
+              notify(`AI PDF parser failed, but OCR/vision fallback found ${imageQuestions.length} question(s). Please review carefully.`);
               return;
             }
           }
@@ -981,7 +1008,7 @@ Rules:
       setStagedQuestions(parsedQuestions);
       setImportStatus('review');
     } catch (err: any) {
-      alert(err?.message || "AI reading failed. Check your API key and file.");
+      notify(err?.message || "AI reading failed. Check your API key and file.");
       setImportStatus('idle');
     }
   };
@@ -998,13 +1025,13 @@ Rules:
         throw new Error(errors[0] || 'No valid rows were found in CSV.');
       }
       if (errors.length > 0) {
-        alert(`Imported with ${errors.length} skipped row(s). First issue: ${errors[0]}`);
+        notify(`Imported with ${errors.length} skipped row(s). First issue: ${errors[0]}`);
       }
 
       setStagedQuestions(mapped);
       setImportStatus('review');
     } catch (err: any) {
-      alert(err?.message || 'CSV import failed.');
+      notify(err?.message || 'CSV import failed.');
       setImportStatus('idle');
     }
   };
@@ -1021,10 +1048,10 @@ Rules:
       setCsvDynamicQuestionCount(prev => Math.max(1, Math.min(mapped.length, prev || mapped.length)));
       setCsvBundleSize(prev => Math.max(1, Math.min(mapped.length, prev || 100)));
       if (errors.length > 0) {
-        alert(`CSV loaded with ${errors.length} skipped row(s). First issue: ${errors[0]}`);
+        notify(`CSV loaded with ${errors.length} skipped row(s). First issue: ${errors[0]}`);
       }
     } catch (err: any) {
-      alert(err?.message || 'Could not load CSV for dynamic test.');
+      notify(err?.message || 'Could not load CSV for dynamic test.');
     } finally {
       setLoading(false);
     }
@@ -1049,7 +1076,7 @@ Rules:
     try {
       const duplicateId = await findDuplicateQuestion(data.text, editingId || undefined);
       if (duplicateId) {
-        alert('This question already exists.');
+        notify('This question already exists.');
         setLoading(false);
         return;
       }
@@ -1063,7 +1090,7 @@ Rules:
         if (optionsChanged) {
           const updatedCount = await recalculateScoresForQuestion(editingId);
           if (updatedCount > 0) {
-            alert(`Question updated. ${updatedCount} result(s) were recalculated.`);
+            notify(`Question updated. ${updatedCount} result(s) were recalculated.`);
           }
         }
       } else {
@@ -1075,7 +1102,7 @@ Rules:
         await runQuestionSearch(bankSearchQuery);
       }
     } catch (e: any) {
-      alert("Could not save to database. " + (e?.message || ""));
+      notify("Could not save to database. " + (e?.message || ""));
     }
     finally { setLoading(false); }
   };
@@ -1116,24 +1143,24 @@ Rules:
 
   const handleCreateTest = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!testName) return alert("Test name is required.");
+    if (!testName) return notify("Test name is required.");
     if (testGenerationMode === 'csv-dynamic' && csvDynamicQuestions.length === 0) {
-      return alert("Upload a CSV file for CSV Dynamic mode.");
+      return notify("Upload a CSV file for CSV Dynamic mode.");
     }
     if (testGenerationMode === 'csv-dynamic' && (csvDynamicQuestionCount <= 0 || csvDynamicQuestionCount > csvDynamicQuestions.length)) {
-      return alert(`Question count must be between 1 and ${csvDynamicQuestions.length}.`);
+      return notify(`Question count must be between 1 and ${csvDynamicQuestions.length}.`);
     }
     if (testGenerationMode === 'csv-dynamic' && csvBundleEnabled && (csvBundleSize <= 0 || csvBundleSize > csvDynamicQuestions.length)) {
-      return alert(`Bundle size must be between 1 and ${csvDynamicQuestions.length}.`);
+      return notify(`Bundle size must be between 1 and ${csvDynamicQuestions.length}.`);
     }
     if (testGenerationMode === 'fixed' && sections.some(s => s.questionIds.length === 0)) {
-      return alert("One or more sections are empty.");
+      return notify("One or more sections are empty.");
     }
     if (testGenerationMode === 'dynamic' && sections.some(s => Number(s.questionCount || 0) <= 0)) {
-      return alert("Each dynamic section must have a question count greater than zero.");
+      return notify("Each dynamic section must have a question count greater than zero.");
     }
     if (!allowRetake && maxAttempts !== '' && Number(maxAttempts) > 1) {
-      return alert("Retake is off, so max attempts must be 1.");
+      return notify("Retake is off, so max attempts must be 1.");
     }
     
     setLoading(true);
@@ -1228,23 +1255,29 @@ Rules:
         createdBy: user.id,
         createdByName: user.name
       });
-      alert("Test published.");
+      notify("Test published.");
       if (testGenerationMode === 'csv-dynamic') {
         setCsvDynamicQuestions([]);
         setCsvDynamicFileName('');
         setCsvBundleEnabled(false);
       }
       setActiveTab('tests');
-    } catch (e: any) { alert("Error creating test. " + (e?.message || "")); }
+    } catch (e: any) { notify("Error creating test. " + (e?.message || "")); }
     finally { setLoading(false); }
   };
 
   const rebuildDynamicPools = async (test: MockTest) => {
     if ((test.generationMode || 'fixed') !== 'dynamic') {
-      alert('This test is not dynamic.');
+      notify('This test is not dynamic.');
       return;
     }
-    if (!window.confirm(`Rebuild dynamic pools for "${test.name}" using current question bank?`)) return;
+    const shouldRebuildPools = await confirmDialog({
+      title: 'Rebuild dynamic pools?',
+      message: `Rebuild dynamic pools for "${test.name}" using current question bank?`,
+      confirmText: 'Rebuild',
+      variant: 'danger'
+    });
+    if (!shouldRebuildPools) return;
     setLoading(true);
     try {
       const nextSections = await buildDynamicSectionsWithPools(test.sections);
@@ -1254,9 +1287,9 @@ Rules:
         poolRebuiltBy: user.id
       });
       await loadManagedTests();
-      alert('Dynamic pools rebuilt successfully.');
+      notify('Dynamic pools rebuilt successfully.');
     } catch (e: any) {
-      alert('Could not rebuild pools. ' + (e?.message || ''));
+      notify('Could not rebuild pools. ' + (e?.message || ''));
     } finally {
       setLoading(false);
     }
@@ -1318,13 +1351,13 @@ Rules:
     try {
       const snap = await getDoc(doc(db, 'questions', questionId));
       if (!snap.exists()) {
-        alert('Question no longer exists.');
+        notify('Question no longer exists.');
         return;
       }
       const question = { ...snap.data(), id: snap.id } as Question;
       openEditModal(question);
     } catch (err: any) {
-      alert('Could not open question. ' + (err?.message || ''));
+      notify('Could not open question. ' + (err?.message || ''));
     }
   };
 
@@ -1336,7 +1369,7 @@ Rules:
         reviewedBy: user.id
       });
     } catch (err: any) {
-      alert('Could not mark as reviewed. ' + (err?.message || ''));
+      notify('Could not mark as reviewed. ' + (err?.message || ''));
     }
   };
 
@@ -1349,7 +1382,7 @@ Rules:
     try {
       const selected = stagedQuestions.filter(q => q.selected);
       if (selected.length === 0) {
-        alert('Select at least one question to import.');
+        notify('Select at least one question to import.');
         setLoading(false);
         return;
       }
@@ -1392,7 +1425,7 @@ Rules:
       });
 
       if (finalList.length === 0) {
-        alert('All selected questions are already in the bank.');
+        notify('All selected questions are already in the bank.');
         setLoading(false);
         return;
       }
@@ -1417,15 +1450,15 @@ Rules:
 
       const skipped = uniqueSelected.length - finalList.length;
       if (skipped > 0) {
-        alert(`Bank updated. Skipped ${skipped} duplicate(s).`);
+        notify(`Bank updated. Skipped ${skipped} duplicate(s).`);
       } else {
-        alert('Bank updated successfully.');
+        notify('Bank updated successfully.');
       }
 
       setImportStatus('idle');
       setStagedQuestions([]);
     } catch (e: any) {
-      alert('Import failed. ' + (e?.message || ''));
+      notify('Import failed. ' + (e?.message || ''));
     } finally {
       setLoading(false);
     }
@@ -1491,11 +1524,11 @@ Rules:
 
       const missing = ids.length - rows.length;
       if (missing > 0) {
-        alert(`Loaded ${rows.length} CSV question(s). ${missing} question(s) were missing from the bank.`);
+        notify(`Loaded ${rows.length} CSV question(s). ${missing} question(s) were missing from the bank.`);
       }
       setEditingCsvQuestions(rows);
     } catch (err: any) {
-      alert('Could not load CSV question pool for editing. ' + (err?.message || ''));
+      notify('Could not load CSV question pool for editing. ' + (err?.message || ''));
       setEditingCsvQuestions([]);
     } finally {
       setEditingCsvLoading(false);
@@ -1520,7 +1553,7 @@ Rules:
   const saveEditedTest = async (testId: string) => {
     const activeEditTest = managedTests.find((test) => test.id === testId) || editingTest;
     if (!activeEditTest) {
-      alert('Could not find selected test.');
+      notify('Could not find selected test.');
       return;
     }
     const isCsvDynamic = (activeEditTest.generationMode || 'fixed') === 'csv-dynamic';
@@ -1528,15 +1561,15 @@ Rules:
     try {
       if (isCsvDynamic) {
         if (editingCsvQuestions.length === 0) {
-          alert('No CSV questions loaded for this test.');
+          notify('No CSV questions loaded for this test.');
           return;
         }
         if (editingCsvQuestionCount <= 0 || editingCsvQuestionCount > editingCsvQuestions.length) {
-          alert(`Question count must be between 1 and ${editingCsvQuestions.length}.`);
+          notify(`Question count must be between 1 and ${editingCsvQuestions.length}.`);
           return;
         }
         if (editingCsvBundleEnabled && (editingCsvBundleSize <= 0 || editingCsvBundleSize > editingCsvQuestions.length)) {
-          alert(`Bundle size must be between 1 and ${editingCsvQuestions.length}.`);
+          notify(`Bundle size must be between 1 and ${editingCsvQuestions.length}.`);
           return;
         }
 
@@ -1544,16 +1577,16 @@ Rules:
           const row = editingCsvQuestions[i];
           const options = Array.isArray(row.options) ? row.options.map(opt => String(opt || '').trim()) : [];
           if (!String(row.text || '').trim()) {
-            alert(`Question ${i + 1} has empty text.`);
+            notify(`Question ${i + 1} has empty text.`);
             return;
           }
           if (options.length !== 4 || options.some(opt => !opt)) {
-            alert(`Question ${i + 1} must have exactly 4 non-empty options.`);
+            notify(`Question ${i + 1} must have exactly 4 non-empty options.`);
             return;
           }
           const answerIndex = Number(row.correctAnswerIndex);
           if (!Number.isFinite(answerIndex) || answerIndex < 0 || answerIndex > 3) {
-            alert(`Question ${i + 1} has an invalid correct answer index.`);
+            notify(`Question ${i + 1} has an invalid correct answer index.`);
             return;
           }
         }
@@ -1631,7 +1664,7 @@ Rules:
         });
 
         const changedResults = await recalculateResultsForTests([{ ...activeEditTest, sections: nextSections }]);
-        alert(`Test updated. Recalculated ${changedResults} result(s).`);
+        notify(`Test updated. Recalculated ${changedResults} result(s).`);
       } else {
         await updateDoc(doc(db, 'tests', testId), {
           name: editTestName.trim(),
@@ -1643,7 +1676,7 @@ Rules:
       await loadManagedTests();
       cancelEditTest();
     } catch (err: any) {
-      alert('Failed to update test. ' + (err?.message || ''));
+      notify('Failed to update test. ' + (err?.message || ''));
     } finally {
       setLoading(false);
     }
@@ -1658,17 +1691,35 @@ Rules:
       });
       await loadManagedTests();
     } catch (err: any) {
-      alert('Failed to update test status. ' + (err?.message || ''));
+      notify('Failed to update test status. ' + (err?.message || ''));
+    }
+  };
+
+  const moveTestToTop = async (test: MockTest) => {
+    try {
+      await updateDoc(doc(db, 'tests', test.id), {
+        updatedAt: new Date().toISOString()
+      });
+      await loadManagedTests();
+      notify(`"${test.name}" moved to top.`);
+    } catch (err: any) {
+      notify('Failed to move test. ' + (err?.message || ''));
     }
   };
 
   const removeTest = async (test: MockTest) => {
-    if (!window.confirm(`Delete test "${test.name}"? This cannot be undone.`)) return;
+    const shouldDelete = await confirmDialog({
+      title: 'Delete test?',
+      message: `Delete test "${test.name}"? This cannot be undone.`,
+      confirmText: 'Delete',
+      variant: 'danger'
+    });
+    if (!shouldDelete) return;
     try {
       await deleteDoc(doc(db, 'tests', test.id));
       setManagedTests(prev => prev.filter(item => item.id !== test.id));
     } catch (err: any) {
-      alert('Failed to delete test. ' + (err?.message || ''));
+      notify('Failed to delete test. ' + (err?.message || ''));
     }
   };
 
@@ -1685,9 +1736,9 @@ Rules:
         document.execCommand('copy');
         document.body.removeChild(temp);
       }
-      alert('Test link copied.');
+      notify('Test link copied.');
     } catch {
-      alert('Could not copy link. Link: ' + link);
+      notify('Could not copy link. Link: ' + link);
     }
   };
 
@@ -1717,9 +1768,9 @@ Rules:
       const code = makeLicenseKey();
       await saveGeneratedKeyDocs([code], singleKeyDurationDays);
       setGeneratedKeys([code]);
-      alert('Single activation key generated.');
+      notify('Single activation key generated.');
     } catch (err: any) {
-      alert('Failed to generate key. ' + (err?.message || ''));
+      notify('Failed to generate key. ' + (err?.message || ''));
     } finally {
       setKeyToolLoading(false);
     }
@@ -1737,9 +1788,9 @@ Rules:
       const codes = Array.from(codeSet);
       await saveGeneratedKeyDocs(codes, bulkKeyDurationDays);
       setGeneratedKeys(codes);
-      alert(`Generated ${codes.length} activation keys.`);
+      notify(`Generated ${codes.length} activation keys.`);
     } catch (err: any) {
-      alert('Bulk generation failed. ' + (err?.message || ''));
+      notify('Bulk generation failed. ' + (err?.message || ''));
     } finally {
       setKeyToolLoading(false);
     }
@@ -1750,9 +1801,9 @@ Rules:
     const text = generatedKeys.join('\n');
     try {
       await navigator.clipboard.writeText(text);
-      alert('Generated keys copied.');
+      notify('Generated keys copied.');
     } catch {
-      alert('Could not copy keys. Please copy manually from the list.');
+      notify('Could not copy keys. Please copy manually from the list.');
     }
   };
 
@@ -1760,7 +1811,7 @@ Rules:
     if (!canManageKeys) return;
     const iso = watInputToIso(deadlineInput);
     if (!iso) {
-      alert('Invalid deadline value. Use a valid date and time.');
+      notify('Invalid deadline value. Use a valid date and time.');
       return;
     }
 
@@ -1773,9 +1824,9 @@ Rules:
         updatedByName: user.name,
         updatedAt: new Date().toISOString()
       }, { merge: true });
-      alert('Deadline updated successfully.');
+      notify('Deadline updated successfully.');
     } catch (err: any) {
-      alert('Failed to update deadline. ' + (err?.message || ''));
+      notify('Failed to update deadline. ' + (err?.message || ''));
     } finally {
       setDeadlineSaving(false);
     }
@@ -1790,30 +1841,30 @@ Rules:
             <h1 className="text-lg font-bold text-slate-900 leading-none">Admin Panel</h1>
             <div className="flex items-center gap-2 mt-1">
                <span className={`w-2 h-2 rounded-full ${dbError ? 'bg-red-500' : 'bg-emerald-500'} animate-pulse`}></span>
-               <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{dbError || 'Connected'}</span>
+               <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">{dbError || 'Connected'}</span>
             </div>
           </div>
         </div>
         <div className="flex gap-2">
-          <button onClick={onSwitchToStudent} className="px-5 py-2 text-[10px] font-bold text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50 uppercase tracking-widest">Student View</button>
-          <button onClick={onLogout} className="px-5 py-2 text-[10px] font-bold text-red-600 border border-red-50 rounded-xl hover:bg-red-50 uppercase tracking-widest">Logout</button>
+          <button onClick={onSwitchToStudent} className="px-5 py-2 text-xs font-bold text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50 uppercase tracking-widest">Student View</button>
+          <button onClick={onLogout} className="px-5 py-2 text-xs font-bold text-red-600 border border-red-50 rounded-xl hover:bg-red-50 uppercase tracking-widest">Logout</button>
         </div>
       </div>
 
       <nav className="flex bg-white px-6 border-b border-slate-100 shrink-0 overflow-x-auto no-scrollbar">
-        <button onClick={() => setActiveTab('analytics')} className={`px-8 py-4 text-[10px] font-bold uppercase tracking-widest transition-all ${activeTab === 'analytics' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50' : 'text-slate-400'}`}>Analytics</button>
-        <button onClick={() => setActiveTab('questions')} className={`px-8 py-4 text-[10px] font-bold uppercase tracking-widest transition-all ${activeTab === 'questions' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50' : 'text-slate-400'}`}>Question Bank</button>
-        <button onClick={() => setActiveTab('create-test')} className={`px-8 py-4 text-[10px] font-bold uppercase tracking-widest transition-all ${activeTab === 'create-test' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50' : 'text-slate-400'}`}>Create Test</button>
-        <button onClick={() => setActiveTab('tests')} className={`px-8 py-4 text-[10px] font-bold uppercase tracking-widest transition-all ${activeTab === 'tests' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50' : 'text-slate-400'}`}>Tests</button>
-        <button onClick={() => setActiveTab('import')} className={`px-8 py-4 text-[10px] font-bold uppercase tracking-widest transition-all ${activeTab === 'import' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50' : 'text-slate-400'}`}>Import</button>
+        <button onClick={() => setActiveTab('analytics')} className={`px-8 py-4 text-xs font-bold uppercase tracking-widest transition-all ${activeTab === 'analytics' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50' : 'text-slate-400'}`}>Analytics</button>
+        <button onClick={() => setActiveTab('questions')} className={`px-8 py-4 text-xs font-bold uppercase tracking-widest transition-all ${activeTab === 'questions' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50' : 'text-slate-400'}`}>Question Bank</button>
+        <button onClick={() => setActiveTab('create-test')} className={`px-8 py-4 text-xs font-bold uppercase tracking-widest transition-all ${activeTab === 'create-test' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50' : 'text-slate-400'}`}>Create Test</button>
+        <button onClick={() => setActiveTab('tests')} className={`px-8 py-4 text-xs font-bold uppercase tracking-widest transition-all ${activeTab === 'tests' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50' : 'text-slate-400'}`}>Tests</button>
+        <button onClick={() => setActiveTab('import')} className={`px-8 py-4 text-xs font-bold uppercase tracking-widest transition-all ${activeTab === 'import' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50' : 'text-slate-400'}`}>Import</button>
         {canManageKeys && (
-          <button onClick={() => setActiveTab('license-keys')} className={`px-8 py-4 text-[10px] font-bold uppercase tracking-widest transition-all ${activeTab === 'license-keys' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50' : 'text-slate-400'}`}>License Keys</button>
+          <button onClick={() => setActiveTab('license-keys')} className={`px-8 py-4 text-xs font-bold uppercase tracking-widest transition-all ${activeTab === 'license-keys' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50' : 'text-slate-400'}`}>License Keys</button>
         )}
       </nav>
 
       <div className="flex-1 v2-scroll p-6 md:p-10 safe-bottom">
         {dbError && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-2xl flex items-center gap-3 text-red-600 font-bold text-[10px] uppercase tracking-widest">
+          <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-2xl flex items-center gap-3 text-red-600 font-bold text-xs uppercase tracking-widest">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
             {dbError}
           </div>
@@ -1826,40 +1877,40 @@ Rules:
             <div className="v2-panel bg-white rounded-[2rem] border border-amber-100 shadow-sm p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-[11px] font-black uppercase tracking-widest text-slate-900">Tagged Insights</h3>
-                <span className="text-[10px] font-black uppercase tracking-widest text-amber-700 bg-amber-50 px-3 py-1 rounded-full">
+                <span className="text-xs font-black uppercase tracking-widest text-amber-700 bg-amber-50 px-3 py-1 rounded-full">
                   {tagInsightsLoading ? 'Loading...' : `${tagInsights.length} New`}
                 </span>
               </div>
               {tagInsights.length === 0 && !tagInsightsLoading ? (
-                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">No pending tagged questions.</p>
+                <p className="text-xs font-bold uppercase tracking-widest text-slate-400">No pending tagged questions.</p>
               ) : (
                 <div className="space-y-2 max-h-72 v2-scroll">
                   {tagInsights.map((tag) => (
                     <div key={tag.id} className="p-4 bg-amber-50/40 border border-amber-100 rounded-2xl">
                       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                         <div className="space-y-1">
-                          <p className="text-[10px] font-black uppercase tracking-widest text-amber-700">
+                          <p className="text-xs font-black uppercase tracking-widest text-amber-700">
                             {tag.testName || 'Unknown Test'} - {tag.userName || 'Unknown User'}
                           </p>
-                          <p className="text-[10px] font-bold text-slate-500">
+                          <p className="text-xs font-bold text-slate-500">
                             Question ID: {tag.questionId}
                           </p>
                           {tag.note ? (
                             <p className="text-xs text-slate-700">{tag.note}</p>
                           ) : (
-                            <p className="text-[10px] italic text-slate-500">No note provided (tag only).</p>
+                            <p className="text-xs italic text-slate-500">No note provided (tag only).</p>
                           )}
                         </div>
                         <div className="flex gap-2 shrink-0">
                           <button
                             onClick={() => openTaggedQuestion(tag.questionId)}
-                            className="px-3 py-2 bg-slate-950 text-amber-500 rounded-xl text-[9px] font-bold uppercase tracking-widest"
+                            className="px-3 py-2 bg-slate-950 text-amber-500 rounded-xl text-xs font-bold uppercase tracking-widest"
                           >
                             Open Question
                           </button>
                           <button
                             onClick={() => markTagInsightReviewed(tag)}
-                            className="px-3 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl text-[9px] font-bold uppercase tracking-widest"
+                            className="px-3 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-bold uppercase tracking-widest"
                           >
                             Mark Reviewed
                           </button>
@@ -1881,44 +1932,44 @@ Rules:
               />
               <button
                 onClick={() => runQuestionSearch(bankSearchQuery)}
-                className="px-6 py-5 bg-slate-950 text-amber-500 rounded-2xl text-[9px] font-bold uppercase tracking-widest hover:bg-slate-900 transition-all"
+                className="px-6 py-5 bg-slate-950 text-amber-500 rounded-2xl text-xs font-bold uppercase tracking-widest hover:bg-slate-900 transition-all"
               >
                 {isSearching ? 'Searching...' : 'Search'}
               </button>
               <button
                 onClick={openNewQuestionModal}
-                className="px-6 py-5 bg-amber-500 text-slate-950 rounded-2xl text-[9px] font-bold uppercase tracking-widest hover:bg-amber-600 transition-all"
+                className="px-6 py-5 bg-amber-500 text-slate-950 rounded-2xl text-xs font-bold uppercase tracking-widest hover:bg-amber-600 transition-all"
               >
                 Add Question
               </button>
-              <button onClick={runBankCleanup} className="px-6 py-5 bg-white border border-red-100 text-red-500 rounded-2xl text-[9px] font-bold uppercase tracking-widest hover:bg-red-50 transition-all flex items-center gap-2">
+              <button onClick={runBankCleanup} className="px-6 py-5 bg-white border border-red-100 text-red-500 rounded-2xl text-xs font-bold uppercase tracking-widest hover:bg-red-50 transition-all flex items-center gap-2">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                 Clean Bank
               </button>
               <button
                 onClick={recalculateAllScores}
                 disabled={loading}
-                className="px-6 py-5 bg-white border border-amber-200 text-amber-700 rounded-2xl text-[9px] font-bold uppercase tracking-widest hover:bg-amber-50 transition-all disabled:opacity-50"
+                className="px-6 py-5 bg-white border border-amber-200 text-amber-700 rounded-2xl text-xs font-bold uppercase tracking-widest hover:bg-amber-50 transition-all disabled:opacity-50"
               >
                 {loading ? 'Working...' : 'Recalculate Scores'}
               </button>
               <button
                 onClick={rebuildLeaderboardPublic}
                 disabled={loading}
-                className="px-6 py-5 bg-white border border-sky-200 text-sky-700 rounded-2xl text-[9px] font-bold uppercase tracking-widest hover:bg-sky-50 transition-all disabled:opacity-50"
+                className="px-6 py-5 bg-white border border-sky-200 text-sky-700 rounded-2xl text-xs font-bold uppercase tracking-widest hover:bg-sky-50 transition-all disabled:opacity-50"
               >
                 {loading ? 'Working...' : 'Rebuild Ranks'}
               </button>
             </div>
 
             {!hasSearched && (
-              <div className="bg-white p-16 rounded-[2rem] border border-dashed text-center text-slate-300 font-bold uppercase text-[10px] tracking-[0.2em]">
+              <div className="bg-white p-16 rounded-[2rem] border border-dashed text-center text-slate-300 font-bold uppercase text-xs tracking-[0.2em]">
                 Search to load questions
               </div>
             )}
 
             {hasSearched && questions.length === 0 && !isSearching && (
-              <div className="bg-white p-16 rounded-[2rem] border border-dashed text-center text-slate-300 font-bold uppercase text-[10px] tracking-[0.2em]">
+              <div className="bg-white p-16 rounded-[2rem] border border-dashed text-center text-slate-300 font-bold uppercase text-xs tracking-[0.2em]">
                 No results found
               </div>
             )}
@@ -1932,21 +1983,21 @@ Rules:
                       <div className="flex items-center gap-3">
                         <div className="w-2 h-2 rounded-full bg-amber-500"></div>
                         <span className="text-[11px] font-bold text-slate-900 uppercase tracking-widest">{subject}</span>
-                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{list.length} item(s)</span>
+                        <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">{list.length} item(s)</span>
                       </div>
-                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{isCollapsed ? 'Expand' : 'Collapse'}</span>
+                      <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">{isCollapsed ? 'Expand' : 'Collapse'}</span>
                     </button>
                     {!isCollapsed && (
                       <div className="px-6 pb-6 space-y-3">
                         {list.map(q => (
                           <div key={q.id} className="bg-slate-50 p-5 rounded-2xl border border-slate-100 flex justify-between items-start gap-6">
                             <div className="flex-1">
-                              <p className="text-[9px] font-bold text-amber-600 mb-2 uppercase tracking-widest">{q.topic || 'General'}</p>
+                              <p className="text-xs font-bold text-amber-600 mb-2 uppercase tracking-widest">{q.topic || 'General'}</p>
                               <p className="text-sm font-bold text-slate-800"><ScientificText text={q.text} /></p>
                             </div>
                             <div className="flex gap-2 shrink-0">
                               <button onClick={() => openEditModal(q)} className="p-3 bg-white rounded-xl border border-slate-100 hover:bg-slate-100"><svg className="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg></button>
-                              <button onClick={async () => { if(window.confirm('Delete this question?')) { await deleteDoc(doc(db, 'questions', q.id)); setQuestions(prev => prev.filter(item => item.id !== q.id)); } }} className="p-3 bg-red-50 rounded-xl hover:bg-red-100"><svg className="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>
+                              <button onClick={async () => { const ok = await confirmDialog({ title: 'Delete question?', message: 'Delete this question?', confirmText: 'Delete', variant: 'danger' }); if (ok) { await deleteDoc(doc(db, 'questions', q.id)); setQuestions(prev => prev.filter(item => item.id !== q.id)); } }} className="p-3 bg-red-50 rounded-xl hover:bg-red-100"><svg className="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>
                             </div>
                           </div>
                         ))}
@@ -1967,30 +2018,30 @@ Rules:
                 <input placeholder="Test name" className="w-full p-4 bg-slate-50 border rounded-2xl text-xs font-bold" value={testName} onChange={e => setTestName(e.target.value)} />
                 <textarea placeholder="Instructions shown to students" className="w-full p-4 bg-slate-50 border rounded-2xl text-xs h-20" value={testDesc} onChange={e => setTestDesc(e.target.value)} />
                 <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl">
-                   <span className="text-[10px] font-bold uppercase text-slate-400">Time (mins)</span>
+                   <span className="text-xs font-bold uppercase text-slate-400">Time (mins)</span>
                    <input type="number" className="bg-transparent font-bold w-full text-center text-xl outline-none" value={testDuration} onChange={e => setTestDuration(parseInt(e.target.value) || 0)} />
                 </div>
                 <div className="flex items-center justify-between bg-slate-50 p-4 rounded-2xl">
-                  <span className="text-[10px] font-bold uppercase text-slate-400">Build Mode</span>
+                  <span className="text-xs font-bold uppercase text-slate-400">Build Mode</span>
                   <div className="flex gap-2">
                     <button
                       type="button"
                       onClick={() => setTestGenerationMode('fixed')}
-                      className={`px-4 py-2 rounded-xl text-[9px] font-bold uppercase tracking-widest ${testGenerationMode === 'fixed' ? 'bg-slate-950 text-amber-500' : 'bg-slate-200 text-slate-600'}`}
+                      className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest ${testGenerationMode === 'fixed' ? 'bg-slate-950 text-amber-500' : 'bg-slate-200 text-slate-600'}`}
                     >
                       Fixed
                     </button>
                     <button
                       type="button"
                       onClick={() => setTestGenerationMode('dynamic')}
-                      className={`px-4 py-2 rounded-xl text-[9px] font-bold uppercase tracking-widest ${testGenerationMode === 'dynamic' ? 'bg-slate-950 text-amber-500' : 'bg-slate-200 text-slate-600'}`}
+                      className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest ${testGenerationMode === 'dynamic' ? 'bg-slate-950 text-amber-500' : 'bg-slate-200 text-slate-600'}`}
                     >
                       Dynamic
                     </button>
                     <button
                       type="button"
                       onClick={() => setTestGenerationMode('csv-dynamic')}
-                      className={`px-4 py-2 rounded-xl text-[9px] font-bold uppercase tracking-widest ${testGenerationMode === 'csv-dynamic' ? 'bg-slate-950 text-amber-500' : 'bg-slate-200 text-slate-600'}`}
+                      className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest ${testGenerationMode === 'csv-dynamic' ? 'bg-slate-950 text-amber-500' : 'bg-slate-200 text-slate-600'}`}
                     >
                       CSV Dynamic
                     </button>
@@ -1998,18 +2049,18 @@ Rules:
                 </div>
 
                 <div className="flex items-center justify-between bg-slate-50 p-4 rounded-2xl">
-                  <span className="text-[10px] font-bold uppercase text-slate-400">Allow Retake</span>
+                  <span className="text-xs font-bold uppercase text-slate-400">Allow Retake</span>
                   <button
                     type="button"
                     onClick={() => setAllowRetake(!allowRetake)}
-                    className={`px-4 py-2 rounded-xl text-[9px] font-bold uppercase tracking-widest ${allowRetake ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-600'}`}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest ${allowRetake ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-600'}`}
                   >
                     {allowRetake ? 'Yes' : 'No'}
                   </button>
                 </div>
 
                 <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl">
-                  <span className="text-[10px] font-bold uppercase text-slate-400">Max Attempts</span>
+                  <span className="text-xs font-bold uppercase text-slate-400">Max Attempts</span>
                   <input
                     type="number"
                     min={1}
@@ -2023,12 +2074,12 @@ Rules:
                 
                 {testGenerationMode !== 'csv-dynamic' && (
                 <div className="space-y-3">
-                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Sections</p>
+                   <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Sections</p>
                    {sections.map((s, idx) => (
                      <button key={s.id} onClick={() => setActiveBuilderSection(idx)} className={`w-full p-4 rounded-2xl border-2 text-left flex justify-between items-center transition-all ${activeBuilderSection === idx ? 'border-amber-500 bg-amber-50' : 'border-slate-50 bg-white'}`}>
                         <div>
                           <input 
-                            className="text-[10px] font-bold text-slate-900 bg-transparent outline-none uppercase" 
+                            className="text-xs font-bold text-slate-900 bg-transparent outline-none uppercase" 
                             value={s.name} 
                             onChange={(e) => {
                               const newSections = [...sections];
@@ -2037,30 +2088,30 @@ Rules:
                             }}
                             onClick={(e) => e.stopPropagation()}
                           />
-                          <p className="text-[9px] text-slate-400 mt-1">
+                          <p className="text-xs text-slate-400 mt-1">
                             {testGenerationMode === 'fixed' ? `${s.questionIds.length} question(s)` : `${s.questionCount || 0} generated question(s)`}
                           </p>
                         </div>
                         {activeBuilderSection === idx && <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></div>}
                      </button>
                    ))}
-                   <button onClick={addSection} className="w-full p-3 border-2 border-dashed border-slate-100 rounded-2xl text-[10px] font-bold text-slate-400 uppercase tracking-widest hover:border-amber-200 transition-all">+ New Section</button>
+                   <button onClick={addSection} className="w-full p-3 border-2 border-dashed border-slate-100 rounded-2xl text-xs font-bold text-slate-400 uppercase tracking-widest hover:border-amber-200 transition-all">+ New Section</button>
                 </div>
                 )}
 
                 {testGenerationMode === 'csv-dynamic' && (
                   <div className="space-y-3">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">CSV Pool</p>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">CSV Pool</p>
                     <input
                       type="file"
                       accept=".csv,text/csv"
                       onChange={(e) => e.target.files?.[0] && processCsvForDynamicTest(e.target.files[0])}
-                      className="w-full p-3 bg-slate-50 border rounded-2xl text-[10px] font-bold"
+                      className="w-full p-3 bg-slate-50 border rounded-2xl text-xs font-bold"
                     />
-                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                    <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">
                       {csvDynamicFileName ? `${csvDynamicFileName} loaded (${csvDynamicQuestions.length} questions)` : 'No CSV loaded yet'}
                     </p>
-                    <label className="text-[10px] font-bold uppercase text-slate-400 block">
+                    <label className="text-xs font-bold uppercase text-slate-400 block">
                       Questions Per User
                       <input
                         type="number"
@@ -2071,7 +2122,7 @@ Rules:
                         className="w-full mt-2 p-3 bg-slate-50 border rounded-xl text-xs font-bold"
                       />
                     </label>
-                    <label className="text-[10px] font-bold uppercase text-slate-400 block">
+                    <label className="text-xs font-bold uppercase text-slate-400 block">
                       Marks Per Question
                       <input
                         type="number"
@@ -2082,18 +2133,18 @@ Rules:
                       />
                     </label>
                     <div className="flex items-center justify-between bg-slate-50 p-3 rounded-xl border border-slate-100">
-                      <span className="text-[10px] font-bold uppercase text-slate-500">Enable Test Bundles</span>
+                      <span className="text-xs font-bold uppercase text-slate-500">Enable Test Bundles</span>
                       <button
                         type="button"
                         onClick={() => setCsvBundleEnabled(!csvBundleEnabled)}
-                        className={`px-3 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-widest ${csvBundleEnabled ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-600'}`}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-widest ${csvBundleEnabled ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-600'}`}
                       >
                         {csvBundleEnabled ? 'On' : 'Off'}
                       </button>
                     </div>
                     {csvBundleEnabled && (
                       <>
-                        <label className="text-[10px] font-bold uppercase text-slate-400 block">
+                        <label className="text-xs font-bold uppercase text-slate-400 block">
                           Bundle By
                           <select
                             value={csvBundleCategoryField}
@@ -2105,7 +2156,7 @@ Rules:
                             ))}
                           </select>
                         </label>
-                        <label className="text-[10px] font-bold uppercase text-slate-400 block">
+                        <label className="text-xs font-bold uppercase text-slate-400 block">
                           Bundle Size
                           <input
                             type="number"
@@ -2121,7 +2172,7 @@ Rules:
                   </div>
                 )}
 
-                <button onClick={handleCreateTest} className="w-full py-5 bg-slate-950 text-amber-500 rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-xl active:scale-95 transition-all">Publish Test</button>
+                <button onClick={handleCreateTest} className="w-full py-5 bg-slate-950 text-amber-500 rounded-2xl font-bold uppercase text-xs tracking-widest shadow-xl active:scale-95 transition-all">Publish Test</button>
               </div>
             </div>
             
@@ -2131,7 +2182,7 @@ Rules:
                     <h4 className="text-sm font-bold uppercase tracking-widest text-amber-500">
                       {testGenerationMode === 'csv-dynamic' ? 'CSV Dynamic Pool' : `Selecting for: ${sections[activeBuilderSection].name}`}
                     </h4>
-                  <p className="text-[9px] text-slate-400 mt-1">
+                  <p className="text-xs text-slate-400 mt-1">
                     {testGenerationMode === 'fixed'
                       ? 'Tap a question to add/remove from this section'
                       : testGenerationMode === 'dynamic'
@@ -2155,7 +2206,7 @@ Rules:
                       />
                       <button
                         onClick={() => runQuestionSearch(builderSearchQuery)}
-                        className="px-4 py-3 bg-amber-500 text-slate-950 rounded-xl text-[9px] font-bold uppercase tracking-widest hover:bg-amber-400 transition-all"
+                        className="px-4 py-3 bg-amber-500 text-slate-950 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-amber-400 transition-all"
                       >
                         {isSearching ? 'Searching...' : 'Search'}
                       </button>
@@ -2166,7 +2217,7 @@ Rules:
                {testGenerationMode === 'fixed' ? (
                  <div className="flex-1 v2-scroll pr-2 space-y-3 pb-10">
                     {questions.length === 0 && (
-                      <div className="bg-white p-16 rounded-[2rem] border border-dashed text-center text-slate-300 font-bold uppercase text-[10px] tracking-[0.2em]">
+                      <div className="bg-white p-16 rounded-[2rem] border border-dashed text-center text-slate-300 font-bold uppercase text-xs tracking-[0.2em]">
                         Search the bank to load questions
                       </div>
                     )}
@@ -2175,7 +2226,7 @@ Rules:
                       return (
                         <div key={q.id} onClick={() => toggleQuestionInActiveSection(q.id)} className={`p-5 border-2 rounded-2xl cursor-pointer transition-all flex justify-between items-center gap-6 shadow-sm ${isSelected ? 'border-amber-500 bg-amber-50 shadow-md ring-2 ring-amber-500/10' : 'border-white bg-white hover:border-slate-200'}`}>
                            <div className="flex-1">
-                              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">{q.subject}</p>
+                              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">{q.subject}</p>
                               <p className="text-sm font-bold text-slate-800 leading-relaxed"><ScientificText text={q.text} /></p>
                            </div>
                            <div className={`w-6 h-6 rounded-lg flex items-center justify-center border-2 shrink-0 ${isSelected ? 'bg-amber-500 border-amber-500 text-slate-950 shadow-sm' : 'border-slate-100 text-transparent'}`}><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path></svg></div>
@@ -2187,7 +2238,7 @@ Rules:
                  <div className="flex-1 v2-scroll pr-2 pb-10">
                    <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm space-y-4">
                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                       <label className="text-[10px] font-bold uppercase text-slate-400">
+                       <label className="text-xs font-bold uppercase text-slate-400">
                          Question Count
                          <input
                            type="number"
@@ -2197,7 +2248,7 @@ Rules:
                            className="w-full mt-2 p-3 bg-slate-50 border rounded-xl text-xs font-bold"
                          />
                        </label>
-                       <label className="text-[10px] font-bold uppercase text-slate-400">
+                       <label className="text-xs font-bold uppercase text-slate-400">
                          Marks Per Question
                          <input
                            type="number"
@@ -2208,7 +2259,7 @@ Rules:
                          />
                        </label>
                      </div>
-                     <label className="text-[10px] font-bold uppercase text-slate-400 block">
+                     <label className="text-xs font-bold uppercase text-slate-400 block">
                        Subjects (comma-separated)
                        <input
                          value={(sections[activeBuilderSection].sampleFilters?.subjects || []).join(', ')}
@@ -2217,7 +2268,7 @@ Rules:
                          placeholder="Anatomy, Physiology"
                        />
                      </label>
-                     <label className="text-[10px] font-bold uppercase text-slate-400 block">
+                     <label className="text-xs font-bold uppercase text-slate-400 block">
                        Topics (comma-separated)
                        <input
                          value={(sections[activeBuilderSection].sampleFilters?.topics || []).join(', ')}
@@ -2226,7 +2277,7 @@ Rules:
                          placeholder="Cell Biology, Cardiology"
                        />
                      </label>
-                     <label className="text-[10px] font-bold uppercase text-slate-400 block">
+                     <label className="text-xs font-bold uppercase text-slate-400 block">
                        Tags (comma-separated)
                        <input
                          value={(sections[activeBuilderSection].sampleFilters?.tags || []).join(', ')}
@@ -2249,7 +2300,7 @@ Rules:
                                  return { ...s, sampleFilters: { ...(s.sampleFilters || {}), difficulties: next.length > 0 ? next : ['easy', 'medium', 'hard'] } };
                                });
                              }}
-                             className={`p-3 rounded-xl border text-[10px] font-bold uppercase ${checked ? 'bg-amber-100 border-amber-300 text-amber-700' : 'bg-slate-50 border-slate-200 text-slate-500'}`}
+                             className={`p-3 rounded-xl border text-xs font-bold uppercase ${checked ? 'bg-amber-100 border-amber-300 text-amber-700' : 'bg-slate-50 border-slate-200 text-slate-500'}`}
                            >
                              {d}
                            </button>
@@ -2258,7 +2309,7 @@ Rules:
                      </div>
                      <div className="grid grid-cols-3 gap-3">
                        {(['easy', 'medium', 'hard'] as DifficultyLevel[]).map((d) => (
-                         <label key={d} className="text-[10px] font-bold uppercase text-slate-400">
+                         <label key={d} className="text-xs font-bold uppercase text-slate-400">
                            {d} %
                            <input
                              type="number"
@@ -2282,15 +2333,15 @@ Rules:
                      </p>
                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                        <div className="p-4 rounded-xl bg-slate-50 border border-slate-100">
-                         <p className="text-[10px] font-bold uppercase text-slate-400">CSV Questions</p>
+                         <p className="text-xs font-bold uppercase text-slate-400">CSV Questions</p>
                          <p className="text-lg font-black text-slate-900 mt-1">{csvDynamicQuestions.length}</p>
                        </div>
                        <div className="p-4 rounded-xl bg-slate-50 border border-slate-100">
-                         <p className="text-[10px] font-bold uppercase text-slate-400">Per User</p>
+                         <p className="text-xs font-bold uppercase text-slate-400">Per User</p>
                          <p className="text-lg font-black text-slate-900 mt-1">{csvDynamicQuestionCount}</p>
                        </div>
                        <div className="p-4 rounded-xl bg-slate-50 border border-slate-100">
-                         <p className="text-[10px] font-bold uppercase text-slate-400">Sufficient Pool</p>
+                         <p className="text-xs font-bold uppercase text-slate-400">Sufficient Pool</p>
                          <p className={`text-lg font-black mt-1 ${csvDynamicQuestionCount <= csvDynamicQuestions.length ? 'text-emerald-600' : 'text-red-600'}`}>
                            {csvDynamicQuestionCount <= csvDynamicQuestions.length ? 'Yes' : 'No'}
                          </p>
@@ -2298,10 +2349,10 @@ Rules:
                      </div>
                      {csvBundleEnabled && (
                       <div className="p-4 rounded-xl bg-sky-50 border border-sky-100">
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-sky-700">
+                        <p className="text-xs font-bold uppercase tracking-widest text-sky-700">
                           Bundle Preview: {csvBundlePreview.length} bundle(s) by {csvBundleCategoryField}
                         </p>
-                        <p className="text-[10px] text-sky-700 mt-1">
+                        <p className="text-xs text-sky-700 mt-1">
                           Size target: {Math.max(1, Number(csvBundleSize) || 1)} question(s) per bundle.
                         </p>
                       </div>
@@ -2310,12 +2361,12 @@ Rules:
                        <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
                          {csvDynamicQuestions.slice(0, 20).map((q, idx) => (
                            <div key={`${idx}-${q.text.slice(0, 24)}`} className="p-3 rounded-xl border border-slate-100 bg-slate-50">
-                             <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-1">{q.subject} • {q.topic || 'General'}</p>
+                             <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">{q.subject} - {q.topic || 'General'}</p>
                              <p className="text-xs font-bold text-slate-800 leading-relaxed"><ScientificText text={q.text} /></p>
                            </div>
                          ))}
                          {csvDynamicQuestions.length > 20 && (
-                           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                           <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
                              Showing first 20 of {csvDynamicQuestions.length} CSV questions.
                            </p>
                          )}
@@ -2332,19 +2383,19 @@ Rules:
           <div className="space-y-6">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold text-slate-900">Manage Tests</h3>
-              <button onClick={loadManagedTests} className="px-5 py-2 bg-white border border-slate-200 rounded-xl text-[10px] font-bold uppercase tracking-widest text-slate-600 hover:bg-slate-50">
+              <button onClick={loadManagedTests} className="px-5 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold uppercase tracking-widest text-slate-600 hover:bg-slate-50">
                 Refresh
               </button>
             </div>
 
             {managedTestsLoading && (
-              <div className="bg-white p-12 rounded-[2rem] border border-slate-100 text-center text-slate-400 text-[10px] font-bold uppercase tracking-widest">
+              <div className="bg-white p-12 rounded-[2rem] border border-slate-100 text-center text-slate-400 text-xs font-bold uppercase tracking-widest">
                 Loading tests...
               </div>
             )}
 
             {!managedTestsLoading && managedTests.length === 0 && (
-              <div className="bg-white p-12 rounded-[2rem] border border-dashed text-center text-slate-300 text-[10px] font-bold uppercase tracking-widest">
+              <div className="bg-white p-12 rounded-[2rem] border border-dashed text-center text-slate-300 text-xs font-bold uppercase tracking-widest">
                 No tests found
               </div>
             )}
@@ -2360,23 +2411,24 @@ Rules:
                         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                           <div>
                             <h4 className="text-base font-bold text-slate-900 uppercase">{test.name}</h4>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+                            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">
                               {Math.round((test.totalDurationSeconds || 0) / 60)} mins - {test.sections?.length || 0} section(s) - {(test.generationMode || 'fixed')} mode
                             </p>
                           </div>
-                          <span className={`px-3 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-widest ${isPaused ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                          <span className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-widest ${isPaused ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
                             {isPaused ? 'Paused' : 'Live'}
                           </span>
                         </div>
                         <p className="text-sm text-slate-500">{test.description || 'No instructions set.'}</p>
                         <div className="flex flex-wrap gap-2">
-                          <button onClick={() => copyTestLink(test)} className="px-5 py-2 bg-emerald-50 rounded-xl text-[10px] font-bold uppercase tracking-widest text-emerald-700 hover:bg-emerald-100">Copy Link</button>
-                          <button onClick={() => startEditTest(test)} className="px-5 py-2 bg-slate-100 rounded-xl text-[10px] font-bold uppercase tracking-widest text-slate-700 hover:bg-slate-200">Edit</button>
+                          <button onClick={() => copyTestLink(test)} className="px-5 py-2 bg-emerald-50 rounded-xl text-xs font-bold uppercase tracking-widest text-emerald-700 hover:bg-emerald-100">Copy Link</button>
+                          <button onClick={() => startEditTest(test)} className="px-5 py-2 bg-slate-100 rounded-xl text-xs font-bold uppercase tracking-widest text-slate-700 hover:bg-slate-200">Edit</button>
+                          <button onClick={() => moveTestToTop(test)} className="px-5 py-2 bg-violet-50 rounded-xl text-xs font-bold uppercase tracking-widest text-violet-700 hover:bg-violet-100">Back To Top</button>
                           {(test.generationMode || 'fixed') === 'dynamic' && (
-                            <button onClick={() => rebuildDynamicPools(test)} className="px-5 py-2 bg-sky-50 rounded-xl text-[10px] font-bold uppercase tracking-widest text-sky-700 hover:bg-sky-100">Rebuild Pools</button>
+                            <button onClick={() => rebuildDynamicPools(test)} className="px-5 py-2 bg-sky-50 rounded-xl text-xs font-bold uppercase tracking-widest text-sky-700 hover:bg-sky-100">Rebuild Pools</button>
                           )}
-                          <button onClick={() => togglePauseTest(test)} className="px-5 py-2 bg-amber-100 rounded-xl text-[10px] font-bold uppercase tracking-widest text-amber-700 hover:bg-amber-200">{isPaused ? 'Resume' : 'Pause'}</button>
-                          <button onClick={() => removeTest(test)} className="px-5 py-2 bg-red-50 rounded-xl text-[10px] font-bold uppercase tracking-widest text-red-600 hover:bg-red-100">Delete</button>
+                          <button onClick={() => togglePauseTest(test)} className="px-5 py-2 bg-amber-100 rounded-xl text-xs font-bold uppercase tracking-widest text-amber-700 hover:bg-amber-200">{isPaused ? 'Resume' : 'Pause'}</button>
+                          <button onClick={() => removeTest(test)} className="px-5 py-2 bg-red-50 rounded-xl text-xs font-bold uppercase tracking-widest text-red-600 hover:bg-red-100">Delete</button>
                         </div>
                       </div>
                     ) : (
@@ -2384,18 +2436,18 @@ Rules:
                         <input value={editTestName} onChange={(e) => setEditTestName(e.target.value)} className="w-full p-4 bg-slate-50 border rounded-2xl text-xs font-bold" placeholder="Test name" />
                         <textarea value={editTestDesc} onChange={(e) => setEditTestDesc(e.target.value)} className="w-full p-4 bg-slate-50 border rounded-2xl text-xs h-24" placeholder="Instructions" />
                         <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl">
-                          <span className="text-[10px] font-bold uppercase text-slate-400">Time (mins)</span>
+                          <span className="text-xs font-bold uppercase text-slate-400">Time (mins)</span>
                           <input type="number" min={1} value={editTestDuration} onChange={(e) => setEditTestDuration(parseInt(e.target.value) || 1)} className="bg-transparent font-bold w-full text-center text-xl outline-none" />
                         </div>
                         {(test.generationMode || 'fixed') === 'csv-dynamic' && (
                           <div className="space-y-4 rounded-2xl border border-slate-100 p-4 bg-slate-50/50">
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                               <label className="p-3 bg-white rounded-xl border border-slate-100">
-                                <span className="text-[10px] font-bold uppercase text-slate-400">CSV Questions</span>
+                                <span className="text-xs font-bold uppercase text-slate-400">CSV Questions</span>
                                 <p className="text-lg font-black text-slate-900 mt-1">{editingCsvQuestions.length}</p>
                               </label>
                               <label className="p-3 bg-white rounded-xl border border-slate-100">
-                                <span className="text-[10px] font-bold uppercase text-slate-400">Per User</span>
+                                <span className="text-xs font-bold uppercase text-slate-400">Per User</span>
                                 <input
                                   type="number"
                                   min={1}
@@ -2406,7 +2458,7 @@ Rules:
                                 />
                               </label>
                               <label className="p-3 bg-white rounded-xl border border-slate-100">
-                                <span className="text-[10px] font-bold uppercase text-slate-400">Marks / Question</span>
+                                <span className="text-xs font-bold uppercase text-slate-400">Marks / Question</span>
                                 <input
                                   type="number"
                                   min={1}
@@ -2418,7 +2470,7 @@ Rules:
                             </div>
 
                             <div className="rounded-xl border border-slate-100 bg-white p-4 space-y-3">
-                              <label className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                              <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-slate-500">
                                 <input
                                   type="checkbox"
                                   checked={editingCsvBundleEnabled}
@@ -2429,7 +2481,7 @@ Rules:
                               </label>
                               {editingCsvBundleEnabled && (
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                  <label className="text-[10px] font-bold uppercase text-slate-500">
+                                  <label className="text-xs font-bold uppercase text-slate-500">
                                     Bundle By
                                     <select
                                       value={editingCsvBundleCategoryField}
@@ -2441,7 +2493,7 @@ Rules:
                                       ))}
                                     </select>
                                   </label>
-                                  <label className="text-[10px] font-bold uppercase text-slate-500">
+                                  <label className="text-xs font-bold uppercase text-slate-500">
                                     Bundle Size
                                     <input
                                       type="number"
@@ -2452,7 +2504,7 @@ Rules:
                                       className="w-full mt-2 p-2 bg-slate-50 border rounded-xl text-xs font-bold"
                                     />
                                   </label>
-                                  <p className="md:col-span-2 text-[10px] font-bold uppercase tracking-widest text-sky-700 bg-sky-50 border border-sky-100 rounded-xl p-3">
+                                  <p className="md:col-span-2 text-xs font-bold uppercase tracking-widest text-sky-700 bg-sky-50 border border-sky-100 rounded-xl p-3">
                                     Bundle Preview: {editingCsvBundlePreview.length} bundle(s)
                                   </p>
                                 </div>
@@ -2460,12 +2512,12 @@ Rules:
                             </div>
 
                             {editingCsvLoading ? (
-                              <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 py-3">Loading CSV pool...</div>
+                              <div className="text-xs font-bold uppercase tracking-widest text-slate-400 py-3">Loading CSV pool...</div>
                             ) : (
                               <div className="space-y-3 max-h-[55vh] overflow-y-auto pr-1">
                                 {editingCsvQuestions.map((q, idx) => (
                                   <div key={q.id} className="rounded-xl border border-slate-100 bg-white p-4 space-y-3">
-                                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Question {idx + 1}</p>
+                                    <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Question {idx + 1}</p>
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                                       <input
                                         value={q.subject || ''}
@@ -2528,7 +2580,7 @@ Rules:
                                         className="p-2 bg-slate-50 border rounded-xl text-xs"
                                         placeholder="Tags"
                                       />
-                                      <label className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-slate-500 p-2 bg-slate-50 border rounded-xl">
+                                      <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-slate-500 p-2 bg-slate-50 border rounded-xl">
                                         <input
                                           type="checkbox"
                                           checked={q.isActive !== false}
@@ -2551,8 +2603,8 @@ Rules:
                           </div>
                         )}
                         <div className="flex gap-2">
-                          <button disabled={loading || editingCsvLoading} onClick={() => saveEditedTest(test.id)} className="px-6 py-3 bg-slate-950 text-amber-500 rounded-xl text-[10px] font-bold uppercase tracking-widest disabled:opacity-40">Save</button>
-                          <button disabled={loading} onClick={cancelEditTest} className="px-6 py-3 bg-slate-100 text-slate-700 rounded-xl text-[10px] font-bold uppercase tracking-widest disabled:opacity-40">Cancel</button>
+                          <button disabled={loading || editingCsvLoading} onClick={() => saveEditedTest(test.id)} className="px-6 py-3 bg-slate-950 text-amber-500 rounded-xl text-xs font-bold uppercase tracking-widest disabled:opacity-40">Save</button>
+                          <button disabled={loading} onClick={cancelEditTest} className="px-6 py-3 bg-slate-100 text-slate-700 rounded-xl text-xs font-bold uppercase tracking-widest disabled:opacity-40">Cancel</button>
                         </div>
                       </div>
                     )}
@@ -2572,16 +2624,16 @@ Rules:
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <button onClick={() => fileInputRef.current?.click()} className="bg-white p-8 rounded-[2rem] border-2 border-dashed border-slate-100 hover:border-amber-400 transition-all shadow-sm group text-left">
                       <h3 className="text-sm font-bold mb-2 uppercase text-slate-900">Import From PDF</h3>
-                      <p className="text-[10px] text-slate-400 font-medium">AI extract questions and review before publish.</p>
+                      <p className="text-xs text-slate-400 font-medium">AI extract questions and review before publish.</p>
                     </button>
                     <button onClick={() => csvInputRef.current?.click()} className="bg-white p-8 rounded-[2rem] border-2 border-dashed border-slate-100 hover:border-emerald-400 transition-all shadow-sm group text-left">
                       <h3 className="text-sm font-bold mb-2 uppercase text-slate-900">Import From CSV</h3>
-                      <p className="text-[10px] text-slate-400 font-medium">Fast bulk upload with row validation and dedupe.</p>
+                      <p className="text-xs text-slate-400 font-medium">Fast bulk upload with row validation and dedupe.</p>
                     </button>
                   </div>
                   <div className="bg-white p-6 rounded-2xl border border-slate-100 text-left">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">CSV Headers</p>
-                    <code className="text-[10px] text-slate-700 break-words">
+                    <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">CSV Headers</p>
+                    <code className="text-xs text-slate-700 break-words">
                       subject,topic,text,optionA,optionB,optionC,optionD,correctAnswer,explanation,difficulty,tags,source,year,examType,status,isActive
                     </code>
                   </div>
@@ -2591,18 +2643,18 @@ Rules:
                   <div className="w-72 h-2 bg-slate-100 rounded-full overflow-hidden mb-6">
                     <div className="h-full bg-amber-500 animate-pulse w-1/2"></div>
                   </div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest animate-pulse">Processing file...</p>
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest animate-pulse">Processing file...</p>
                 </div>
               ) : (
                 <div className="space-y-6 text-left animate-in slide-in-from-bottom-10">
                   <div className="flex flex-col md:flex-row gap-4 md:items-center justify-between bg-slate-950 p-6 rounded-3xl text-white shadow-2xl">
                     <div>
                       <p className="text-sm font-bold uppercase text-amber-500">{stagedQuestions.filter(q => q.selected).length} Selected</p>
-                      <p className="text-[9px] text-slate-400 uppercase font-bold mt-1">Review and edit before adding</p>
+                      <p className="text-xs text-slate-400 uppercase font-bold mt-1">Review and edit before adding</p>
                     </div>
                     <div className="flex gap-2">
-                      <button onClick={commitImportedQuestions} className="px-6 py-3 bg-amber-500 text-slate-950 rounded-xl font-bold uppercase text-[10px] hover:bg-amber-600">Add to Bank</button>
-                      <button onClick={() => setImportStatus('idle')} className="px-6 py-3 bg-slate-800 text-white rounded-xl font-bold uppercase text-[10px]">Cancel</button>
+                      <button onClick={commitImportedQuestions} className="px-6 py-3 bg-amber-500 text-slate-950 rounded-xl font-bold uppercase text-xs hover:bg-amber-600">Add to Bank</button>
+                      <button onClick={() => setImportStatus('idle')} className="px-6 py-3 bg-slate-800 text-white rounded-xl font-bold uppercase text-xs">Cancel</button>
                     </div>
                   </div>
 
@@ -2621,9 +2673,9 @@ Rules:
                               }}
                               className="w-4 h-4 accent-amber-500"
                             />
-                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Include</span>
+                            <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Include</span>
                           </div>
-                          <span className="text-[9px] font-bold text-amber-600 uppercase tracking-widest">{q.subject || 'General'}</span>
+                          <span className="text-xs font-bold text-amber-600 uppercase tracking-widest">{q.subject || 'General'}</span>
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -2722,7 +2774,7 @@ Rules:
                           rows={3}
                           placeholder="Explanation (optional)"
                         />
-                        <label className="flex items-center gap-2 text-[10px] font-bold uppercase text-slate-500">
+                        <label className="flex items-center gap-2 text-xs font-bold uppercase text-slate-500">
                           <input
                             type="checkbox"
                             checked={q.isActive !== false}
@@ -2747,14 +2799,14 @@ Rules:
           <div className="max-w-5xl mx-auto space-y-6">
             <div className="bg-white border border-slate-100 rounded-[2rem] p-8 shadow-sm">
               <h3 className="text-lg font-bold text-slate-900 mb-2">Activation Key Generator</h3>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-400">
                 Root admin only. Generated keys are stored in <code>licenseKeys</code>.
               </p>
             </div>
 
             <div className="bg-white border border-slate-100 rounded-[2rem] p-8 shadow-sm space-y-4">
               <h4 className="text-sm font-bold uppercase tracking-widest text-slate-900">Free Access Deadline (WAT)</h4>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-400">
                 This controls when paywall lock starts for unpaid users.
               </p>
               <div className="flex flex-col md:flex-row gap-3">
@@ -2767,12 +2819,12 @@ Rules:
                 <button
                   onClick={handleSaveDeadline}
                   disabled={deadlineSaving}
-                  className="px-6 py-4 bg-slate-950 text-amber-500 rounded-2xl text-[10px] font-bold uppercase tracking-widest disabled:opacity-40"
+                  className="px-6 py-4 bg-slate-950 text-amber-500 rounded-2xl text-xs font-bold uppercase tracking-widest disabled:opacity-40"
                 >
                   {deadlineSaving ? 'Saving...' : 'Save Deadline'}
                 </button>
               </div>
-              <p className="text-[10px] text-slate-500">
+              <p className="text-xs text-slate-500">
                 Default reference: April 2, 2026 at 00:00 WAT.
               </p>
             </div>
@@ -2781,7 +2833,7 @@ Rules:
               <div className="bg-white border border-slate-100 rounded-[2rem] p-8 shadow-sm space-y-4">
                 <h4 className="text-sm font-bold uppercase tracking-widest text-slate-900">Single Key</h4>
                 <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl">
-                  <span className="text-[10px] font-bold uppercase text-slate-400">Duration (days)</span>
+                  <span className="text-xs font-bold uppercase text-slate-400">Duration (days)</span>
                   <input
                     type="number"
                     min={1}
@@ -2793,7 +2845,7 @@ Rules:
                 <button
                   onClick={handleGenerateSingleKey}
                   disabled={keyToolLoading}
-                  className="w-full py-4 bg-slate-950 text-amber-500 rounded-2xl font-bold uppercase text-[10px] tracking-widest disabled:opacity-40"
+                  className="w-full py-4 bg-slate-950 text-amber-500 rounded-2xl font-bold uppercase text-xs tracking-widest disabled:opacity-40"
                 >
                   {keyToolLoading ? 'Working...' : 'Generate One Key'}
                 </button>
@@ -2802,7 +2854,7 @@ Rules:
               <div className="bg-white border border-slate-100 rounded-[2rem] p-8 shadow-sm space-y-4">
                 <h4 className="text-sm font-bold uppercase tracking-widest text-slate-900">Bulk Keys</h4>
                 <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl">
-                  <span className="text-[10px] font-bold uppercase text-slate-400">How Many</span>
+                  <span className="text-xs font-bold uppercase text-slate-400">How Many</span>
                   <input
                     type="number"
                     min={1}
@@ -2813,7 +2865,7 @@ Rules:
                   />
                 </div>
                 <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl">
-                  <span className="text-[10px] font-bold uppercase text-slate-400">Duration (days)</span>
+                  <span className="text-xs font-bold uppercase text-slate-400">Duration (days)</span>
                   <input
                     type="number"
                     min={1}
@@ -2825,7 +2877,7 @@ Rules:
                 <button
                   onClick={handleGenerateBulkKeys}
                   disabled={keyToolLoading}
-                  className="w-full py-4 bg-amber-500 text-slate-950 rounded-2xl font-bold uppercase text-[10px] tracking-widest disabled:opacity-40"
+                  className="w-full py-4 bg-amber-500 text-slate-950 rounded-2xl font-bold uppercase text-xs tracking-widest disabled:opacity-40"
                 >
                   {keyToolLoading ? 'Working...' : 'Generate Bulk Keys'}
                 </button>
@@ -2838,13 +2890,13 @@ Rules:
                 <button
                   onClick={copyGeneratedKeys}
                   disabled={generatedKeys.length === 0}
-                  className="px-5 py-2 bg-slate-950 text-amber-500 rounded-xl text-[10px] font-bold uppercase tracking-widest disabled:opacity-30"
+                  className="px-5 py-2 bg-slate-950 text-amber-500 rounded-xl text-xs font-bold uppercase tracking-widest disabled:opacity-30"
                 >
                   Copy All
                 </button>
               </div>
               {generatedKeys.length === 0 ? (
-                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">No new keys generated this session.</p>
+                <p className="text-xs font-bold uppercase tracking-widest text-slate-400">No new keys generated this session.</p>
               ) : (
                 <div className="max-h-72 v2-scroll space-y-2">
                   {generatedKeys.map((key) => (
@@ -2886,11 +2938,11 @@ Rules:
                 </div>
               ))}
               <textarea placeholder="Explanation (optional)" className="w-full p-4 bg-slate-50 border rounded-2xl text-xs h-20 outline-none" value={qExplanation} onChange={e => setQExplanation(e.target.value)} />
-              <label className="flex items-center gap-2 text-[10px] font-bold uppercase text-slate-500">
+              <label className="flex items-center gap-2 text-xs font-bold uppercase text-slate-500">
                 <input type="checkbox" checked={qIsActive} onChange={(e) => setQIsActive(e.target.checked)} className="accent-amber-500" />
                 Active
               </label>
-              <button disabled={loading} className="w-full py-4 bg-slate-950 text-amber-500 rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-xl active:scale-95 transition-all">{editingId ? 'Save Changes' : 'Add Question'}</button>
+              <button disabled={loading} className="w-full py-4 bg-slate-950 text-amber-500 rounded-2xl font-bold uppercase text-xs tracking-widest shadow-xl active:scale-95 transition-all">{editingId ? 'Save Changes' : 'Add Question'}</button>
             </form>
           </div>
         </div>
@@ -2900,3 +2952,5 @@ Rules:
 };
 
 export default AdminDashboard;
+
+

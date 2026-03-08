@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+﻿import React, { useEffect, useMemo, useState } from 'react';
 import { ExamResult, MockTest, Question } from '../types';
 import { db } from '../firebase';
 import { collection, getDocs, limit, query } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
@@ -32,6 +32,7 @@ const AdminAnalytics: React.FC = () => {
   const [testFilter, setTestFilter] = useState<string>('all');
   const [userFilter, setUserFilter] = useState<string>('all');
   const [subjectFilter, setSubjectFilter] = useState<string>('all');
+  const [showMore, setShowMore] = useState(false);
 
   const loadAnalyticsData = async () => {
     setIsLoading(true);
@@ -404,64 +405,74 @@ const AdminAnalytics: React.FC = () => {
             ))}
           </select>
 
-          <button onClick={loadAnalyticsData} className="px-5 py-3 bg-slate-950 text-amber-500 rounded-xl text-[10px] font-bold uppercase tracking-widest">
+          <button onClick={loadAnalyticsData} className="px-5 py-3 bg-slate-950 text-amber-500 rounded-xl text-xs font-bold uppercase tracking-widest">
             Refresh
           </button>
         </div>
         {loadError && (
-          <p className="mt-3 text-[10px] font-bold uppercase tracking-widest text-red-600">{loadError}</p>
+          <p className="mt-3 text-xs font-bold uppercase tracking-widest text-red-600">{loadError}</p>
         )}
       </div>
 
       {isLoading ? (
-        <div className="bg-white border border-slate-100 rounded-[2rem] p-12 text-center text-slate-400 text-[10px] font-bold uppercase tracking-widest">
+        <div className="bg-white border border-slate-100 rounded-[2rem] p-12 text-center text-slate-400 text-xs font-bold uppercase tracking-widest">
           Loading analytics...
         </div>
       ) : (
         <>
           <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
             <div className="bg-white border border-slate-100 rounded-2xl p-5">
-              <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400">Total Attempts</p>
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Total Attempts</p>
               <p className="text-2xl font-black text-slate-900 mt-2">{kpis.attempts}</p>
             </div>
             <div className="bg-white border border-slate-100 rounded-2xl p-5">
-              <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400">Unique Candidates</p>
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Unique Candidates</p>
               <p className="text-2xl font-black text-slate-900 mt-2">{kpis.uniqueCandidates}</p>
             </div>
             <div className="bg-white border border-slate-100 rounded-2xl p-5">
-              <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400">Average Score</p>
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Average Score</p>
               <p className="text-2xl font-black text-slate-900 mt-2">{fmtPct(kpis.avgScorePct)}</p>
             </div>
             <div className="bg-white border border-slate-100 rounded-2xl p-5">
-              <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400">Pass Rate</p>
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Pass Rate</p>
               <p className="text-2xl font-black text-slate-900 mt-2">{fmtPct(kpis.passRate)}</p>
             </div>
             <div className="bg-white border border-slate-100 rounded-2xl p-5">
-              <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400">Excellent (70%+)</p>
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Excellent (70%+)</p>
               <p className="text-2xl font-black text-slate-900 mt-2">{fmtPct(kpis.excellentRate)}</p>
             </div>
             <div className="bg-white border border-slate-100 rounded-2xl p-5">
-              <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400">Auto-submit Rate</p>
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Auto-submit Rate</p>
               <p className="text-2xl font-black text-slate-900 mt-2">{fmtPct(kpis.autoSubmitRate)}</p>
             </div>
             <div className="bg-white border border-slate-100 rounded-2xl p-5">
-              <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400">Abandonment Rate</p>
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Abandonment Rate</p>
               <p className="text-2xl font-black text-slate-900 mt-2">{fmtPct(kpis.abandonmentRate)}</p>
             </div>
             <div className="bg-white border border-slate-100 rounded-2xl p-5">
-              <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400">Recalculated Results</p>
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Recalculated Results</p>
               <p className="text-2xl font-black text-slate-900 mt-2">{operational.recalculated}</p>
             </div>
+          </div>
+
+          <div className="flex justify-end">
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => setShowMore((prev) => !prev)}
+            >
+              {showMore ? 'Show Less' : 'Show More'}
+            </button>
           </div>
 
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
             <div className="bg-white border border-slate-100 rounded-[2rem] p-6">
               <h3 className="text-sm font-bold uppercase tracking-widest text-slate-900 mb-4">Attempts Trend</h3>
               <div className="space-y-2 max-h-64 overflow-y-auto pr-2">
-                {trendRows.length === 0 && <p className="text-[10px] font-bold text-slate-400 uppercase">No data for current filters.</p>}
+                {trendRows.length === 0 && <p className="text-xs font-bold text-slate-400 uppercase">No data for current filters.</p>}
                 {trendRows.map(row => (
                   <div key={row.date} className="space-y-1">
-                    <div className="flex justify-between text-[10px] font-bold text-slate-500">
+                    <div className="flex justify-between text-xs font-bold text-slate-500">
                       <span>{row.date}</span>
                       <span>{row.attempts} attempts</span>
                     </div>
@@ -476,10 +487,10 @@ const AdminAnalytics: React.FC = () => {
             <div className="bg-white border border-slate-100 rounded-[2rem] p-6">
               <h3 className="text-sm font-bold uppercase tracking-widest text-slate-900 mb-4">Average Score Trend</h3>
               <div className="space-y-2 max-h-64 overflow-y-auto pr-2">
-                {trendRows.length === 0 && <p className="text-[10px] font-bold text-slate-400 uppercase">No data for current filters.</p>}
+                {trendRows.length === 0 && <p className="text-xs font-bold text-slate-400 uppercase">No data for current filters.</p>}
                 {trendRows.map(row => (
                   <div key={row.date} className="space-y-1">
-                    <div className="flex justify-between text-[10px] font-bold text-slate-500">
+                    <div className="flex justify-between text-xs font-bold text-slate-500">
                       <span>{row.date}</span>
                       <span>{fmtPct(row.avgScore)}</span>
                     </div>
@@ -497,7 +508,7 @@ const AdminAnalytics: React.FC = () => {
             <div className="overflow-x-auto">
               <table className="w-full text-left min-w-[900px]">
                 <thead>
-                  <tr className="text-[10px] font-bold uppercase tracking-widest text-slate-400 border-b border-slate-100">
+                  <tr className="text-xs font-bold uppercase tracking-widest text-slate-400 border-b border-slate-100">
                     <th className="py-3 pr-4">Test</th>
                     <th className="py-3 pr-4">Attempts</th>
                     <th className="py-3 pr-4">Candidates</th>
@@ -521,7 +532,7 @@ const AdminAnalytics: React.FC = () => {
                   ))}
                   {testRows.length === 0 && (
                     <tr>
-                      <td className="py-8 text-[10px] font-bold uppercase text-slate-400" colSpan={7}>No tests in current filter set.</td>
+                      <td className="py-8 text-xs font-bold uppercase text-slate-400" colSpan={7}>No tests in current filter set.</td>
                     </tr>
                   )}
                 </tbody>
@@ -529,13 +540,15 @@ const AdminAnalytics: React.FC = () => {
             </div>
           </div>
 
+          {showMore && (
+          <>
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
             <div className="bg-white border border-slate-100 rounded-[2rem] p-6">
               <h3 className="text-sm font-bold uppercase tracking-widest text-slate-900 mb-4">Section Difficulty</h3>
               <div className="space-y-3">
                 {sectionRows.slice(0, 10).map(section => (
                   <div key={section.name}>
-                    <div className="flex justify-between text-[10px] font-bold uppercase text-slate-500 mb-1">
+                    <div className="flex justify-between text-xs font-bold uppercase text-slate-500 mb-1">
                       <span>{section.name}</span>
                       <span>{fmtPct(section.avgPct)}</span>
                     </div>
@@ -544,7 +557,7 @@ const AdminAnalytics: React.FC = () => {
                     </div>
                   </div>
                 ))}
-                {sectionRows.length === 0 && <p className="text-[10px] font-bold uppercase text-slate-400">No section data for filters.</p>}
+                {sectionRows.length === 0 && <p className="text-xs font-bold uppercase text-slate-400">No section data for filters.</p>}
               </div>
             </div>
 
@@ -555,17 +568,17 @@ const AdminAnalytics: React.FC = () => {
                   <div key={`${student.name}-${idx}`} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
                     <div>
                       <p className="text-xs font-bold text-slate-900 uppercase">{student.name}</p>
-                      <p className="text-[9px] font-bold uppercase text-slate-400">{student.attempts} attempts</p>
+                      <p className="text-xs font-bold uppercase text-slate-400">{student.attempts} attempts</p>
                     </div>
                     <div className="text-right">
                       <p className="text-sm font-black text-slate-900">{fmtPct(student.best)}</p>
-                      <p className={`text-[9px] font-bold uppercase ${student.delta >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                      <p className={`text-xs font-bold uppercase ${student.delta >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                         {student.delta >= 0 ? '+' : ''}{Math.round(student.delta)} trend
                       </p>
                     </div>
                   </div>
                 ))}
-                {topStudents.length === 0 && <p className="text-[10px] font-bold uppercase text-slate-400">No student rows for filters.</p>}
+                {topStudents.length === 0 && <p className="text-xs font-bold uppercase text-slate-400">No student rows for filters.</p>}
               </div>
             </div>
           </div>
@@ -576,14 +589,14 @@ const AdminAnalytics: React.FC = () => {
               <div className="space-y-3">
                 {hardestQuestions.map(question => (
                   <div key={question.id} className="p-3 bg-slate-50 rounded-xl">
-                    <p className="text-[9px] font-bold uppercase text-amber-600">{question.subject}</p>
+                    <p className="text-xs font-bold uppercase text-amber-600">{question.subject}</p>
                     <p className="text-xs font-bold text-slate-800 line-clamp-2 mt-1">{question.prompt}</p>
-                    <p className="text-[10px] font-bold uppercase text-slate-500 mt-2">
+                    <p className="text-xs font-bold uppercase text-slate-500 mt-2">
                       Correct: {fmtPct(question.correctRate)} | Attempts: {question.attempts}
                     </p>
                   </div>
                 ))}
-                {hardestQuestions.length === 0 && <p className="text-[10px] font-bold uppercase text-slate-400">Not enough question-level attempts.</p>}
+                {hardestQuestions.length === 0 && <p className="text-xs font-bold uppercase text-slate-400">Not enough question-level attempts.</p>}
               </div>
             </div>
 
@@ -592,14 +605,14 @@ const AdminAnalytics: React.FC = () => {
               <div className="space-y-3">
                 {mostSkippedQuestions.map(question => (
                   <div key={question.id} className="p-3 bg-slate-50 rounded-xl">
-                    <p className="text-[9px] font-bold uppercase text-amber-600">{question.subject}</p>
+                    <p className="text-xs font-bold uppercase text-amber-600">{question.subject}</p>
                     <p className="text-xs font-bold text-slate-800 line-clamp-2 mt-1">{question.prompt}</p>
-                    <p className="text-[10px] font-bold uppercase text-slate-500 mt-2">
+                    <p className="text-xs font-bold uppercase text-slate-500 mt-2">
                       Skipped: {fmtPct(question.unattemptedRate)} | Options: A{question.optionCounts[0]} B{question.optionCounts[1]} C{question.optionCounts[2]} D{question.optionCounts[3]}
                     </p>
                   </div>
                 ))}
-                {mostSkippedQuestions.length === 0 && <p className="text-[10px] font-bold uppercase text-slate-400">Not enough question-level attempts.</p>}
+                {mostSkippedQuestions.length === 0 && <p className="text-xs font-bold uppercase text-slate-400">Not enough question-level attempts.</p>}
               </div>
             </div>
           </div>
@@ -608,25 +621,25 @@ const AdminAnalytics: React.FC = () => {
             <h3 className="text-sm font-bold uppercase tracking-widest text-slate-900 mb-4">Operational Snapshot</h3>
             <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
               <div className="p-4 bg-slate-50 rounded-xl">
-                <p className="text-[9px] font-bold uppercase text-slate-400">Active Tests</p>
+                <p className="text-xs font-bold uppercase text-slate-400">Active Tests</p>
                 <p className="text-2xl font-black text-slate-900">{operational.activeTests}</p>
               </div>
               <div className="p-4 bg-slate-50 rounded-xl">
-                <p className="text-[9px] font-bold uppercase text-slate-400">Paused Tests</p>
+                <p className="text-xs font-bold uppercase text-slate-400">Paused Tests</p>
                 <p className="text-2xl font-black text-slate-900">{operational.pausedTests}</p>
               </div>
               <div className="p-4 bg-slate-50 rounded-xl">
-                <p className="text-[9px] font-bold uppercase text-slate-400">Approved Tests</p>
+                <p className="text-xs font-bold uppercase text-slate-400">Approved Tests</p>
                 <p className="text-2xl font-black text-slate-900">{operational.approvedTests}</p>
               </div>
               <div className="p-4 bg-slate-50 rounded-xl">
-                <p className="text-[9px] font-bold uppercase text-slate-400">Questions Added (30d)</p>
+                <p className="text-xs font-bold uppercase text-slate-400">Questions Added (30d)</p>
                 <p className="text-2xl font-black text-slate-900">{operational.questionsLast30d}</p>
               </div>
             </div>
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
               <div className="p-4 bg-slate-50 rounded-xl">
-                <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-600 mb-3">Top Subjects</h4>
+                <h4 className="text-xs font-bold uppercase tracking-widest text-slate-600 mb-3">Top Subjects</h4>
                 <div className="space-y-2">
                   {operational.topSubjects.map(subject => (
                     <div key={subject.name} className="flex justify-between text-sm">
@@ -637,7 +650,7 @@ const AdminAnalytics: React.FC = () => {
                 </div>
               </div>
               <div className="p-4 bg-slate-50 rounded-xl">
-                <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-600 mb-3">Top Topics</h4>
+                <h4 className="text-xs font-bold uppercase tracking-widest text-slate-600 mb-3">Top Topics</h4>
                 <div className="space-y-2">
                   {operational.topTopics.map(topic => (
                     <div key={topic.name} className="flex justify-between text-sm">
@@ -649,6 +662,8 @@ const AdminAnalytics: React.FC = () => {
               </div>
             </div>
           </div>
+          </>
+          )}
         </>
       )}
     </div>
@@ -656,3 +671,4 @@ const AdminAnalytics: React.FC = () => {
 };
 
 export default AdminAnalytics;
+

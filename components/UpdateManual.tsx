@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import logo from '../assets/logo.png';
 
 interface UpdateManualProps {
@@ -81,3 +81,4 @@ const UpdateManual: React.FC<UpdateManualProps> = ({ onClose }) => {
 };
 
 export default UpdateManual;
+

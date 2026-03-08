@@ -1,7 +1,6 @@
-
 import React from 'react';
 import { ExamResult } from '../types';
-import logo from '../assets/logo.png';
+import ScoreBadge from './ui/ScoreBadge';
 
 interface ResultScreenProps {
   result: ExamResult;
@@ -9,87 +8,73 @@ interface ResultScreenProps {
   onReview: () => void;
 }
 
+const clamp = (value: number, min = 0, max = 100) => Math.max(min, Math.min(max, value));
+
 const ResultScreen: React.FC<ResultScreenProps> = ({ result, onClose, onReview }) => {
-  const percentage = Math.round((result.score / result.maxScore) * 100);
-  const hasAnsweredAccuracy = typeof result.answeredQuestionCount === 'number' && typeof result.correctAnsweredCount === 'number';
+  const percentage = clamp(Math.round((result.score / Math.max(result.maxScore || 1, 1)) * 100));
   const answeredQuestionCount = result.answeredQuestionCount ?? Object.keys(result.userAnswers || {}).length;
   const correctAnsweredCount = result.correctAnsweredCount ?? 0;
-  const answeredAccuracy = hasAnsweredAccuracy && answeredQuestionCount > 0
+  const answeredAccuracy = answeredQuestionCount > 0
     ? Math.round((correctAnsweredCount / answeredQuestionCount) * 100)
     : 0;
-  
-  const getFeedback = () => {
-    if (result.status === 'abandoned') return { text: "SESSION ENDED", color: "text-red-600", bg: "bg-red-50" };
-    if (percentage >= 70) return { text: "EXCELLENT", color: "text-amber-600", bg: "bg-amber-50" };
-    if (percentage >= 50) return { text: "PASSED", color: "text-slate-800", bg: "bg-slate-50" };
-    return { text: "FAILED", color: "text-rose-600", bg: "bg-rose-50" };
+
+  const bandClass = percentage >= 70 ? 'score-high' : percentage >= 40 ? 'score-mid' : 'score-low';
+  const ringColor = percentage >= 70 ? 'var(--emerald)' : percentage >= 40 ? 'var(--gold)' : 'var(--rose)';
+  const ringStyle = {
+    background: `conic-gradient(${ringColor} ${percentage}%, var(--edge) ${percentage}% 100%)`
   };
 
-  const feedback = getFeedback();
+  const message = percentage >= 70
+    ? "Excellent work - you're on track."
+    : percentage >= 40
+      ? 'Good effort - review the flagged areas.'
+      : 'Keep practicing - use the review tool to identify weak points.';
 
   return (
-    <div className="v2-page min-h-screen bg-slate-50 flex items-center justify-center p-6 pb-20 safe-top safe-bottom">
-       <div className="max-w-3xl w-full bg-white rounded-[2rem] shadow-2xl overflow-hidden border border-slate-100 animate-in zoom-in-95 fade-in duration-700">
-          <div className="bg-slate-950 p-10 text-center relative border-b-8 border-amber-500">
-             <div className="flex justify-center mb-6">
-                <img src={logo} alt="Logo" className="w-20 h-20" />
-             </div>
-             <p className="text-amber-500 text-[10px] font-bold uppercase tracking-widest mb-2">Test Result</p>
-             <h1 className="text-2xl font-bold text-white uppercase tracking-tight">{result.testName}</h1>
+    <div className="v2-page min-h-screen flex items-center justify-center p-4 md:p-8 safe-top safe-bottom">
+      <div className="w-full max-w-[520px] card">
+        <div className="flex flex-col items-center text-center">
+          <div className="w-44 h-44 rounded-full p-2" style={ringStyle}>
+            <div className="w-full h-full rounded-full bg-[var(--surface)] border border-[var(--edge)] flex flex-col items-center justify-center">
+              <p className="text-xs text-[var(--muted)] uppercase tracking-widest mb-1">Score</p>
+              <span className={`font-display text-5xl font-extrabold ${bandClass}`}>{percentage}%</span>
+            </div>
           </div>
+          <p className="mt-4 text-sm text-[var(--muted)]">You scored {result.score} out of {result.maxScore}</p>
+          <p className={`mt-2 text-sm font-semibold ${bandClass}`}>{message}</p>
+        </div>
 
-          <div className="p-8 md:p-12 text-center">
-             <div className="mb-10">
-                <h2 className={`text-4xl font-bold mb-4 ${feedback.color}`}>{feedback.text}</h2>
-                <div className="flex flex-col sm:flex-row justify-center items-stretch gap-4 sm:gap-6">
-                   <div className={`px-8 py-4 rounded-2xl font-bold text-5xl ${feedback.bg} ${feedback.color} shadow-lg`}>
-                      {percentage}%
-                   </div>
-                   <div className="text-left text-slate-400 text-[10px] font-bold uppercase leading-relaxed">
-                     Score: {result.score} / {result.maxScore}
-                   </div>
-                   <div className="px-6 py-4 rounded-2xl bg-emerald-50 text-left shadow-lg">
-                     <p className="text-[9px] font-bold uppercase tracking-widest text-emerald-600 mb-1">Answered Accuracy</p>
-                     {hasAnsweredAccuracy ? (
-                       <>
-                         <p className="text-3xl font-bold text-emerald-700 leading-none">{answeredAccuracy}%</p>
-                         <p className="text-[10px] font-bold uppercase text-emerald-700/80 mt-2">
-                           {correctAnsweredCount} correct / {answeredQuestionCount} answered
-                         </p>
-                       </>
-                     ) : (
-                       <p className="text-[10px] font-bold uppercase text-emerald-700/80 mt-2">
-                         Available for new results only
-                       </p>
-                     )}
-                   </div>
+        <div className="mt-6 p-4 rounded-xl border border-[var(--edge)] bg-[var(--panel-2)]">
+          <p className="section-label mb-2">Answered Accuracy</p>
+          <div className="flex items-center justify-between">
+            <ScoreBadge value={answeredAccuracy} />
+            <p className="text-sm text-[var(--muted)]">{correctAnsweredCount} correct / {answeredQuestionCount} answered</p>
+          </div>
+        </div>
+
+        <div className="mt-6 space-y-3">
+          <p className="section-label">Section Scores</p>
+          {result.sectionBreakdown.map((sec, i) => {
+            const pct = clamp(Math.round((sec.score / Math.max(sec.total || 1, 1)) * 100));
+            return (
+              <div key={`${sec.sectionName}-${i}`} className="p-3 rounded-xl border border-[var(--edge)] bg-[var(--panel-2)]">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm font-semibold">{sec.sectionName}</span>
+                  <span className="text-sm text-[var(--muted)]">{sec.score}/{sec.total}</span>
                 </div>
-             </div>
+                <div className="h-1.5 rounded-full bg-[var(--edge)] overflow-hidden">
+                  <div className="h-full rounded-full" style={{ width: `${pct}%`, background: ringColor }}></div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
 
-             <div className="space-y-4 mb-10 text-left">
-                <h3 className="text-[10px] font-bold text-slate-950 uppercase tracking-widest">Section Scores</h3>
-                {result.sectionBreakdown.map((sec, i) => {
-                  const secPerc = Math.round((sec.score / sec.total) * 100);
-                  return (
-                    <div key={i} className="flex flex-col gap-2">
-                       <div className="flex justify-between items-center text-[10px]">
-                          <span className="font-bold text-slate-800 uppercase">{sec.sectionName}</span>
-                          <span className="font-bold text-slate-400">{sec.score} / {sec.total}</span>
-                       </div>
-                       <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden">
-                          <div className={`h-full bg-amber-500`} style={{ width: `${secPerc}%` }}></div>
-                       </div>
-                    </div>
-                  );
-                })}
-             </div>
-
-             <div className="flex flex-col sm:flex-row gap-4">
-                <button onClick={onReview} className="flex-1 py-5 bg-amber-500 text-slate-950 rounded-2xl font-bold uppercase tracking-widest text-[10px] shadow-lg">Review Questions</button>
-                <button onClick={onClose} className="flex-1 py-5 bg-slate-950 text-amber-500 rounded-2xl font-bold uppercase tracking-widest text-[10px] shadow-lg">Back to Dashboard</button>
-             </div>
-          </div>
-       </div>
+        <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <button onClick={onReview} className="btn btn-outline-sky w-full">Review Test</button>
+          <button onClick={onClose} className="btn btn-ghost w-full">Back to Dashboard</button>
+        </div>
+      </div>
     </div>
   );
 };

@@ -44,6 +44,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Aureus Medicos">
     <meta name="theme-color" content="#020617">
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,400&display=swap" rel="stylesheet"/>
 
     <!-- MathJax Configuration -->
     <script>
@@ -63,8 +64,6 @@
 
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap');
-        
         :root {
             --sat: env(safe-area-inset-top);
             --sab: env(safe-area-inset-bottom);
@@ -73,9 +72,8 @@
         }
 
         body {
-            font-family: 'Manrope', sans-serif;
+            font-family: 'DM Sans', sans-serif;
             overscroll-behavior-y: contain;
-            background-color: #f8fafc;
             margin: 0;
             padding: 0;
             min-height: 100dvh;
@@ -130,7 +128,7 @@
 </script>
 <link rel="stylesheet" href="/index.css">
 </head>
-<body class="text-slate-900">
+<body>
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
 </body>

@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { User, MockTest, ExamResult, QuizQuestion, SharedQuiz, CsvQuestionBundle, CustomThemeConfig } from '../types';
 import { db } from '../firebase';
 import { collection, query, where, onSnapshot, getDocs, getDocsFromServer, limit, addDoc, updateDoc, deleteDoc, doc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import logo from '../assets/logo.png';
 import { AppTheme, THEMES } from '../theme';
+import { toast } from './ui/Toast';
+import { confirmDialog } from './ui/ConfirmDialog';
 
 interface DashboardProps {
   user: User;
@@ -98,17 +100,17 @@ const LeaderboardModal: React.FC<{ test: MockTest, onClose: () => void }> = ({ t
       <div className="w-full max-w-lg bg-white rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 border-b-8 border-amber-500">
         <div className="bg-slate-900 p-8 text-center relative">
           <button onClick={onClose} className="absolute top-6 right-6 text-slate-400 hover:text-white"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
-          <p className="text-amber-500 text-[10px] font-black uppercase tracking-widest mb-1">Leaderboard</p>
+          <p className="text-amber-500 text-xs font-black uppercase tracking-widest mb-1">Leaderboard</p>
           <h2 className="text-xl font-bold text-white uppercase truncate">{test.name}</h2>
-          <p className="text-[9px] text-slate-400 uppercase mt-2 italic">First attempt only</p>
+          <p className="text-xs text-slate-400 uppercase mt-2 italic">First attempt only</p>
         </div>
         <div className="p-6 max-h-[60vh] overflow-y-auto no-scrollbar">
           {loading ? (
-            <div className="flex flex-col items-center py-20"><div className="w-8 h-8 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mb-4"></div><p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Loading...</p></div>
+            <div className="flex flex-col items-center py-20"><div className="w-8 h-8 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mb-4"></div><p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Loading...</p></div>
           ) : loadError ? (
-            <div className="text-center py-20 text-red-500 font-bold uppercase text-[10px]">{loadError}</div>
+            <div className="text-center py-20 text-red-500 font-bold uppercase text-xs">{loadError}</div>
           ) : topScores.length === 0 ? (
-            <div className="text-center py-20 text-slate-400 font-bold uppercase text-[10px]">No attempts yet.</div>
+            <div className="text-center py-20 text-slate-400 font-bold uppercase text-xs">No attempts yet.</div>
           ) : (
             <div className="space-y-2">
               {topScores.map((res, i) => (
@@ -122,28 +124,6 @@ const LeaderboardModal: React.FC<{ test: MockTest, onClose: () => void }> = ({ t
           )}
         </div>
       </div>
-      <nav className="v3-mobile-nav fixed md:hidden bottom-0 left-0 right-0 z-[90]">
-        <div className="grid grid-cols-5 gap-1 px-2 pt-2 pb-[calc(env(safe-area-inset-bottom)+8px)]">
-          {[
-            { id: 'home' as MainTab, label: 'Home' },
-            { id: 'ranks' as MainTab, label: 'Ranks' },
-            { id: 'create' as MainTab, label: 'Create' },
-            { id: 'settings' as MainTab, label: 'Settings' },
-            { id: 'profile' as MainTab, label: 'Profile' }
-          ].map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => setActiveTab(item.id)}
-              className={`rounded-xl px-2 py-3 text-[11px] font-black uppercase tracking-widest min-h-[44px] ${
-                activeTab === item.id ? 'bg-white/15 text-white' : 'text-slate-300'
-              }`}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-      </nav>
     </div>
   );
 };
@@ -313,9 +293,9 @@ const Dashboard: React.FC<DashboardProps> = ({
         document.execCommand('copy');
         document.body.removeChild(temp);
       }
-      alert('Test link copied.');
+      toast.success('Link copied', 'Test link copied to clipboard.');
     } catch {
-      alert('Could not copy link. Link: ' + link);
+      toast.error('Copy failed', `Could not copy link. ${link}`);
     }
   };
 
@@ -338,7 +318,7 @@ const Dashboard: React.FC<DashboardProps> = ({
   const handleActivateFromSettings = async () => {
     const key = activationInput.trim().toUpperCase();
     if (!key) {
-      alert('Enter your activation key.');
+      toast.warning('Missing key', 'Enter your activation key.');
       return;
     }
     if (!onActivateLicense) return;
@@ -380,11 +360,11 @@ const Dashboard: React.FC<DashboardProps> = ({
   const publishQuiz = async () => {
     const trimmedName = quizName.trim();
     if (!trimmedName) {
-      alert('Quiz name is required.');
+      toast.warning('Missing name', 'Quiz name is required.');
       return;
     }
     if (!quizAllowRetake && quizMaxAttempts !== '' && Number(quizMaxAttempts) > 1) {
-      alert('Retake is off, so max attempts must be 1.');
+      toast.warning('Invalid attempts', 'Retake is off, so max attempts must be 1.');
       return;
     }
 
@@ -399,7 +379,7 @@ const Dashboard: React.FC<DashboardProps> = ({
       !q.text || q.options.some(opt => !opt) || q.correctAnswerIndex < 0 || q.correctAnswerIndex > 3
     );
     if (invalidQuestion) {
-      alert('Each question must have text, 4 options, and a valid correct answer.');
+      toast.warning('Invalid questions', 'Each question must have text, 4 options, and a valid correct answer.');
       return;
     }
 
@@ -419,7 +399,7 @@ const Dashboard: React.FC<DashboardProps> = ({
       });
       const link = `${window.location.origin}/quiz/${quizDoc.id}`;
       await copyText(link);
-      alert('Quiz published. Share link copied.');
+      toast.success('Quiz published', 'Share link copied.');
       setQuizName('');
       setQuizDescription('');
       setQuizDurationMins(30);
@@ -428,7 +408,7 @@ const Dashboard: React.FC<DashboardProps> = ({
       setQuizQuestions([{ id: 'qq_' + Date.now(), text: '', options: ['', '', '', ''], correctAnswerIndex: 0, explanation: '' }]);
       setActiveTab('home');
     } catch (err: any) {
-      alert('Failed to publish quiz. ' + (err?.message || ''));
+      toast.error('Publish failed', err?.message || 'Could not publish quiz.');
     } finally {
       setIsPublishingQuiz(false);
     }
@@ -587,7 +567,7 @@ const Dashboard: React.FC<DashboardProps> = ({
 
   if (loading) {
     return (
-      <div className="h-full w-full flex flex-col items-center justify-center bg-slate-50"><img src={logo} className="w-12 h-12 animate-pulse mb-4" alt="Loading" /><p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Opening Portal...</p></div>
+      <div className="h-full w-full flex flex-col items-center justify-center bg-slate-50"><img src={logo} className="w-12 h-12 animate-pulse mb-4" alt="Loading" /><p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Opening Portal...</p></div>
     );
   }
 
@@ -595,9 +575,9 @@ const Dashboard: React.FC<DashboardProps> = ({
     const link = `${window.location.origin}/quiz/${quizId}`;
     try {
       await copyText(link);
-      alert('Quiz link copied.');
+      toast.success('Link copied', 'Quiz link copied.');
     } catch {
-      alert('Could not copy link. Link: ' + link);
+      toast.error('Copy failed', `Could not copy link. ${link}`);
     }
   };
 
@@ -608,16 +588,22 @@ const Dashboard: React.FC<DashboardProps> = ({
         updatedAt: new Date().toISOString()
       });
     } catch (err: any) {
-      alert('Failed to update quiz status. ' + (err?.message || ''));
+      toast.error('Update failed', err?.message || 'Failed to update quiz status.');
     }
   };
 
   const removeQuiz = async (quiz: SharedQuiz) => {
-    if (!window.confirm(`Delete quiz "${quiz.name}"?`)) return;
+    const confirmed = await confirmDialog({
+      title: 'Delete quiz?',
+      message: `Delete quiz "${quiz.name}"?`,
+      confirmText: 'Delete',
+      variant: 'danger'
+    });
+    if (!confirmed) return;
     try {
       await deleteDoc(doc(db, 'quizzes', quiz.id));
     } catch (err: any) {
-      alert('Failed to delete quiz. ' + (err?.message || ''));
+      toast.error('Delete failed', err?.message || 'Failed to delete quiz.');
     }
   };
 
@@ -669,16 +655,16 @@ const Dashboard: React.FC<DashboardProps> = ({
   const createFolder = () => {
     const name = newFolderName.trim();
     if (!name) {
-      alert('Enter a folder name.');
+      toast.warning('Missing folder name', 'Enter a folder name.');
       return;
     }
     if (testFolders.length >= MAX_TEST_FOLDERS) {
-      alert(`You can only create up to ${MAX_TEST_FOLDERS} folders.`);
+      toast.warning('Folder limit reached', `You can only create up to ${MAX_TEST_FOLDERS} folders.`);
       return;
     }
     const normalized = name.toLowerCase();
     if (testFolders.some(folder => folder.name.toLowerCase() === normalized)) {
-      alert('A folder with this name already exists.');
+      toast.warning('Duplicate folder', 'A folder with this name already exists.');
       return;
     }
     const id = `folder_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
@@ -687,18 +673,25 @@ const Dashboard: React.FC<DashboardProps> = ({
   };
 
   const removeFolder = (folderId: string) => {
-    if (!window.confirm('Remove this folder? Tests in it will become unfiled.')) return;
-    setTestFolders(prev => prev.filter(folder => folder.id !== folderId));
-    setTestFolderAssignments(prev => {
-      const next: Record<string, string> = {};
-      Object.entries(prev).forEach(([testId, assignedFolderId]) => {
-        if (assignedFolderId !== folderId) next[testId] = assignedFolderId;
+    confirmDialog({
+      title: 'Remove folder?',
+      message: 'Remove this folder? Tests in it will become unfiled.',
+      confirmText: 'Remove',
+      variant: 'danger'
+    }).then((ok) => {
+      if (!ok) return;
+      setTestFolders(prev => prev.filter(folder => folder.id !== folderId));
+      setTestFolderAssignments(prev => {
+        const next: Record<string, string> = {};
+        Object.entries(prev).forEach(([testId, assignedFolderId]) => {
+          if (assignedFolderId !== folderId) next[testId] = assignedFolderId;
+        });
+        return next;
       });
-      return next;
+      if (selectedFolderId === folderId) {
+        setSelectedFolderId('all');
+      }
     });
-    if (selectedFolderId === folderId) {
-      setSelectedFolderId('all');
-    }
   };
 
   const assignTestFolder = (testId: string, folderId: string) => {
@@ -729,29 +722,59 @@ const Dashboard: React.FC<DashboardProps> = ({
     });
 
   return (
-    <div className={`v2-page v3-mobile-shell mobile-ui-${mobileUiMode} flex-1 w-full bg-slate-50 flex flex-col overflow-hidden min-h-0 relative`}>
-      <div className="v2-shell v3-topbar bg-slate-950 text-amber-500 py-[14px] px-[18px] md:px-8 flex justify-between items-center text-[10px] font-black uppercase tracking-widest shrink-0 border-b border-slate-900 shadow-xl z-50 safe-top">
-         <div className="flex items-center gap-3">
-           <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-sm"></span>
-           <span className="hidden md:inline">Connection Stable</span>
+    <div className={`v2-page v3-mobile-shell mobile-ui-${mobileUiMode} flex-1 w-full bg-slate-50 overflow-hidden min-h-0 relative shell md:grid md:grid-cols-[72px_1fr]`}>
+      <aside className="sidebar hidden md:flex flex-col items-center justify-between py-5 px-3 bg-[var(--surface)] border-r border-[var(--edge)] sticky top-0 h-screen">
+        <div className="w-10 h-10 rounded-xl bg-[var(--gold)] text-[var(--ink)] font-display text-lg font-black flex items-center justify-center shadow-[var(--shadow-gold)]">A</div>
+        <div className="flex flex-col gap-3">
+          {[
+            { id: 'home' as MainTab, icon: 'âŠž' },
+            { id: 'ranks' as MainTab, icon: 'â¬¡' },
+            { id: 'create' as MainTab, icon: 'âœ¦' },
+            { id: 'settings' as MainTab, icon: 'âš™' },
+            { id: 'profile' as MainTab, icon: 'â—‰' }
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className={`w-11 h-11 min-h-[44px] rounded-xl border ${activeTab === tab.id ? 'bg-[var(--gold-dim)] text-[var(--gold)] border-[var(--gold)]' : 'bg-transparent text-[var(--muted)] border-[var(--edge)] hover:bg-[var(--panel)]'}`}
+            >
+              <span className="text-lg">{tab.icon}</span>
+            </button>
+          ))}
+        </div>
+        <button onClick={onLogout} className="w-11 h-11 min-h-[44px] rounded-xl border border-[var(--edge)] text-[var(--rose)] hover:bg-[var(--rose-dim)]">âŽ‹</button>
+      </aside>
+      <div className="flex flex-col min-h-0 overflow-hidden">
+      <div className="v2-shell v3-topbar topbar bg-slate-950 py-[14px] px-[18px] md:px-8 flex justify-between items-center shrink-0 border-b border-slate-900 shadow-xl z-50 safe-top sticky top-0">
+         <div>
+           <p className="text-xs text-amber-500 uppercase tracking-widest font-semibold">Exam Practice Portal</p>
+           <h1 className="font-display text-lg font-bold text-slate-100">Student Dashboard</h1>
          </div>
-         <div className="v3-topbar-title text-base md:text-[10px]">Aureus Medicos CBT</div>
-         <button onClick={onLogout} className="text-white hover:text-red-500 transition-colors uppercase text-[9px] font-bold">Sign Out</button>
+         <div className="flex items-center gap-3">
+           <div className="connection-badge">
+             <span className="connection-dot"></span>
+             <span className="hidden md:inline">Connection Stable</span>
+           </div>
+           <div className="w-9 h-9 rounded-full bg-[var(--panel-2)] border border-[var(--edge)] text-xs font-bold flex items-center justify-center text-[var(--gold)]">
+             {String(user.name || 'U').slice(0, 2).toUpperCase()}
+           </div>
+         </div>
       </div>
 
       {errors && (
-        <div className="mx-6 mt-6 p-4 bg-red-50 border border-red-100 rounded-2xl text-red-600 font-bold text-[10px] uppercase tracking-widest">
+        <div className="mx-6 mt-6 p-4 bg-red-50 border border-red-100 rounded-2xl text-red-600 font-bold text-xs uppercase tracking-widest">
           {errors}
         </div>
       )}
 
       {isReadOnly && (
-        <div className="mx-6 mt-6 p-4 bg-amber-50 border border-amber-200 rounded-2xl text-amber-700 font-bold text-[10px] uppercase tracking-widest">
+        <div className="mx-6 mt-6 p-4 bg-amber-50 border border-amber-200 rounded-2xl text-amber-700 font-bold text-xs uppercase tracking-widest">
           License required. You can browse the app, but actions are disabled until activation.{deadlineLabel ? ` Deadline passed: ${deadlineLabel}.` : ''}
         </div>
       )}
       {lowDataMode && (
-        <div className="mx-6 mt-6 p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-emerald-700 font-bold text-[10px] uppercase tracking-widest">
+        <div className="mx-6 mt-6 p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-emerald-700 font-bold text-xs uppercase tracking-widest">
           Low-data mode is ON. Reduced sync and lighter queries are active.
         </div>
       )}
@@ -765,42 +788,42 @@ const Dashboard: React.FC<DashboardProps> = ({
               <img src={logo} alt="Logo" className="w-16 h-16" />
               <div>
                 <h1 className="text-2xl font-bold text-slate-950 uppercase tracking-tight leading-none">Student Dashboard</h1>
-                <p className="text-amber-600 text-[10px] font-black uppercase mt-1">Aureus Medicos CBT</p>
+                <p className="text-amber-600 text-xs font-black uppercase mt-1">Aureus Medicos CBT</p>
               </div>
             </div>
             {(user.role === 'admin' || user.role === 'root-admin') && onReturnToAdmin && (
-              <button onClick={onReturnToAdmin} className="px-10 py-4 text-[10px] font-black text-amber-600 bg-amber-50 border border-amber-100 rounded-2xl hover:bg-amber-100 uppercase tracking-widest shadow-sm">Staff Settings</button>
+              <button onClick={onReturnToAdmin} className="px-10 py-4 text-xs font-black text-amber-600 bg-amber-50 border border-amber-100 rounded-2xl hover:bg-amber-100 uppercase tracking-widest shadow-sm">Staff Settings</button>
             )}
           </div>
 
           <div className="mb-8 bg-white rounded-2xl border border-slate-100 p-2 hidden md:inline-flex gap-2">
             <button
               onClick={() => setActiveTab('home')}
-              className={`px-5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest ${activeTab === 'home' ? 'bg-slate-950 text-amber-500' : 'text-slate-500 bg-slate-50'}`}
+              className={`px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest ${activeTab === 'home' ? 'bg-slate-950 text-amber-500' : 'text-slate-500 bg-slate-50'}`}
             >
               Home
             </button>
             <button
               onClick={() => setActiveTab('ranks')}
-              className={`px-5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest ${activeTab === 'ranks' ? 'bg-slate-950 text-amber-500' : 'text-slate-500 bg-slate-50'}`}
+              className={`px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest ${activeTab === 'ranks' ? 'bg-slate-950 text-amber-500' : 'text-slate-500 bg-slate-50'}`}
             >
               Ranks
             </button>
             <button
               onClick={() => setActiveTab('settings')}
-              className={`px-5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest ${activeTab === 'settings' ? 'bg-slate-950 text-amber-500' : 'text-slate-500 bg-slate-50'}`}
+              className={`px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest ${activeTab === 'settings' ? 'bg-slate-950 text-amber-500' : 'text-slate-500 bg-slate-50'}`}
             >
               Settings
             </button>
             <button
               onClick={() => setActiveTab('create')}
-              className={`px-5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest ${activeTab === 'create' ? 'bg-slate-950 text-amber-500' : 'text-slate-500 bg-slate-50'}`}
+              className={`px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest ${activeTab === 'create' ? 'bg-slate-950 text-amber-500' : 'text-slate-500 bg-slate-50'}`}
             >
               Create
             </button>
             <button
               onClick={() => setActiveTab('profile')}
-              className={`px-5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest ${activeTab === 'profile' ? 'bg-slate-950 text-amber-500' : 'text-slate-500 bg-slate-50'}`}
+              className={`px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest ${activeTab === 'profile' ? 'bg-slate-950 text-amber-500' : 'text-slate-500 bg-slate-50'}`}
             >
               Profile
             </button>
@@ -811,7 +834,7 @@ const Dashboard: React.FC<DashboardProps> = ({
               <section className="bg-white border border-slate-100 rounded-[2rem] p-6 shadow-sm">
                 <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4 mb-4">
                   <div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Test Folders</p>
+                    <p className="text-xs font-black uppercase tracking-widest text-slate-500">Test Folders</p>
                     <h3 className="text-lg font-bold text-slate-900">Focused Sorting</h3>
                   </div>
                   <div className="flex flex-col sm:flex-row gap-2">
@@ -825,7 +848,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                       type="button"
                       onClick={createFolder}
                       disabled={testFolders.length >= MAX_TEST_FOLDERS}
-                      className="px-4 py-3 bg-slate-900 text-amber-500 rounded-xl text-[10px] font-black uppercase tracking-widest disabled:opacity-40"
+                      className="px-4 py-3 bg-slate-900 text-amber-500 rounded-xl text-xs font-black uppercase tracking-widest disabled:opacity-40"
                     >
                       Add Folder ({testFolders.length}/{MAX_TEST_FOLDERS})
                     </button>
@@ -835,14 +858,14 @@ const Dashboard: React.FC<DashboardProps> = ({
                   <button
                     type="button"
                     onClick={() => setSelectedFolderId('all')}
-                    className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest ${selectedFolderId === 'all' ? 'bg-slate-900 text-amber-500' : 'bg-slate-100 text-slate-600'}`}
+                    className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest ${selectedFolderId === 'all' ? 'bg-slate-900 text-amber-500' : 'bg-slate-100 text-slate-600'}`}
                   >
                     All
                   </button>
                   <button
                     type="button"
                     onClick={() => setSelectedFolderId('unfiled')}
-                    className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest ${selectedFolderId === 'unfiled' ? 'bg-slate-900 text-amber-500' : 'bg-slate-100 text-slate-600'}`}
+                    className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest ${selectedFolderId === 'unfiled' ? 'bg-slate-900 text-amber-500' : 'bg-slate-100 text-slate-600'}`}
                   >
                     Unfiled
                   </button>
@@ -851,14 +874,14 @@ const Dashboard: React.FC<DashboardProps> = ({
                       <button
                         type="button"
                         onClick={() => setSelectedFolderId(folder.id)}
-                        className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest ${selectedFolderId === folder.id ? 'bg-slate-900 text-amber-500' : 'text-slate-700'}`}
+                        className={`px-3 py-2 rounded-xl text-xs font-black uppercase tracking-widest ${selectedFolderId === folder.id ? 'bg-slate-900 text-amber-500' : 'text-slate-700'}`}
                       >
                         {folder.name}
                       </button>
                       <button
                         type="button"
                         onClick={() => removeFolder(folder.id)}
-                        className="px-2 py-2 text-[10px] font-black text-red-500 uppercase"
+                        className="px-2 py-2 text-xs font-black text-red-500 uppercase"
                       >
                         x
                       </button>
@@ -866,7 +889,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                   ))}
                 </div>
                 <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Sort by:</p>
+                  <p className="text-xs font-black uppercase tracking-widest text-slate-500">Sort by:</p>
                   <div className="v3-sort-scroll flex gap-2 overflow-x-auto no-scrollbar whitespace-nowrap">
                     {[
                       { key: 'updated', label: 'Latest' },
@@ -878,7 +901,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                         key={item.key}
                         type="button"
                         onClick={() => setSortMode(item.key as TestSortMode)}
-                        className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest ${sortMode === item.key ? 'bg-amber-500 text-slate-950' : 'bg-slate-100 text-slate-600'}`}
+                        className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest ${sortMode === item.key ? 'bg-amber-500 text-slate-950' : 'bg-slate-100 text-slate-600'}`}
                       >
                         {item.label}
                       </button>
@@ -891,7 +914,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                 <section>
                   <div className="flex items-center justify-between mb-8">
                     <h2 className="text-xl font-bold text-slate-950 uppercase">Active Tests</h2>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{viewableTests.length} visible</p>
+                    <p className="text-xs font-black uppercase tracking-widest text-slate-400">{viewableTests.length} visible</p>
                   </div>
                   <div className="v3-test-grid grid grid-cols-1 lg:grid-cols-2 gap-6">
                     {viewableTests.map(test => (
@@ -907,18 +930,18 @@ const Dashboard: React.FC<DashboardProps> = ({
                       <div key={test.id} className={`bg-white p-[18px] sm:p-8 rounded-[2.5rem] shadow-sm border transition-all flex flex-col h-full group min-w-0 ${isReadOnly ? 'border-slate-100 opacity-60' : 'border-slate-100 hover:border-amber-400'}`}>
                         <div className="flex justify-between items-start mb-4 min-w-0">
                           <h3 className="font-bold text-xl text-slate-950 uppercase truncate leading-tight mr-2 min-w-0">{test.name}</h3>
-                          <span className="bg-slate-50 text-slate-500 text-[8px] font-black px-3 py-1.5 rounded-lg uppercase whitespace-nowrap">{test.totalDurationSeconds / 60}m</span>
+                          <span className="bg-slate-50 text-slate-500 text-xs font-black px-3 py-1.5 rounded-lg uppercase whitespace-nowrap">{test.totalDurationSeconds / 60}m</span>
                         </div>
                         <p className="text-xs text-slate-400 mb-6 font-medium italic line-clamp-3 leading-relaxed">{test.description || 'Start this test.'}</p>
-                        <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-6">
+                        <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6">
                           Taken by {testCounts[test.id] ?? 0} people
                         </div>
                         <div className="mb-4">
-                          <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 block mb-2">Folder</label>
+                          <label className="text-xs font-black uppercase tracking-widest text-slate-500 block mb-2">Folder</label>
                           <select
                             value={testFolderAssignments[test.id] || ''}
                             onChange={(e) => assignTestFolder(test.id, e.target.value)}
-                            className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-[10px] font-bold uppercase text-slate-700"
+                            className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold uppercase text-slate-700"
                           >
                             <option value="">Unfiled</option>
                             {testFolders.map(folder => (
@@ -929,13 +952,13 @@ const Dashboard: React.FC<DashboardProps> = ({
                         {hasBundles && (
                           <div className="mb-4 p-4 rounded-xl border border-sky-100 bg-sky-50">
                             <div className="flex items-center justify-between gap-2 mb-2">
-                              <p className="text-[10px] font-bold uppercase tracking-widest text-sky-700">
+                              <p className="text-xs font-bold uppercase tracking-widest text-sky-700">
                                 Test Bundles ({bundles.length})
                               </p>
                               <button
                                 disabled={isBlocked}
                                 onClick={() => setExpandedBundleTestId(prev => prev === test.id ? null : test.id)}
-                                className="disabled:opacity-40 px-3 py-1.5 bg-white border border-sky-200 rounded-lg text-[9px] font-bold uppercase tracking-widest text-sky-700 hover:bg-sky-100"
+                                className="disabled:opacity-40 px-3 py-1.5 bg-white border border-sky-200 rounded-lg text-xs font-bold uppercase tracking-widest text-sky-700 hover:bg-sky-100"
                               >
                                 {expandedBundleTestId === test.id ? 'Hide' : 'Open'}
                               </button>
@@ -945,8 +968,8 @@ const Dashboard: React.FC<DashboardProps> = ({
                                 {bundles.map((bundle) => (
                                   <div key={bundle.id} className="p-3 rounded-lg bg-white border border-sky-100 flex items-center justify-between gap-2">
                                     <div>
-                                      <p className="text-[10px] font-bold uppercase text-slate-800">{bundle.name}</p>
-                                      <p className="text-[9px] font-bold uppercase tracking-widest text-slate-500">
+                                      <p className="text-xs font-bold uppercase text-slate-800">{bundle.name}</p>
+                                      <p className="text-xs font-bold uppercase tracking-widest text-slate-500">
                                         {bundle.categoryField}: {bundle.category}
                                       </p>
                                     </div>
@@ -954,7 +977,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                                       <button
                                         disabled={isBlocked}
                                         onClick={() => startBundleTest(test, bundle)}
-                                        className="disabled:opacity-40 px-3 py-2 bg-amber-500 text-slate-950 rounded-lg text-[9px] font-bold uppercase tracking-widest whitespace-nowrap"
+                                        className="disabled:opacity-40 px-3 py-2 bg-amber-500 text-slate-950 rounded-lg text-xs font-bold uppercase tracking-widest whitespace-nowrap"
                                       >
                                         Start
                                       </button>
@@ -962,7 +985,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                                         <button
                                           disabled={isReadOnly}
                                           onClick={() => startBundleInQuizMode(test, bundle)}
-                                          className="disabled:opacity-40 px-3 py-2 bg-slate-900 text-amber-500 rounded-lg text-[9px] font-bold uppercase tracking-widest whitespace-nowrap"
+                                          className="disabled:opacity-40 px-3 py-2 bg-slate-900 text-amber-500 rounded-lg text-xs font-bold uppercase tracking-widest whitespace-nowrap"
                                         >
                                           Quiz Mode
                                         </button>
@@ -976,13 +999,13 @@ const Dashboard: React.FC<DashboardProps> = ({
                         )}
                         <div className="mt-auto flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-2 min-w-0">
                           <div className="flex flex-wrap items-center gap-2 min-w-0">
-                            <button disabled={isReadOnly || lowDataMode} onClick={() => setShowLeaderboard(test)} className="v3-card-action disabled:opacity-40 text-[9px] font-bold text-amber-600 uppercase tracking-widest hover:underline flex items-center gap-1">
+                            <button disabled={isReadOnly || lowDataMode} onClick={() => setShowLeaderboard(test)} className="v3-card-action disabled:opacity-40 text-xs font-bold text-amber-600 uppercase tracking-widest hover:underline flex items-center gap-1">
                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>Leaderboard
                             </button>
-                            <button disabled={isReadOnly} onClick={() => copyTestLink(test)} className="v3-card-action disabled:opacity-40 px-3 py-2 bg-emerald-50 rounded-xl text-[9px] font-bold uppercase tracking-widest text-emerald-700 hover:bg-emerald-100">
+                            <button disabled={isReadOnly} onClick={() => copyTestLink(test)} className="v3-card-action disabled:opacity-40 px-3 py-2 bg-emerald-50 rounded-xl text-xs font-bold uppercase tracking-widest text-emerald-700 hover:bg-emerald-100">
                               Copy Link
                             </button>
-                            <button disabled={isReadOnly} onClick={() => onSaveOfflineTest && onSaveOfflineTest(test)} className="v3-card-action disabled:opacity-40 px-3 py-2 bg-sky-50 rounded-xl text-[9px] font-bold uppercase tracking-widest text-sky-700 hover:bg-sky-100">
+                            <button disabled={isReadOnly} onClick={() => onSaveOfflineTest && onSaveOfflineTest(test)} className="v3-card-action disabled:opacity-40 px-3 py-2 bg-sky-50 rounded-xl text-xs font-bold uppercase tracking-widest text-sky-700 hover:bg-sky-100">
                               Save Offline
                             </button>
                           </div>
@@ -992,12 +1015,12 @@ const Dashboard: React.FC<DashboardProps> = ({
                                 <button
                                   onClick={() => onStartTest(test, { quizMode: true })}
                                   disabled={isReadOnly}
-                                  className="v3-card-action px-5 py-3 bg-slate-900 text-amber-500 rounded-xl font-bold uppercase tracking-widest text-[9px] shadow-lg active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap text-center"
+                                  className="v3-card-action px-5 py-3 bg-slate-900 text-amber-500 rounded-xl font-bold uppercase tracking-widest text-xs shadow-lg active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap text-center"
                                 >
                                   Quiz Mode
                                 </button>
                               )}
-                              <button onClick={() => onStartTest(test)} disabled={isBlocked} className="v3-card-action px-8 py-3 bg-amber-500 text-slate-950 rounded-xl font-bold uppercase tracking-widest text-[9px] shadow-lg active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap text-center">
+                              <button onClick={() => onStartTest(test)} disabled={isBlocked} className="v3-card-action px-8 py-3 bg-amber-500 text-slate-950 rounded-xl font-bold uppercase tracking-widest text-xs shadow-lg active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap text-center">
                               {isReadOnly ? 'Activate First' : isBlocked ? 'Not Available' : 'Start Test'}
                               </button>
                             </div>
@@ -1009,7 +1032,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                     ))}
                     {viewableTests.length === 0 && (
                       <div className="col-span-full py-16 text-center rounded-2xl border border-dashed border-slate-200 bg-white">
-                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">No tests in this folder.</p>
+                        <p className="text-xs font-black uppercase tracking-widest text-slate-400">No tests in this folder.</p>
                       </div>
                     )}
                   </div>
@@ -1022,14 +1045,14 @@ const Dashboard: React.FC<DashboardProps> = ({
                   {history.map(item => (
                     <div key={item.id} className="p-5 bg-slate-50 rounded-2xl border border-slate-100 hover:border-amber-200 transition-all">
                       <div className="flex justify-between items-start mb-2">
-                        <h4 className="text-[10px] font-bold text-slate-950 uppercase truncate max-w-[120px]">{item.testName}</h4>
+                        <h4 className="text-xs font-bold text-slate-950 uppercase truncate max-w-[120px]">{item.testName}</h4>
                         <span className="text-lg font-black text-slate-950">{Math.round((item.score / (item.maxScore || 1)) * 100)}%</span>
                       </div>
-                      <button disabled={isReadOnly} onClick={() => onReviewResult(item)} className="disabled:opacity-40 text-[9px] font-bold text-amber-600 uppercase tracking-widest hover:underline transition-all">Review Test</button>
+                      <button disabled={isReadOnly} onClick={() => onReviewResult(item)} className="disabled:opacity-40 text-xs font-bold text-amber-600 uppercase tracking-widest hover:underline transition-all">Review Test</button>
                     </div>
                   ))}
                   {history.length === 0 && (
-                    <div className="py-20 text-center italic text-slate-300 font-bold uppercase text-[10px] tracking-widest">No history yet.</div>
+                    <div className="py-20 text-center italic text-slate-300 font-bold uppercase text-xs tracking-widest">No history yet.</div>
                   )}
                 </div>
               </aside>
@@ -1045,17 +1068,17 @@ const Dashboard: React.FC<DashboardProps> = ({
                   <input placeholder="Quiz name" className="w-full p-4 bg-slate-50 border rounded-2xl text-xs font-bold" value={quizName} onChange={e => setQuizName(e.target.value)} />
                   <textarea placeholder="Quiz instructions" className="w-full p-4 bg-slate-50 border rounded-2xl text-xs h-20" value={quizDescription} onChange={e => setQuizDescription(e.target.value)} />
                   <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl">
-                    <span className="text-[10px] font-bold uppercase text-slate-400">Time (mins)</span>
+                    <span className="text-xs font-bold uppercase text-slate-400">Time (mins)</span>
                     <input type="number" min={1} className="bg-transparent font-bold w-full text-center text-xl outline-none" value={quizDurationMins} onChange={e => setQuizDurationMins(Math.max(1, parseInt(e.target.value) || 1))} />
                   </div>
                   <div className="flex items-center justify-between bg-slate-50 p-4 rounded-2xl">
-                    <span className="text-[10px] font-bold uppercase text-slate-400">Allow Retake</span>
-                    <button type="button" onClick={() => setQuizAllowRetake(!quizAllowRetake)} className={`px-4 py-2 rounded-xl text-[9px] font-bold uppercase tracking-widest ${quizAllowRetake ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-600'}`}>
+                    <span className="text-xs font-bold uppercase text-slate-400">Allow Retake</span>
+                    <button type="button" onClick={() => setQuizAllowRetake(!quizAllowRetake)} className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest ${quizAllowRetake ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-600'}`}>
                       {quizAllowRetake ? 'Yes' : 'No'}
                     </button>
                   </div>
                   <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl">
-                    <span className="text-[10px] font-bold uppercase text-slate-400">Max Attempts</span>
+                    <span className="text-xs font-bold uppercase text-slate-400">Max Attempts</span>
                     <input
                       type="number"
                       min={1}
@@ -1066,7 +1089,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                       placeholder="Unlimited"
                     />
                   </div>
-                  <button onClick={publishQuiz} disabled={isPublishingQuiz || isReadOnly} className="w-full py-5 bg-slate-950 text-amber-500 rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-xl active:scale-95 transition-all disabled:opacity-40">
+                  <button onClick={publishQuiz} disabled={isPublishingQuiz || isReadOnly} className="w-full py-5 bg-slate-950 text-amber-500 rounded-2xl font-bold uppercase text-xs tracking-widest shadow-xl active:scale-95 transition-all disabled:opacity-40">
                     {isPublishingQuiz ? 'Publishing...' : 'Publish Quiz'}
                   </button>
                 </div>
@@ -1075,44 +1098,44 @@ const Dashboard: React.FC<DashboardProps> = ({
                 <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
                   <div className="flex items-center justify-between mb-4">
                     <h4 className="text-sm font-bold uppercase tracking-widest text-slate-900">My Created Quizzes</h4>
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{myQuizzes.length} quiz(es)</span>
+                    <span className="text-xs font-bold uppercase tracking-widest text-slate-400">{myQuizzes.length} quiz(es)</span>
                   </div>
                   <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
                     {myQuizzes.map((quiz) => (
                       <div key={quiz.id} className="p-4 rounded-xl border border-slate-100 bg-slate-50 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                         <div>
                           <p className="text-sm font-bold text-slate-900">{quiz.name}</p>
-                          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
-                            {Math.round((quiz.totalDurationSeconds || 0) / 60)} mins • {quiz.questions?.length || 0} questions • {quiz.isActive ? 'active' : 'paused'}
+                          <p className="text-xs font-bold uppercase tracking-widest text-slate-500">
+                            {Math.round((quiz.totalDurationSeconds || 0) / 60)} mins - {quiz.questions?.length || 0} questions - {quiz.isActive ? 'active' : 'paused'}
                           </p>
                         </div>
                         <div className="flex gap-2">
-                          <button onClick={() => copyQuizLink(quiz.id)} className="px-3 py-2 bg-emerald-50 text-emerald-700 rounded-xl text-[9px] font-bold uppercase tracking-widest">Copy Link</button>
-                          <button onClick={() => toggleQuizActive(quiz)} className="px-3 py-2 bg-amber-50 text-amber-700 rounded-xl text-[9px] font-bold uppercase tracking-widest">
+                          <button onClick={() => copyQuizLink(quiz.id)} className="px-3 py-2 bg-emerald-50 text-emerald-700 rounded-xl text-xs font-bold uppercase tracking-widest">Copy Link</button>
+                          <button onClick={() => toggleQuizActive(quiz)} className="px-3 py-2 bg-amber-50 text-amber-700 rounded-xl text-xs font-bold uppercase tracking-widest">
                             {quiz.isActive ? 'Pause' : 'Activate'}
                           </button>
-                          <button onClick={() => removeQuiz(quiz)} className="px-3 py-2 bg-red-50 text-red-700 rounded-xl text-[9px] font-bold uppercase tracking-widest">Delete</button>
+                          <button onClick={() => removeQuiz(quiz)} className="px-3 py-2 bg-red-50 text-red-700 rounded-xl text-xs font-bold uppercase tracking-widest">Delete</button>
                         </div>
                       </div>
                     ))}
                     {myQuizzes.length === 0 && (
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">No quizzes created yet.</p>
+                      <p className="text-xs font-bold uppercase tracking-widest text-slate-400">No quizzes created yet.</p>
                     )}
                   </div>
                 </div>
                 <div className="bg-slate-900 text-white p-6 rounded-[2rem] flex justify-between items-center shadow-lg">
                   <div>
                     <h4 className="text-sm font-bold uppercase tracking-widest text-amber-500">Manual Questions</h4>
-                    <p className="text-[9px] text-slate-400 mt-1">These questions are private to this quiz link and are not added to the bank.</p>
+                    <p className="text-xs text-slate-400 mt-1">These questions are private to this quiz link and are not added to the bank.</p>
                   </div>
-                  <button onClick={addQuizQuestion} className="px-4 py-3 bg-amber-500 text-slate-950 rounded-xl text-[9px] font-bold uppercase tracking-widest">Add Question</button>
+                  <button onClick={addQuizQuestion} className="px-4 py-3 bg-amber-500 text-slate-950 rounded-xl text-xs font-bold uppercase tracking-widest">Add Question</button>
                 </div>
                 <div className="space-y-4">
                   {quizQuestions.map((q, qIdx) => (
                     <div key={q.id} className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm space-y-4">
                       <div className="flex justify-between items-center">
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Question {qIdx + 1}</p>
-                        <button onClick={() => removeQuizQuestion(q.id)} disabled={quizQuestions.length <= 1} className="text-[10px] font-bold uppercase tracking-widest text-red-500 disabled:opacity-30">Remove</button>
+                        <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Question {qIdx + 1}</p>
+                        <button onClick={() => removeQuizQuestion(q.id)} disabled={quizQuestions.length <= 1} className="text-xs font-bold uppercase tracking-widest text-red-500 disabled:opacity-30">Remove</button>
                       </div>
                       <textarea
                         value={q.text}
@@ -1136,7 +1159,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                         ))}
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <label className="text-[10px] font-bold uppercase text-slate-400">
+                        <label className="text-xs font-bold uppercase text-slate-400">
                           Correct Answer
                           <select
                             value={q.correctAnswerIndex}
@@ -1149,7 +1172,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                             <option value={3}>Option D</option>
                           </select>
                         </label>
-                        <label className="text-[10px] font-bold uppercase text-slate-400">
+                        <label className="text-xs font-bold uppercase text-slate-400">
                           Explanation (optional)
                           <input
                             value={q.explanation || ''}
@@ -1172,18 +1195,18 @@ const Dashboard: React.FC<DashboardProps> = ({
                 <div className="flex items-center justify-between gap-3 mb-4">
                   <div>
                     <h2 className="text-lg font-bold text-slate-950 uppercase">Ranks</h2>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Community performance leaderboard</p>
+                    <p className="text-xs font-black uppercase tracking-widest text-slate-500">Community performance leaderboard</p>
                   </div>
-                  <span className="text-[10px] font-black uppercase tracking-widest text-amber-700 bg-amber-50 px-3 py-1 rounded-full">
+                  <span className="text-xs font-black uppercase tracking-widest text-amber-700 bg-amber-50 px-3 py-1 rounded-full">
                     Top {Math.max(rankRows.length, 0)}
                   </span>
                 </div>
                 {rankLoading ? (
-                  <p className="py-16 text-center text-[10px] font-black uppercase tracking-widest text-slate-400">Loading ranks...</p>
+                  <p className="py-16 text-center text-xs font-black uppercase tracking-widest text-slate-400">Loading ranks...</p>
                 ) : rankError ? (
-                  <p className="py-16 text-center text-[10px] font-black uppercase tracking-widest text-red-600">{rankError}</p>
+                  <p className="py-16 text-center text-xs font-black uppercase tracking-widest text-red-600">{rankError}</p>
                 ) : rankRows.length === 0 ? (
-                  <p className="py-16 text-center text-[10px] font-black uppercase tracking-widest text-slate-400">No rank data yet.</p>
+                  <p className="py-16 text-center text-xs font-black uppercase tracking-widest text-slate-400">No rank data yet.</p>
                 ) : (
                   <div className="space-y-2 max-h-[60dvh] v2-scroll pr-1">
                     {rankRows.map((row, idx) => (
@@ -1191,11 +1214,11 @@ const Dashboard: React.FC<DashboardProps> = ({
                         <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black ${idx < 3 ? 'bg-amber-500 text-slate-950' : 'bg-white text-slate-500 border border-slate-200'}`}>{idx + 1}</div>
                         <div className="min-w-0 flex-1">
                           <p className="text-sm font-black uppercase text-slate-900 truncate">{row.userName}</p>
-                          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">{row.attempts} attempts</p>
+                          <p className="text-xs font-bold uppercase tracking-widest text-slate-500">{row.attempts} attempts</p>
                         </div>
                         <div className="text-right">
                           <p className="text-lg font-black text-slate-900">{Math.round(row.averagePercent)}%</p>
-                          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Best {Math.round(row.bestPercent)}%</p>
+                          <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Best {Math.round(row.bestPercent)}%</p>
                         </div>
                       </div>
                     ))}
@@ -1215,7 +1238,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                   <div className="flex justify-between"><span className="text-slate-400">Role</span><span className="font-bold uppercase text-slate-900">{user.role}</span></div>
                   <div className="flex justify-between"><span className="text-slate-400">License</span><span className="font-bold text-slate-900">{licenseStatusLabel}</span></div>
                 </div>
-                <button onClick={onLogout} className="mt-6 w-full py-4 bg-red-50 border border-red-100 text-red-700 rounded-2xl text-[10px] font-black uppercase tracking-widest">
+                <button onClick={onLogout} className="mt-6 w-full py-4 bg-red-50 border border-red-100 text-red-700 rounded-2xl text-xs font-black uppercase tracking-widest">
                   Sign Out
                 </button>
               </section>
@@ -1224,14 +1247,14 @@ const Dashboard: React.FC<DashboardProps> = ({
                 <div className="space-y-3 max-h-[55dvh] v2-scroll pr-1">
                   {history.slice(0, 20).map(item => (
                     <button key={item.id} onClick={() => onReviewResult(item)} className="w-full text-left p-4 rounded-xl border border-slate-100 bg-slate-50">
-                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-700 truncate">{item.testName}</p>
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mt-1">
+                      <p className="text-xs font-black uppercase tracking-widest text-slate-700 truncate">{item.testName}</p>
+                      <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mt-1">
                         {new Date(item.completedAt).toLocaleDateString()} - {Math.round((item.score / (item.maxScore || 1)) * 100)}%
                       </p>
                     </button>
                   ))}
                   {history.length === 0 && (
-                    <p className="py-10 text-center text-[10px] font-black uppercase tracking-widest text-slate-400">No attempts yet.</p>
+                    <p className="py-10 text-center text-xs font-black uppercase tracking-widest text-slate-400">No attempts yet.</p>
                   )}
                 </div>
               </section>
@@ -1263,14 +1286,14 @@ const Dashboard: React.FC<DashboardProps> = ({
                   <button
                     onClick={handleActivateFromSettings}
                     disabled={isActivatingLicense}
-                    className="px-6 py-4 bg-slate-950 text-amber-500 rounded-2xl text-[10px] font-black uppercase tracking-widest disabled:opacity-40"
+                    className="px-6 py-4 bg-slate-950 text-amber-500 rounded-2xl text-xs font-black uppercase tracking-widest disabled:opacity-40"
                   >
                     {isActivatingLicense ? 'Activating...' : 'Activate'}
                   </button>
                 </div>
                 <button
                   onClick={onOpenActivationSupport}
-                  className="w-full py-3 bg-emerald-50 border border-emerald-100 text-emerald-700 rounded-2xl text-[10px] font-black uppercase tracking-widest"
+                  className="w-full py-3 bg-emerald-50 border border-emerald-100 text-emerald-700 rounded-2xl text-xs font-black uppercase tracking-widest"
                 >
                   Contact Support on WhatsApp
                 </button>
@@ -1280,20 +1303,20 @@ const Dashboard: React.FC<DashboardProps> = ({
                 <h2 className="text-lg font-bold text-slate-950 uppercase mb-5">Preferences</h2>
                 <div className="space-y-3">
                   <div className="flex items-center justify-between bg-slate-50 border border-slate-100 rounded-2xl p-4">
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Email Alerts</span>
-                    <button onClick={handleToggleNotifications} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest ${notificationsEnabled ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-700'}`}>
+                    <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Email Alerts</span>
+                    <button onClick={handleToggleNotifications} className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest ${notificationsEnabled ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-700'}`}>
                       {notificationsEnabled ? 'On' : 'Off'}
                     </button>
                   </div>
                   <div className="flex items-center justify-between bg-slate-50 border border-slate-100 rounded-2xl p-4">
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Low-data Mode</span>
-                    <button onClick={handleToggleLowDataMode} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest ${lowDataMode ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-700'}`}>
+                    <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Low-data Mode</span>
+                    <button onClick={handleToggleLowDataMode} className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest ${lowDataMode ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-700'}`}>
                       {lowDataMode ? 'On' : 'Off'}
                     </button>
                   </div>
                   <div className="flex items-center justify-between bg-slate-50 border border-slate-100 rounded-2xl p-4">
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Mobile UI Mode</span>
-                    <button onClick={() => setMobileUiMode((prev) => (prev === 'dark' ? 'light' : 'dark'))} className="px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest bg-slate-200 text-slate-700">
+                    <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Mobile UI Mode</span>
+                    <button onClick={() => setMobileUiMode((prev) => (prev === 'dark' ? 'light' : 'dark'))} className="px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest bg-slate-200 text-slate-700">
                       {mobileUiMode === 'dark' ? 'Dark Glass' : 'Light Glass'}
                     </button>
                   </div>
@@ -1318,9 +1341,9 @@ const Dashboard: React.FC<DashboardProps> = ({
                         <div className={`h-16 rounded-xl bg-gradient-to-br ${theme.previewClass} mb-4 shadow-sm`}></div>
                         <div className="flex items-center justify-between gap-3">
                           <span className="text-sm font-black uppercase text-slate-900">{theme.name}</span>
-                          {isActive && <span className="text-[9px] font-black uppercase tracking-widest text-amber-700">Active</span>}
+                          {isActive && <span className="text-xs font-black uppercase tracking-widest text-amber-700">Active</span>}
                         </div>
-                        <p className="mt-2 text-[10px] font-bold uppercase tracking-widest text-slate-400 leading-relaxed">
+                        <p className="mt-2 text-xs font-bold uppercase tracking-widest text-slate-400 leading-relaxed">
                           {theme.description}
                         </p>
                       </button>
@@ -1329,10 +1352,10 @@ const Dashboard: React.FC<DashboardProps> = ({
                 </div>
                 {currentTheme === 'custom' && customTheme && onCustomThemeChange && (
                   <div className="mt-6 p-5 bg-slate-50 border border-slate-200 rounded-2xl">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-4">Custom Theme Designer</p>
+                    <p className="text-xs font-black uppercase tracking-widest text-slate-500 mb-4">Custom Theme Designer</p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       {THEME_COLOR_FIELDS.map((field) => (
-                        <label key={field.key} className="flex items-center justify-between gap-3 text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                        <label key={field.key} className="flex items-center justify-between gap-3 text-xs font-bold uppercase tracking-widest text-slate-500">
                           <span>{field.label}</span>
                           <div className="flex items-center gap-2">
                             <input
@@ -1341,7 +1364,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                               onChange={(e) => onCustomThemeChange({ ...customTheme, [field.key]: e.target.value })}
                               className="w-9 h-9 rounded-lg border border-slate-300 bg-white p-0.5"
                             />
-                            <span className="font-mono text-[10px] text-slate-700">{customTheme[field.key]}</span>
+                            <span className="font-mono text-xs text-slate-700">{customTheme[field.key]}</span>
                           </div>
                         </label>
                       ))}
@@ -1354,7 +1377,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                 <h2 className="text-lg font-bold text-slate-950 uppercase mb-5">App Data</h2>
                 <button
                   onClick={onOpenUpdateManual}
-                  className="w-full py-4 mb-3 bg-sky-50 border border-sky-100 text-sky-700 rounded-2xl text-[10px] font-black uppercase tracking-widest"
+                  className="w-full py-4 mb-3 bg-sky-50 border border-sky-100 text-sky-700 rounded-2xl text-xs font-black uppercase tracking-widest"
                 >
                   Open What's New
                 </button>
@@ -1380,10 +1403,10 @@ const Dashboard: React.FC<DashboardProps> = ({
                         await Promise.all(cacheNames.map((name) => caches.delete(name)));
                       }
                     }
-                    alert('Local cache cleared. Reloading...');
+                    toast.success('Cache cleared', 'Local cache cleared. Reloading...');
                     window.location.reload();
                   }}
-                  className="w-full py-4 bg-slate-50 border border-slate-200 text-slate-700 rounded-2xl text-[10px] font-black uppercase tracking-widest"
+                  className="w-full py-4 bg-slate-50 border border-slate-200 text-slate-700 rounded-2xl text-xs font-black uppercase tracking-widest"
                 >
                   Clear Local Cache
                 </button>
@@ -1392,8 +1415,28 @@ const Dashboard: React.FC<DashboardProps> = ({
           )}
         </div>
       </div>
+      <nav className="fixed bottom-0 left-0 right-0 z-50 flex justify-around items-center bg-[rgba(15,19,32,0.95)] backdrop-blur-xl border-t border-[var(--edge)] py-2 pb-safe md:hidden">
+        {[
+          { id: 'home' as MainTab, label: 'Home', icon: 'âŠž' },
+          { id: 'ranks' as MainTab, label: 'Ranks', icon: 'â¬¡' },
+          { id: 'create' as MainTab, label: 'Create', icon: 'âœ¦' },
+          { id: 'settings' as MainTab, label: 'Settings', icon: 'âš™' },
+          { id: 'profile' as MainTab, label: 'Profile', icon: 'â—‰' }
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex flex-col items-center gap-1 px-4 py-2 rounded-xl min-h-[44px] text-xs uppercase tracking-widest font-semibold transition-all ${activeTab === tab.id ? 'text-[var(--gold)]' : 'text-[var(--muted)]'}`}
+          >
+            <span className="text-xl leading-none">{tab.icon}</span>
+            <span>{tab.label}</span>
+          </button>
+        ))}
+      </nav>
+      </div>
     </div>
   );
 };
 
 export default Dashboard;
+

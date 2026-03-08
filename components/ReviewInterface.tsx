@@ -6,6 +6,7 @@ import { collection, getDocs, doc, getDoc, query, where, documentId, addDoc } fr
 import ScientificText from './ScientificText';
 import logo from '../assets/logo.png';
 import { getOrCreateAiExplanation } from './aiExplanationService';
+import { toast } from './ui/Toast';
 
 interface ReviewInterfaceProps {
   result: ExamResult;
@@ -121,27 +122,51 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
     fetchData();
   }, [result.testId, result.resolvedSections, result.questionSnapshot]);
 
-  const activeSection = test?.sections[activeSectionIndex];
-  const currentQuestionId = activeSection?.questionIds[currentQuestionIndex];
-  const currentQuestion = questions[currentQuestionId!];
-  const isQuestionMissing = Boolean(currentQuestionId) && !currentQuestion;
-  const userAnswer = result.userAnswers[currentQuestionId!];
-  const isCorrect = userAnswer === currentQuestion?.correctAnswerIndex;
+  const reviewedSections = (test?.sections || [])
+    .map((section) => ({
+      ...section,
+      questionIds: section.questionIds.filter((id) => Object.prototype.hasOwnProperty.call(result.userAnswers, id))
+    }))
+    .filter((section) => section.questionIds.length > 0);
+
+  const activeReviewedSection = reviewedSections[activeSectionIndex];
+  const activeReviewedQuestionId = activeReviewedSection?.questionIds[currentQuestionIndex];
+  const activeReviewedQuestion = questions[activeReviewedQuestionId!];
+  const isReviewedQuestionMissing = Boolean(activeReviewedQuestionId) && !activeReviewedQuestion;
+  const reviewedUserAnswer = result.userAnswers[activeReviewedQuestionId!];
+  const isReviewedCorrect = reviewedUserAnswer === activeReviewedQuestion?.correctAnswerIndex;
+
+  useEffect(() => {
+    if (reviewedSections.length === 0) {
+      if (activeSectionIndex !== 0) setActiveSectionIndex(0);
+      if (currentQuestionIndex !== 0) setCurrentQuestionIndex(0);
+      return;
+    }
+    if (activeSectionIndex >= reviewedSections.length) {
+      setActiveSectionIndex(0);
+      setCurrentQuestionIndex(0);
+      return;
+    }
+    const active = reviewedSections[activeSectionIndex];
+    if (!active || active.questionIds.length === 0 || currentQuestionIndex >= active.questionIds.length) {
+      setCurrentQuestionIndex(0);
+    }
+  }, [reviewedSections, activeSectionIndex, currentQuestionIndex]);
 
   useEffect(() => {
     setAiExplanation('');
     setAiError('');
     setAiSource('');
-  }, [currentQuestionId]);
+  }, [activeReviewedQuestionId]);
 
   useEffect(() => {
-    if (!showMoreInfo || !currentQuestion) return;
+    if (!showMoreInfo || !activeReviewedQuestion) return;
     let cancelled = false;
     const run = async () => {
       try {
         setAiLoading(true);
         setAiError('');
-        const result = await getOrCreateAiExplanation(currentQuestion);
+        const result = await getOrCreateAiExplanation(activeReviewedQuestion);
         if (!cancelled) {
           setAiExplanation(result.text);
           setAiSource(result.source);
@@ -154,15 +179,15 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
     };
     run();
     return () => { cancelled = true; };
-  }, [showMoreInfo, currentQuestionId]);
+  }, [showMoreInfo, activeReviewedQuestionId]);
 
   const submitQuestionTag = async (includeNote: boolean) => {
-    if (!currentQuestion || !currentQuestionId || isSubmittingTag) return;
+    if (!activeReviewedQuestion || !activeReviewedQuestionId || isSubmittingTag) return;
     setIsSubmittingTag(true);
     try {
       const noteValue = includeNote ? tagNote.trim() : '';
       await addDoc(collection(db, 'questionTagInsights'), {
-        questionId: currentQuestionId,
+        questionId: activeReviewedQuestionId,
         testId: result.testId,
         testName: result.testName,
         resultId: result.id,
@@ -172,11 +197,11 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
         createdAt: new Date().toISOString(),
         status: 'new'
       });
-      alert(noteValue ? 'Tag submitted with note.' : 'Tag submitted.');
+      toast.success('Tag submitted', noteValue ? 'Tag submitted with note.' : 'Tag submitted.');
       setIsTagDialogOpen(false);
       setTagNote('');
     } catch (err: any) {
-      alert(`Could not submit tag. ${err?.message || ''}`.trim());
+      toast.error('Tag submission failed', (err?.message || 'Could not submit tag.').trim());
     } finally {
       setIsSubmittingTag(false);
     }
@@ -197,39 +222,50 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
         <img src={logo} className="w-16 h-16 mb-6" alt="Aureus Medicos CBT Logo" />
         <h2 className="text-xl font-bold text-slate-900 mb-2 uppercase">Review Unavailable</h2>
         <p className="text-slate-500 text-sm mb-6">We could not load this test.</p>
-        <button onClick={onExit} className="px-8 py-3 bg-slate-950 text-amber-500 rounded-xl font-bold uppercase tracking-widest text-[10px]">Back</button>
+        <button onClick={onExit} className="px-8 py-3 bg-slate-950 text-amber-500 rounded-xl font-bold uppercase tracking-widest text-xs">Back</button>
+      </div>
+    );
+  }
+
+  if (reviewedSections.length === 0) {
+    return (
+      <div className="v2-page h-full w-full flex flex-col items-center justify-center bg-slate-50 p-6 text-center safe-top safe-bottom">
+        <img src={logo} className="w-16 h-16 mb-6" alt="Aureus Medicos CBT Logo" />
+        <h2 className="text-xl font-bold text-slate-900 mb-2 uppercase">Nothing To Review</h2>
+        <p className="text-slate-500 text-sm mb-6">Only answered questions appear in review. This attempt has no answered questions.</p>
+        <button onClick={onExit} className="px-8 py-3 bg-slate-950 text-amber-500 rounded-xl font-bold uppercase tracking-widest text-xs">Back</button>
       </div>
     );
   }
 
   return (
-    <div className="v2-page flex flex-col h-full bg-slate-50 select-none overflow-hidden min-h-0 safe-top">
+    <div className="v2-page flex flex-col h-full bg-slate-50 overflow-hidden min-h-0 safe-top">
       <header className="v2-shell bg-slate-950 text-white px-6 py-5 flex justify-between items-center border-b-4 border-amber-500 z-30 shrink-0">
         <div className="flex items-center gap-4">
           <img src={logo} className="w-10 h-10" alt="Aureus Medicos CBT Logo" />
           <div>
             <h1 className="text-[11px] font-black uppercase tracking-[0.4em] text-amber-500 leading-none">Review Mode</h1>
-            <p className="text-[9px] text-slate-400 font-bold uppercase truncate max-w-[200px] mt-1">{test.name}</p>
+            <p className="text-xs text-slate-400 font-bold uppercase truncate max-w-[200px] mt-1">{test.name}</p>
           </div>
         </div>
         <button 
           onClick={onExit}
-          className="px-6 py-2.5 bg-slate-900 border border-slate-800 text-amber-500 text-[10px] font-black uppercase tracking-widest rounded-2xl hover:bg-slate-800 transition-all shadow-lg"
+          className="px-6 py-2.5 bg-slate-900 border border-slate-800 text-amber-500 text-xs font-black uppercase tracking-widest rounded-2xl hover:bg-slate-800 transition-all shadow-lg"
         >
           Exit Review
         </button>
       </header>
 
-      <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative min-h-0">
-        <aside className="flex flex-col w-full md:w-80 bg-white border-b md:border-b-0 md:border-r border-slate-100 shrink-0 max-h-[180px] md:max-h-none">
+      <div className="review-body flex-1 flex flex-col md:flex-row overflow-hidden relative min-h-0">
+        <aside className="question-list-panel flex flex-col w-full md:w-80 bg-white border-b md:border-b-0 md:border-r border-slate-100 shrink-0 max-h-[180px] md:max-h-none">
            <div className="p-6 border-b border-slate-50 bg-slate-50/50">
-              <h3 className="text-[10px] font-black text-slate-950 uppercase tracking-[0.3em]">Question List</h3>
+              <h3 className="text-xs font-black text-slate-950 uppercase tracking-[0.3em]">Question List</h3>
            </div>
            <div className="flex-1 v2-scroll p-3 md:p-6">
              <div className="flex md:block gap-4 md:gap-8">
-              {test.sections.map((section, sIdx) => (
+              {reviewedSections.map((section, sIdx) => (
                 <div key={sIdx} className="shrink-0">
-                  <p className="text-[9px] font-black text-amber-600 uppercase mb-3 tracking-widest">{section.name}</p>
+                  <p className="text-xs font-black text-amber-600 uppercase mb-3 tracking-widest">{section.name}</p>
                   <div className="grid grid-flow-col auto-cols-[40px] md:grid-flow-row md:grid-cols-5 md:auto-cols-auto gap-2">
                     {section.questionIds.map((id, qIdx) => {
                       const qUserAns = result.userAnswers[id];
@@ -241,14 +277,14 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
                         <button
                           key={id}
                           onClick={() => { setActiveSectionIndex(sIdx); setCurrentQuestionIndex(qIdx); }}
-                          className={`h-10 rounded-xl text-[10px] font-black border transition-all ${
+                          className={`q-dot h-10 rounded-xl text-xs font-black border transition-all ${
                             isActive 
-                              ? 'border-slate-950 ring-4 ring-slate-950/10' 
+                              ? 'active border-amber-500 ring-4 ring-amber-500/20' 
                               : ''
                           } ${
                             qUserAns === undefined
                               ? 'bg-slate-50 text-slate-300'
-                              : qIsCorrect 
+                            : qIsCorrect 
                                 ? 'bg-emerald-500 text-white border-emerald-500 shadow-md' 
                                 : 'bg-rose-500 text-white border-rose-500 shadow-md'
                           }`}
@@ -268,47 +304,47 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
           <div className="flex-1 bg-white rounded-[2.5rem] md:rounded-[4rem] shadow-sm border border-slate-100 v2-scroll p-10 md:p-20">
             <div className="mb-12 border-b border-slate-50 pb-6 flex justify-between items-center">
                <span className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">
-                  {activeSection?.name} - Item {currentQuestionIndex + 1}
+                  {activeReviewedSection?.name} - Item {currentQuestionIndex + 1}
                </span>
-               <div className="flex gap-3 overflow-x-auto no-scrollbar whitespace-nowrap">
+               <div className="q-action-row flex gap-3 overflow-x-auto no-scrollbar whitespace-nowrap">
                  <button
                    type="button"
                    onClick={() => setIsTagDialogOpen(true)}
-                   className="text-[10px] font-black px-4 py-1.5 rounded-full uppercase tracking-widest border text-amber-700 bg-amber-50 border-amber-200"
+                   className="text-xs font-black px-4 py-1.5 rounded-full uppercase tracking-widest border text-amber-700 bg-amber-50 border-amber-200"
                  >
                    Add Tag
                  </button>
                  <button
                    type="button"
                    onClick={() => setShowMoreInfo(prev => !prev)}
-                   className={`text-[10px] font-black px-4 py-1.5 rounded-full uppercase tracking-widest border ${showMoreInfo ? 'text-sky-700 bg-sky-50 border-sky-200' : 'text-slate-500 bg-white border-slate-200'}`}
+                   className={`text-xs font-black px-4 py-1.5 rounded-full uppercase tracking-widest border ${showMoreInfo ? 'text-sky-700 bg-sky-50 border-sky-200' : 'text-slate-500 bg-white border-slate-200'}`}
                  >
                    {showMoreInfo ? 'Hide More Info' : 'Show More Info'}
                  </button>
-                 {userAnswer === undefined ? (
-                   <span className="text-[10px] font-black text-slate-400 bg-slate-100 px-4 py-1.5 rounded-full uppercase tracking-widest">Unattempted</span>
-                 ) : isCorrect ? (
-                   <span className="text-[10px] font-black text-emerald-700 bg-emerald-50 px-4 py-1.5 rounded-full uppercase tracking-widest border border-emerald-100">Correct Response</span>
+                 {reviewedUserAnswer === undefined ? (
+                   <span className="text-xs font-black text-slate-400 bg-slate-100 px-4 py-1.5 rounded-full uppercase tracking-widest">Unattempted</span>
+                 ) : isReviewedCorrect ? (
+                   <span className="text-xs font-black text-emerald-700 bg-emerald-50 px-4 py-1.5 rounded-full uppercase tracking-widest border border-emerald-100">Correct Response</span>
                  ) : (
-                   <span className="text-[10px] font-black text-rose-700 bg-rose-50 px-4 py-1.5 rounded-full uppercase tracking-widest border border-rose-100">Incorrect Response</span>
+                   <span className="text-xs font-black text-rose-700 bg-rose-50 px-4 py-1.5 rounded-full uppercase tracking-widest border border-rose-100">Incorrect Response</span>
                  )}
                </div>
             </div>
 
-            <div className="text-[15px] md:text-3xl font-bold text-slate-900 mb-16 leading-tight tracking-tight">
-              <ScientificText text={currentQuestion?.text || "Question unavailable for this attempt."} />
+            <div className="question-text text-[17px] md:text-3xl font-bold text-slate-900 mb-16 leading-tight tracking-tight">
+              <ScientificText text={activeReviewedQuestion?.text || "Question unavailable for this attempt."} />
             </div>
 
-            {isQuestionMissing && (
+            {isReviewedQuestionMissing && (
               <div className="mb-8 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-xs font-bold text-red-700">
                 We could not load this question from the database. New attempts now save question snapshots, so future reviews will open correctly.
               </div>
             )}
 
             <div className="space-y-5">
-              {currentQuestion?.options.map((option, idx) => {
-                const isSelected = userAnswer === idx;
-                const isCorrectOption = currentQuestion.correctAnswerIndex === idx;
+              {activeReviewedQuestion?.options.map((option, idx) => {
+                const isSelected = reviewedUserAnswer === idx;
+                const isCorrectOption = activeReviewedQuestion.correctAnswerIndex === idx;
                 
                 let cardStyle = "border-slate-50 bg-white text-slate-600";
                 let badgeStyle = "bg-slate-100 text-slate-400";
@@ -316,7 +352,7 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
                 if (isCorrectOption) {
                   cardStyle = "border-emerald-500 bg-emerald-50 text-emerald-950 ring-4 ring-emerald-500/10";
                   badgeStyle = "bg-emerald-500 text-white";
-                } else if (isSelected && !isCorrect) {
+                } else if (isSelected && !isReviewedCorrect) {
                   cardStyle = "border-rose-500 bg-rose-50 text-rose-950 ring-4 ring-rose-500/10";
                   badgeStyle = "bg-rose-500 text-white";
                 }
@@ -334,11 +370,11 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
               })}
             </div>
             
-            {currentQuestion?.explanation && (
+            {activeReviewedQuestion?.explanation && (
               <div className="mt-16 p-10 bg-slate-950 rounded-[2.5rem] border-t-8 border-amber-500 text-white shadow-2xl relative overflow-hidden">
                 <h4 className="text-[11px] font-black text-amber-500 uppercase tracking-[0.4em] mb-6">Explanation</h4>
                 <div className="text-base text-slate-300 leading-relaxed relative z-10 italic">
-                  <ScientificText text={currentQuestion.explanation!} />
+                  <ScientificText text={activeReviewedQuestion.explanation!} />
                 </div>
                 <div className="absolute top-0 right-0 p-8 opacity-5">
                    <img src={logo} className="w-40 h-40" alt="" />
@@ -348,10 +384,10 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
             {showMoreInfo && (
               <div className="mt-10 p-8 bg-sky-50 rounded-[2rem] border border-sky-100 text-slate-800">
                 <h4 className="text-[11px] font-black text-sky-700 uppercase tracking-[0.3em] mb-4">AI More Info</h4>
-                {aiLoading && <p className="text-[10px] font-bold uppercase tracking-widest text-sky-700">Loading explanation...</p>}
-                {!aiLoading && aiError && <p className="text-[10px] font-bold uppercase tracking-widest text-red-600">{aiError}</p>}
+                {aiLoading && <p className="text-xs font-bold uppercase tracking-widest text-sky-700">Loading explanation...</p>}
+                {!aiLoading && aiError && <p className="text-xs font-bold uppercase tracking-widest text-red-600">{aiError}</p>}
                 {!aiLoading && !aiError && aiSource === 'fallback' && (
-                  <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-amber-700 bg-amber-100 border border-amber-200 rounded-lg px-3 py-2">
+                  <p className="mb-3 text-xs font-bold uppercase tracking-widest text-amber-700 bg-amber-100 border border-amber-200 rounded-lg px-3 py-2">
                     AI quota is unavailable. Showing stored local explanation.
                   </p>
                 )}
@@ -367,7 +403,7 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
       </div>
 
       <footer className="v2-shell bg-white border-t border-slate-100 p-6 md:p-10 px-10 md:px-20 flex justify-between items-center z-20 shrink-0 safe-bottom">
-        <div className="hidden sm:block text-[10px] font-black text-slate-400 uppercase tracking-[0.4em]">
+        <div className="hidden sm:block text-xs font-black text-slate-400 uppercase tracking-[0.4em]">
            Aureus Medicos CBT Review
          </div>
          
@@ -377,25 +413,25 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
                 if (currentQuestionIndex > 0) {
                   setCurrentQuestionIndex(currentQuestionIndex - 1);
                 } else if (activeSectionIndex > 0) {
-                  const prevSection = test.sections[activeSectionIndex - 1];
+                  const prevSection = reviewedSections[activeSectionIndex - 1];
                   setActiveSectionIndex(activeSectionIndex - 1);
                   setCurrentQuestionIndex(prevSection.questionIds.length - 1);
                 }
              }}
-             className="flex-1 sm:flex-none px-8 py-4 border-2 border-slate-100 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all"
+             className="flex-1 sm:flex-none px-8 py-4 border-2 border-slate-100 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-slate-50 transition-all"
            >
              Prev Item
            </button>
            <button 
              onClick={() => {
-                if (currentQuestionIndex < activeSection!.questionIds.length - 1) {
+                if (currentQuestionIndex < activeReviewedSection!.questionIds.length - 1) {
                   setCurrentQuestionIndex(currentQuestionIndex + 1);
-                } else if (activeSectionIndex < test.sections.length - 1) {
+                } else if (activeSectionIndex < reviewedSections.length - 1) {
                   setActiveSectionIndex(activeSectionIndex + 1);
                   setCurrentQuestionIndex(0);
                 }
              }}
-             className="flex-1 sm:flex-none px-8 py-4 bg-slate-950 text-amber-500 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl transition-all"
+             className="flex-1 sm:flex-none px-8 py-4 bg-slate-950 text-amber-500 rounded-2xl text-xs font-black uppercase tracking-widest shadow-xl transition-all"
            >
              Next Item
            </button>
@@ -423,14 +459,14 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
                 <button
                   onClick={() => submitQuestionTag(false)}
                   disabled={isSubmittingTag}
-                  className="py-3 bg-white border border-slate-200 text-slate-700 rounded-xl text-[10px] font-black uppercase tracking-widest disabled:opacity-40"
+                  className="py-3 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-black uppercase tracking-widest disabled:opacity-40"
                 >
                   {isSubmittingTag ? 'Submitting...' : 'Add Tag Only'}
                 </button>
                 <button
                   onClick={() => submitQuestionTag(true)}
                   disabled={isSubmittingTag || !tagNote.trim()}
-                  className="py-3 bg-slate-950 text-amber-500 rounded-xl text-[10px] font-black uppercase tracking-widest disabled:opacity-40"
+                  className="py-3 bg-slate-950 text-amber-500 rounded-xl text-xs font-black uppercase tracking-widest disabled:opacity-40"
                 >
                   {isSubmittingTag ? 'Submitting...' : 'Add Tag + Note'}
                 </button>
@@ -444,3 +480,4 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
 };
 
 export default ReviewInterface;
+

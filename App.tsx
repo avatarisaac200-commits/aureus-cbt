@@ -1,4 +1,4 @@
-
+﻿
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { User, MockTest, ExamResult, Question, TestSection, TestAttempt, DifficultyLevel, SharedQuiz, ViewState, BroadcastNotification, CustomThemeConfig } from './types';
 import { auth, db } from './firebase';
@@ -15,6 +15,7 @@ import UpdateManual from './components/UpdateManual';
 import logo from './assets/logo.png';
 import { AppTheme } from './theme';
 import { clearGlassAccent, syncGlassAccent } from './glassAccent';
+import { toast } from './components/ui/Toast';
 
 const DEFAULT_FREE_ACCESS_ENDS_AT_ISO = '2026-04-01T23:00:00.000Z'; // April 2, 2026 00:00 WAT
 const DEADLINE_CONFIG_DOC_ID = 'deadline_config';
@@ -107,7 +108,7 @@ const MonetizationModal: React.FC<MonetizationModalProps> = ({
         <div className="absolute -top-5 -left-4 w-8 h-8 bg-amber-300/70 rounded-full blur-sm paywall-float"></div>
         <div className="absolute -bottom-4 -right-3 w-7 h-7 bg-emerald-300/60 rounded-full blur-sm paywall-float-alt"></div>
         <div className="v2-shell bg-slate-950 border-b-4 border-amber-500 px-8 py-7 shrink-0">
-          <p className="text-amber-500 text-[10px] font-black uppercase tracking-[0.3em] mb-2">Platform Update</p>
+          <p className="text-amber-500 text-xs font-black uppercase tracking-[0.3em] mb-2">Platform Update</p>
           <h2 className="text-white text-xl font-black uppercase tracking-tight">
             {isPreDeadline ? 'Free Access Is Ending Soon' : 'Free Access Has Ended'}
           </h2>
@@ -127,7 +128,7 @@ const MonetizationModal: React.FC<MonetizationModalProps> = ({
           )}
 
           <div className="p-4 rounded-2xl border border-slate-200 bg-slate-50">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-3">Activation Key</p>
+            <p className="text-xs font-black uppercase tracking-widest text-slate-500 mb-3">Activation Key</p>
             <div className="flex flex-col sm:flex-row gap-2">
               <input
                 value={activationKey}
@@ -138,7 +139,7 @@ const MonetizationModal: React.FC<MonetizationModalProps> = ({
               <button
                 onClick={onActivateKey}
                 disabled={isActivatingKey}
-                className="px-5 py-3 bg-slate-950 text-amber-500 rounded-xl font-black uppercase text-[10px] tracking-widest disabled:opacity-40"
+                className="px-5 py-3 bg-slate-950 text-amber-500 rounded-xl font-black uppercase text-xs tracking-widest disabled:opacity-40"
               >
                 {isActivatingKey ? 'Activating...' : 'Activate'}
               </button>
@@ -148,14 +149,14 @@ const MonetizationModal: React.FC<MonetizationModalProps> = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <button
               onClick={onOpenWhatsApp}
-              className="w-full py-4 bg-slate-950 text-amber-500 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-lg"
+              className="w-full py-4 bg-slate-950 text-amber-500 rounded-2xl font-black uppercase text-xs tracking-widest shadow-lg"
             >
               DM +2348145807650
             </button>
             {isPreDeadline && onContinueFree && (
               <button
                 onClick={onContinueFree}
-                className="w-full py-4 bg-white text-slate-600 border border-slate-200 rounded-2xl font-black uppercase text-[10px] tracking-widest"
+                className="w-full py-4 bg-white text-slate-600 border border-slate-200 rounded-2xl font-black uppercase text-xs tracking-widest"
               >
                 Continue Free For Now
               </button>
@@ -165,7 +166,7 @@ const MonetizationModal: React.FC<MonetizationModalProps> = ({
           {!isLocked && onClose && (
             <button
               onClick={onClose}
-              className="w-full py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-slate-600"
+              className="w-full py-3 text-xs font-black text-slate-400 uppercase tracking-widest hover:text-slate-600"
             >
               Continue
             </button>
@@ -174,7 +175,7 @@ const MonetizationModal: React.FC<MonetizationModalProps> = ({
           {isLocked && onLogout && (
             <button
               onClick={onLogout}
-              className="w-full py-3 text-[10px] font-black text-red-500 uppercase tracking-widest hover:text-red-600"
+              className="w-full py-3 text-xs font-black text-red-500 uppercase tracking-widest hover:text-red-600"
             >
               Log Out
             </button>
@@ -568,7 +569,7 @@ const App: React.FC = () => {
         JSON.stringify({ signature: getPackageSignature(test, sections), questions, createdAt: Date.now() })
       );
     } catch {
-      alert('Could not save this test for offline use on this device.');
+      toast.error('Offline save failed', 'Could not save this test for offline use on this device.');
     }
   };
 
@@ -805,21 +806,21 @@ const App: React.FC = () => {
 
   const saveTestForOffline = async (test: MockTest) => {
     if (isDynamicGenerationMode(test.generationMode)) {
-      alert('Dynamic tests are generated per attempt and cannot be saved offline as a single fixed package.');
+      toast.warning('Unavailable', 'Dynamic tests are generated per attempt and cannot be saved offline as a single fixed package.');
       return;
     }
     try {
       const pkg = await packageQuestionsForTest(test, test.sections);
       setOfflinePackage(test, test.sections, pkg);
-      alert(`"${test.name}" saved for offline use on this device.`);
+      toast.success('Saved offline', `"${test.name}" saved for offline use on this device.`);
     } catch (err: any) {
-      alert(err?.message || 'Could not save this test offline right now.');
+      toast.error('Offline save failed', err?.message || 'Could not save this test offline right now.');
     }
   };
 
   const tryStartTestFromLink = async (userObj: User, testId: string): Promise<boolean> => {
     if (isReadOnlyForUnactivatedUser(userObj)) {
-      alert('Activate your license key to open shared tests.');
+      toast.warning('Activation required', 'Activate your license key to open shared tests.');
       setShowMonetizationModal(true);
       clearLinkedTestId();
       return false;
@@ -827,14 +828,14 @@ const App: React.FC = () => {
     try {
       const testDoc = await getDocFromServer(doc(db, 'tests', testId));
       if (!testDoc.exists()) {
-        alert('This test link is invalid or no longer available.');
+        toast.error('Invalid test link', 'This test link is invalid or no longer available.');
         clearLinkedTestId();
         return false;
       }
 
       const test = { ...testDoc.data(), id: testDoc.id } as MockTest & { isPaused?: boolean };
       if (!test.isApproved || test.isPaused) {
-        alert('This test is currently unavailable.');
+        toast.warning('Test unavailable', 'This test is currently unavailable.');
         clearLinkedTestId();
         return false;
       }
@@ -853,7 +854,7 @@ const App: React.FC = () => {
       const retakeBlocked = !test.allowRetake && attempts >= 1;
       const attemptsBlocked = maxAttempts !== null && maxAttempts > 0 && attempts >= maxAttempts;
       if (retakeBlocked || attemptsBlocked) {
-        alert('You cannot take this test again.');
+        toast.warning('Attempt limit reached', 'You cannot take this test again.');
         clearLinkedTestId();
         return false;
       }
@@ -864,7 +865,7 @@ const App: React.FC = () => {
       return true;
     } catch (err) {
       console.error('Linked test open error:', err);
-      alert('Unable to open this shared test right now.');
+      toast.error('Open failed', 'Unable to open this shared test right now.');
       clearLinkedTestId();
       return false;
     }
@@ -872,7 +873,7 @@ const App: React.FC = () => {
 
   const tryStartQuizFromLink = async (userObj: User, quizId: string): Promise<boolean> => {
     if (isReadOnlyForUnactivatedUser(userObj)) {
-      alert('Activate your license key to open shared quizzes.');
+      toast.warning('Activation required', 'Activate your license key to open shared quizzes.');
       setShowMonetizationModal(true);
       clearLinkedQuizId();
       return false;
@@ -880,14 +881,14 @@ const App: React.FC = () => {
     try {
       const quizDoc = await getDocFromServer(doc(db, 'quizzes', quizId));
       if (!quizDoc.exists()) {
-        alert('This quiz link is invalid or no longer available.');
+        toast.error('Invalid quiz link', 'This quiz link is invalid or no longer available.');
         clearLinkedQuizId();
         return false;
       }
 
       const quiz = { ...quizDoc.data(), id: quizDoc.id } as SharedQuiz;
       if (!quiz.isActive) {
-        alert('This quiz is currently unavailable.');
+        toast.warning('Quiz unavailable', 'This quiz is currently unavailable.');
         clearLinkedQuizId();
         return false;
       }
@@ -906,7 +907,7 @@ const App: React.FC = () => {
       const retakeBlocked = !quiz.allowRetake && attempts >= 1;
       const attemptsBlocked = maxAttempts !== null && maxAttempts > 0 && attempts >= maxAttempts;
       if (retakeBlocked || attemptsBlocked) {
-        alert('You cannot take this quiz again.');
+        toast.warning('Attempt limit reached', 'You cannot take this quiz again.');
         clearLinkedQuizId();
         return false;
       }
@@ -956,7 +957,7 @@ const App: React.FC = () => {
       return true;
     } catch (err) {
       console.error('Linked quiz open error:', err);
-      alert('Unable to open this shared quiz right now.');
+      toast.error('Open failed', 'Unable to open this shared quiz right now.');
       clearLinkedQuizId();
       return false;
     }
@@ -1209,7 +1210,7 @@ const App: React.FC = () => {
     if (!currentUser) return false;
     const key = rawKey.trim().toUpperCase();
     if (!key) {
-      alert('Enter your activation key.');
+      toast.warning('Missing key', 'Enter your activation key.');
       return false;
     }
 
@@ -1218,24 +1219,24 @@ const App: React.FC = () => {
       const keyDocRef = doc(db, 'licenseKeys', key);
       const keyDoc = await getDoc(keyDocRef);
       if (!keyDoc.exists()) {
-        alert('Invalid activation key.');
+        toast.error('Invalid key', 'Invalid activation key.');
         return false;
       }
 
       const keyData = keyDoc.data() as any;
       if (keyData?.status !== 'new') {
-        alert('Invalid activation key.');
+        toast.error('Invalid key', 'Invalid activation key.');
         return false;
       }
       const alreadyUsed = Boolean(keyData?.isUsed) || keyData?.status === 'used' || Boolean(keyData?.redeemedBy);
       if (alreadyUsed) {
-        alert('This activation key has already been used.');
+        toast.warning('Key used', 'This activation key has already been used.');
         return false;
       }
 
       const keyExpiryMs = Date.parse(keyData?.expiresAt || '');
       if (Number.isFinite(keyExpiryMs) && keyExpiryMs < Date.now()) {
-        alert('This activation key has expired.');
+        toast.warning('Key expired', 'This activation key has expired.');
         return false;
       }
 
@@ -1263,11 +1264,11 @@ const App: React.FC = () => {
       setCurrentUser(prev => (prev ? { ...prev, subscriptionStatus: 'active', subscriptionEndsAt: nextEndsAt } : prev));
       setShowMonetizationModal(false);
       setIsMonetizationLocked(false);
-      alert('License activated successfully.');
+      toast.success('Activated', 'License activated successfully.');
       return true;
     } catch (err) {
       console.error('Activation failed:', err);
-      alert('Activation failed. Please contact admin on WhatsApp.');
+      toast.error('Activation failed', 'Please contact admin on WhatsApp.');
       return false;
     } finally {
       setIsActivatingKey(false);
@@ -1306,7 +1307,7 @@ const App: React.FC = () => {
         <div className="h-full w-full flex flex-col items-center justify-center bg-slate-950">
           <img src={logo} className="w-20 h-20 animate-pulse mb-6" alt="Aureus Medicos CBT Logo" />
           <div className="flex flex-col items-center">
-            <p className="text-amber-500 text-[10px] font-black uppercase tracking-[0.5em] mb-2">Aureus Medicos CBT</p>
+            <p className="text-amber-500 text-xs font-black uppercase tracking-[0.5em] mb-2">Aureus Medicos CBT</p>
             <div className="w-32 h-1 bg-slate-900 rounded-full overflow-hidden">
               <div className="h-full bg-amber-500 w-1/2 animate-shimmer"></div>
             </div>
@@ -1322,11 +1323,11 @@ const App: React.FC = () => {
       <>
         <div className="h-full w-full flex flex-col items-center justify-center bg-slate-950 p-8 text-center">
           <img src={logo} className="w-16 h-16 animate-pulse mb-6" alt="Aureus Medicos CBT Logo" />
-          <p className="text-amber-500 text-[10px] font-black uppercase tracking-[0.4em] mb-4">{packagingState.message}</p>
+          <p className="text-amber-500 text-xs font-black uppercase tracking-[0.4em] mb-4">{packagingState.message}</p>
           <div className="w-64 h-2 bg-slate-900 rounded-full overflow-hidden mb-3">
             <div className="h-full bg-amber-500 transition-all duration-300" style={{ width: `${packagingState.progress}%` }}></div>
           </div>
-          <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">{packagingState.progress}%</p>
+          <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">{packagingState.progress}%</p>
         </div>
         {renderDesktopContextMenu()}
       </>
@@ -1343,9 +1344,9 @@ const App: React.FC = () => {
             We sent a verification link to your email. Open it to activate your account, and check spam/junk if you do not see it.
           </p>
           <div className="flex flex-col gap-3 w-full max-w-xs">
-            <button onClick={handleManualVerifyCheck} className="w-full py-4 bg-slate-950 text-amber-500 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-lg">I Verified</button>
-            <button onClick={() => auth.currentUser && sendEmailVerification(auth.currentUser).then(() => alert('Verification email resent!'))} className="w-full py-4 bg-white text-slate-600 border border-slate-200 rounded-2xl font-black uppercase text-[10px] tracking-widest">Resend Link</button>
-            <button onClick={() => auth.signOut()} className="mt-4 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-red-500">Log Out</button>
+            <button onClick={handleManualVerifyCheck} className="w-full py-4 bg-slate-950 text-amber-500 rounded-2xl font-black uppercase text-xs tracking-widest shadow-lg">I Verified</button>
+            <button onClick={() => auth.currentUser && sendEmailVerification(auth.currentUser).then(() => toast.success('Verification email resent'))} className="w-full py-4 bg-white text-slate-600 border border-slate-200 rounded-2xl font-black uppercase text-xs tracking-widest">Resend Link</button>
+            <button onClick={() => auth.signOut()} className="mt-4 text-xs font-black text-slate-400 uppercase tracking-widest hover:text-red-500">Log Out</button>
           </div>
         </div>
         {renderDesktopContextMenu()}
@@ -1363,7 +1364,7 @@ const App: React.FC = () => {
           onStartTest={async (test, options) => {
             if (isReadOnlyForUnactivatedUser(currentUser)) {
               setShowMonetizationModal(true);
-              alert('Activate your license key in Settings before starting a test.');
+              toast.warning('Activation required', 'Activate your license key in Settings before starting a test.');
               return;
             }
             try {
@@ -1372,13 +1373,13 @@ const App: React.FC = () => {
             } catch (err: any) {
               setActiveQuizMode(false);
               console.error('Test packaging error:', err);
-              alert(err?.message || 'Unable to prepare this test right now.');
+              toast.error('Preparation failed', err?.message || 'Unable to prepare this test right now.');
             }
           }}
           onReviewResult={(result) => {
             if (isReadOnlyForUnactivatedUser(currentUser)) {
               setShowMonetizationModal(true);
-              alert('Activate your license key in Settings before opening review.');
+              toast.warning('Activation required', 'Activate your license key in Settings before opening review.');
               return;
             }
             setReviewResult(result);
@@ -1466,7 +1467,7 @@ const App: React.FC = () => {
               onClick={() => setBroadcastToasts((prev) => prev.filter((item) => item.id !== toast.id))}
               className="w-full text-left bg-white border border-slate-200 shadow-xl rounded-2xl p-4"
             >
-              <p className="text-[10px] font-black uppercase tracking-widest text-amber-700 mb-1">{toast.title}</p>
+              <p className="text-xs font-black uppercase tracking-widest text-amber-700 mb-1">{toast.title}</p>
               <p className="text-xs text-slate-700">{toast.message}</p>
             </button>
           ))}
@@ -1478,3 +1479,4 @@ const App: React.FC = () => {
 };
 
 export default App;
+
