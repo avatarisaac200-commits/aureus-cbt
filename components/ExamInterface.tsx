@@ -228,6 +228,13 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
     setShowNav(false);
   };
 
+  const exitToDashboard = () => {
+    const confirmed = window.confirm('Leave this test and return to dashboard? Your current progress will not be submitted.');
+    if (!confirmed) return;
+    if (timerRef.current) clearInterval(timerRef.current);
+    onExit();
+  };
+
   const handleSectionSubmit = () => {
     if (activeSectionIndex === null) return;
     if (window.confirm("Finish this section? You cannot change your answers after this.")) {
@@ -330,8 +337,16 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
               <p className="text-[8px] text-slate-400 font-bold uppercase truncate max-w-[150px]">{test.name}</p>
             </div>
           </div>
-          <div className="bg-slate-900 border border-slate-800 px-5 py-2 rounded-xl text-amber-400 font-mono text-xl font-bold">
-            {hasStarted ? formatTime(timeRemaining) : "READY"}
+          <div className="flex items-center gap-3">
+            <div className="bg-slate-900 border border-slate-800 px-5 py-2 rounded-xl text-amber-400 font-mono text-xl font-bold">
+              {hasStarted ? formatTime(timeRemaining) : "READY"}
+            </div>
+            <button
+              onClick={exitToDashboard}
+              className="px-4 py-2 border border-slate-700 text-slate-100 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-slate-900/70"
+            >
+              Exit
+            </button>
           </div>
         </header>
 
@@ -391,6 +406,12 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
           </div>
         </div>
         <div className="flex items-center gap-4">
+          <button
+            onClick={exitToDashboard}
+            className="hidden sm:inline-flex px-4 py-2 border border-slate-700 text-slate-100 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-slate-900/70"
+          >
+            Exit
+          </button>
           <div className="font-mono text-xl font-bold text-amber-400 bg-slate-900 px-4 py-1.5 rounded-xl border border-slate-800">{formatTime(timeRemaining)}</div>
           <button onClick={() => setShowNav(!showNav)} className="md:hidden p-2 text-amber-500 bg-slate-900 rounded-xl border border-slate-800"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16m-7 6h7"></path></svg></button>
         </div>
@@ -493,6 +514,7 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
       <footer className="v2-shell bg-white border-t border-slate-100 p-6 flex flex-col sm:flex-row gap-4 justify-between items-center z-20 shrink-0 safe-bottom">
          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">You can return to lobby anytime</div>
          <div className="flex gap-2 w-full sm:w-auto">
+           <button onClick={exitToDashboard} className="flex-1 sm:flex-none px-6 py-3 border-2 border-red-100 text-red-600 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-red-50">Exit</button>
            <button onClick={returnToLobby} className="flex-1 sm:flex-none px-6 py-3 border-2 border-slate-100 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-slate-50">Lobby</button>
            <button onClick={() => setCurrentQuestionIndex(prev => Math.max(0, prev - 1))} disabled={currentQuestionIndex === 0} className="flex-1 sm:flex-none px-6 py-3 border-2 border-slate-100 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-slate-50 disabled:opacity-30">Back</button>
            <button onClick={() => setCurrentQuestionIndex(prev => Math.min(activeSection.questionIds.length - 1, prev + 1))} disabled={currentQuestionIndex === activeSection.questionIds.length - 1} className="flex-1 sm:flex-none px-6 py-3 border-2 border-slate-100 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-slate-50 disabled:opacity-30">Next</button>
