@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { User } from '../types';
 import { auth, db } from '../firebase';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 import { doc, setDoc, getDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import logo from '../assets/logo.png';
 
@@ -16,6 +16,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isSendingReset, setIsSendingReset] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,6 +62,23 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
     }
   };
 
+  const handleForgotPassword = async () => {
+    const targetEmail = email.trim();
+    if (!targetEmail) {
+      alert('Enter your email first, then tap Forgot Password.');
+      return;
+    }
+    setIsSendingReset(true);
+    try {
+      await sendPasswordResetEmail(auth, targetEmail);
+      alert('Password reset link sent. Check your inbox/spam folder.');
+    } catch (error: any) {
+      alert('Could not send reset link: ' + (error?.message || 'Unknown error'));
+    } finally {
+      setIsSendingReset(false);
+    }
+  };
+
   return (
     <div className="v2-page flex-1 min-h-[100dvh] bg-slate-50 flex flex-col justify-start md:justify-center items-center p-6 overflow-y-auto no-scrollbar safe-top safe-bottom">
       <div className="mb-10 flex flex-col items-center shrink-0 animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -85,6 +103,16 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
                  <div className="w-5 h-5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
                ) : (isLogin ? 'Sign In' : 'Create & Verify')}
             </button>
+            {isLogin && (
+              <button
+                type="button"
+                onClick={handleForgotPassword}
+                disabled={isSendingReset}
+                className="w-full py-3 border border-slate-200 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+              >
+                {isSendingReset ? 'Sending Reset Link...' : 'Forgot Password?'}
+              </button>
+            )}
           </form>
           <div className="mt-8 text-center">
              <button onClick={() => setIsLogin(!isLogin)} className="text-[10px] font-black text-slate-400 hover:text-amber-600 transition-colors uppercase tracking-widest">

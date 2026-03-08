@@ -77,6 +77,11 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
+    match /leaderboardPublic/{rowId} {
+      allow get, list: if signedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
     match /testAttempts/{attemptId} {
       allow create: if
         signedIn() &&

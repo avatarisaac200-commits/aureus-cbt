@@ -397,7 +397,7 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
 
   return (
     <div className="v2-page flex flex-col h-full bg-slate-50 select-none overflow-hidden min-h-0 safe-top">
-      <header className="v2-shell bg-slate-950 text-white px-6 py-4 flex justify-between items-center border-b-4 border-amber-500 z-30 shrink-0">
+      <header className="v2-shell bg-slate-950 text-white px-6 py-4 flex justify-between items-center border-b-4 border-amber-500 z-30 shrink-0 sticky top-0">
         <div className="flex items-center gap-4">
           <img src={logo} className="w-8 h-8" alt="Logo" />
           <div className="hidden sm:block">
@@ -435,14 +435,14 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
                  <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-3 py-1 rounded-full uppercase tracking-widest">{activeSection.name}</span>
                </div>
             </div>
-            <div className="text-lg md:text-2xl font-bold text-slate-900 mb-12 leading-tight"><ScientificText text={currentQuestion?.text || "Loading..."} /></div>
+            <div className="text-lg md:text-2xl font-bold text-slate-900 mb-12 leading-tight text-center md:text-left"><ScientificText text={currentQuestion?.text || "Loading..."} /></div>
             <div className="space-y-4">
               {currentQuestion?.options.map((option, idx) => (
                 <button
                   key={idx}
                   onClick={() => selectAnswer(currentQuestionId, idx)}
                     disabled={instantFeedback && isCurrentRevealed}
-                    className={`w-full text-left p-6 rounded-2xl border-2 transition-all flex items-center ${(instantFeedback && isCurrentRevealed)
+                    className={`w-full text-left p-6 min-h-12 rounded-2xl border-2 transition-all flex items-center ${(instantFeedback && isCurrentRevealed)
                     ? (correctAnswerIndex === idx
                       ? 'border-emerald-500 bg-emerald-50 shadow-sm'
                       : (currentAnswer === idx
@@ -511,13 +511,15 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
         </aside>
       </div>
 
-      <footer className="v2-shell bg-white border-t border-slate-100 p-6 flex flex-col sm:flex-row gap-4 justify-between items-center z-20 shrink-0 safe-bottom">
-         <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">You can return to lobby anytime</div>
+      <footer className="v2-shell bg-white border-t border-slate-100 p-4 sm:p-6 flex flex-col gap-3 justify-between items-center z-20 shrink-0 safe-bottom sticky bottom-0">
+         <div className="hidden sm:block text-[10px] font-bold text-slate-400 uppercase tracking-widest">You can return to lobby anytime</div>
          <div className="flex gap-2 w-full sm:w-auto">
+           <button onClick={() => setCurrentQuestionIndex(prev => Math.max(0, prev - 1))} disabled={currentQuestionIndex === 0} className="flex-1 px-6 py-3 border-2 border-slate-100 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-slate-50 disabled:opacity-30">Prev</button>
+           <button onClick={() => setCurrentQuestionIndex(prev => Math.min(activeSection.questionIds.length - 1, prev + 1))} disabled={currentQuestionIndex === activeSection.questionIds.length - 1} className="flex-1 px-6 py-3 border-2 border-slate-100 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-slate-50 disabled:opacity-30">Next</button>
+         </div>
+         <div className="hidden sm:flex gap-2 w-full sm:w-auto">
            <button onClick={exitToDashboard} className="flex-1 sm:flex-none px-6 py-3 border-2 border-red-100 text-red-600 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-red-50">Exit</button>
            <button onClick={returnToLobby} className="flex-1 sm:flex-none px-6 py-3 border-2 border-slate-100 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-slate-50">Lobby</button>
-           <button onClick={() => setCurrentQuestionIndex(prev => Math.max(0, prev - 1))} disabled={currentQuestionIndex === 0} className="flex-1 sm:flex-none px-6 py-3 border-2 border-slate-100 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-slate-50 disabled:opacity-30">Back</button>
-           <button onClick={() => setCurrentQuestionIndex(prev => Math.min(activeSection.questionIds.length - 1, prev + 1))} disabled={currentQuestionIndex === activeSection.questionIds.length - 1} className="flex-1 sm:flex-none px-6 py-3 border-2 border-slate-100 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-slate-50 disabled:opacity-30">Next</button>
            <button onClick={handleSectionSubmit} className="flex-1 sm:flex-none px-8 py-3 bg-amber-500 text-slate-950 rounded-xl text-[10px] font-bold uppercase tracking-widest shadow-md">Mark Done</button>
          </div>
       </footer>

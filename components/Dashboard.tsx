@@ -25,10 +25,20 @@ interface DashboardProps {
 }
 
 type TestSortMode = 'updated' | 'name' | 'duration' | 'attempts';
+type MainTab = 'home' | 'ranks' | 'create' | 'settings' | 'profile';
+type MobileUiMode = 'dark' | 'light';
 
 interface TestFolder {
   id: string;
   name: string;
+}
+
+interface RankRow {
+  userId: string;
+  userName: string;
+  attempts: number;
+  averagePercent: number;
+  bestPercent: number;
 }
 
 const MAX_TEST_FOLDERS = 10;
@@ -112,6 +122,28 @@ const LeaderboardModal: React.FC<{ test: MockTest, onClose: () => void }> = ({ t
           )}
         </div>
       </div>
+      <nav className="v3-mobile-nav fixed md:hidden bottom-0 left-0 right-0 z-[90]">
+        <div className="grid grid-cols-5 gap-1 px-2 pt-2 pb-[calc(env(safe-area-inset-bottom)+8px)]">
+          {[
+            { id: 'home' as MainTab, label: 'Home' },
+            { id: 'ranks' as MainTab, label: 'Ranks' },
+            { id: 'create' as MainTab, label: 'Create' },
+            { id: 'settings' as MainTab, label: 'Settings' },
+            { id: 'profile' as MainTab, label: 'Profile' }
+          ].map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setActiveTab(item.id)}
+              className={`rounded-xl px-2 py-3 text-[11px] font-black uppercase tracking-widest min-h-[44px] ${
+                activeTab === item.id ? 'bg-white/15 text-white' : 'text-slate-300'
+              }`}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      </nav>
     </div>
   );
 };
@@ -150,6 +182,7 @@ const Dashboard: React.FC<DashboardProps> = ({
   const getFolderAssignmentsStorageKey = () => `testFolderAssignments:${user.id}`;
   const getSortModeStorageKey = () => `testSortMode:${user.id}`;
   const getSelectedFolderStorageKey = () => `selectedTestFolder:${user.id}`;
+  const getMobileUiModeStorageKey = () => `mobileUiMode:${user.id}`;
 
   const normalizeFolderList = (value: any): TestFolder[] => {
     if (!Array.isArray(value)) return [];
@@ -171,7 +204,7 @@ const Dashboard: React.FC<DashboardProps> = ({
   const [testCounts, setTestCounts] = useState<Record<string, number>>({});
   const [errors, setErrors] = useState<string | null>(null);
   const [showLeaderboard, setShowLeaderboard] = useState<MockTest | null>(null);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'settings' | 'create-quiz'>('dashboard');
+  const [activeTab, setActiveTab] = useState<MainTab>('home');
   const [testFolders, setTestFolders] = useState<TestFolder[]>([]);
   const [newFolderName, setNewFolderName] = useState('');
   const [selectedFolderId, setSelectedFolderId] = useState<'all' | 'unfiled' | string>('all');
@@ -191,6 +224,10 @@ const Dashboard: React.FC<DashboardProps> = ({
   const [isPublishingQuiz, setIsPublishingQuiz] = useState(false);
   const [myQuizzes, setMyQuizzes] = useState<SharedQuiz[]>([]);
   const [expandedBundleTestId, setExpandedBundleTestId] = useState<string | null>(null);
+  const [rankRows, setRankRows] = useState<RankRow[]>([]);
+  const [rankLoading, setRankLoading] = useState(false);
+  const [rankError, setRankError] = useState<string | null>(null);
+  const [mobileUiMode, setMobileUiMode] = useState<MobileUiMode>('dark');
   const isStudent = user.role === 'student';
   const licenseEndsMs = Date.parse(user.subscriptionEndsAt || '');
   const licenseEndsLabel = Number.isFinite(licenseEndsMs)
@@ -231,6 +268,10 @@ const Dashboard: React.FC<DashboardProps> = ({
     if (storedSelectedFolder) {
       setSelectedFolderId(storedSelectedFolder as 'all' | 'unfiled' | string);
     }
+    const storedMobileUiMode = window.localStorage.getItem(getMobileUiModeStorageKey());
+    if (storedMobileUiMode === 'light' || storedMobileUiMode === 'dark') {
+      setMobileUiMode(storedMobileUiMode);
+    }
   }, [user.id]);
 
   useEffect(() => {
@@ -252,6 +293,11 @@ const Dashboard: React.FC<DashboardProps> = ({
     if (typeof window === 'undefined') return;
     window.localStorage.setItem(getSelectedFolderStorageKey(), selectedFolderId);
   }, [selectedFolderId, user.id]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(getMobileUiModeStorageKey(), mobileUiMode);
+  }, [mobileUiMode, user.id]);
 
   const copyTestLink = async (test: MockTest) => {
     if (isReadOnly) return;
@@ -380,7 +426,7 @@ const Dashboard: React.FC<DashboardProps> = ({
       setQuizAllowRetake(true);
       setQuizMaxAttempts('');
       setQuizQuestions([{ id: 'qq_' + Date.now(), text: '', options: ['', '', '', ''], correctAnswerIndex: 0, explanation: '' }]);
-      setActiveTab('dashboard');
+      setActiveTab('home');
     } catch (err: any) {
       alert('Failed to publish quiz. ' + (err?.message || ''));
     } finally {
@@ -484,7 +530,7 @@ const Dashboard: React.FC<DashboardProps> = ({
   }, [tests, lowDataMode]);
 
   useEffect(() => {
-    if (activeTab !== 'create-quiz') return;
+    if (activeTab !== 'create') return;
     const unsub = onSnapshot(
       query(collection(db, 'quizzes'), where('createdBy', '==', user.id), limit(100)),
       (snap) => {
@@ -499,6 +545,45 @@ const Dashboard: React.FC<DashboardProps> = ({
     );
     return () => unsub();
   }, [activeTab, user.id]);
+
+  useEffect(() => {
+    if (activeTab !== 'ranks') return;
+    setRankLoading(true);
+    setRankError(null);
+    const unsub = onSnapshot(
+      query(collection(db, 'leaderboardPublic'), limit(200)),
+      (snap) => {
+        const rows: RankRow[] = snap.docs
+          .map((d) => {
+            const data = d.data() as any;
+            return {
+              userId: String(data.userId || d.id),
+              userName: String(data.userName || 'Unknown User'),
+              attempts: Math.max(0, Number(data.attempts || 0)),
+              averagePercent: Math.max(0, Math.min(100, Number(data.averagePercent || 0))),
+              bestPercent: Math.max(0, Math.min(100, Number(data.bestPercent || 0)))
+            } as RankRow;
+          })
+          .sort((a, b) => {
+            if (b.averagePercent !== a.averagePercent) return b.averagePercent - a.averagePercent;
+            return b.bestPercent - a.bestPercent;
+          })
+          .slice(0, 100);
+
+        setRankRows(rows);
+        setRankLoading(false);
+      },
+      (err: any) => {
+        console.error('Ranks load error:', err);
+        setRankError(err?.code === 'permission-denied'
+          ? 'Ranks unavailable. Ask admin to allow leaderboard reads.'
+          : 'Could not load ranks right now.');
+        setRankRows([]);
+        setRankLoading(false);
+      }
+    );
+    return () => unsub();
+  }, [activeTab]);
 
   if (loading) {
     return (
@@ -644,10 +729,13 @@ const Dashboard: React.FC<DashboardProps> = ({
     });
 
   return (
-    <div className="v2-page flex-1 w-full bg-slate-50 flex flex-col overflow-hidden min-h-0 relative">
-      <div className="v2-shell bg-slate-950 text-amber-500 py-3 px-8 flex justify-between items-center text-[10px] font-black uppercase tracking-widest shrink-0 border-b border-slate-900 shadow-xl z-50 safe-top">
-         <div className="flex items-center gap-3"><span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-sm"></span>Connection Stable</div>
-         <div className="hidden sm:block">Aureus Medicos CBT</div>
+    <div className={`v2-page v3-mobile-shell mobile-ui-${mobileUiMode} flex-1 w-full bg-slate-50 flex flex-col overflow-hidden min-h-0 relative`}>
+      <div className="v2-shell v3-topbar bg-slate-950 text-amber-500 py-[14px] px-[18px] md:px-8 flex justify-between items-center text-[10px] font-black uppercase tracking-widest shrink-0 border-b border-slate-900 shadow-xl z-50 safe-top">
+         <div className="flex items-center gap-3">
+           <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-sm"></span>
+           <span className="hidden md:inline">Connection Stable</span>
+         </div>
+         <div className="v3-topbar-title text-base md:text-[10px]">Aureus Medicos CBT</div>
          <button onClick={onLogout} className="text-white hover:text-red-500 transition-colors uppercase text-[9px] font-bold">Sign Out</button>
       </div>
 
@@ -670,9 +758,9 @@ const Dashboard: React.FC<DashboardProps> = ({
 
       {showLeaderboard && <LeaderboardModal test={showLeaderboard} onClose={() => setShowLeaderboard(null)} />}
 
-      <div className="flex-1 v2-scroll p-6 md:p-12 pb-24 safe-bottom">
+      <div className="flex-1 v2-scroll p-4 md:p-12 pb-[110px] md:pb-24 safe-bottom">
         <div className="max-w-6xl mx-auto">
-          <div className="flex flex-col lg:flex-row justify-between items-center mb-6 gap-6 bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
+          <div className="v3-hero-strip flex flex-col lg:flex-row justify-between items-center mb-6 gap-4 bg-white p-5 md:p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
             <div className="flex items-center gap-6">
               <img src={logo} alt="Logo" className="w-16 h-16" />
               <div>
@@ -685,12 +773,18 @@ const Dashboard: React.FC<DashboardProps> = ({
             )}
           </div>
 
-          <div className="mb-8 bg-white rounded-2xl border border-slate-100 p-2 inline-flex gap-2">
+          <div className="mb-8 bg-white rounded-2xl border border-slate-100 p-2 hidden md:inline-flex gap-2">
             <button
-              onClick={() => setActiveTab('dashboard')}
-              className={`px-5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest ${activeTab === 'dashboard' ? 'bg-slate-950 text-amber-500' : 'text-slate-500 bg-slate-50'}`}
+              onClick={() => setActiveTab('home')}
+              className={`px-5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest ${activeTab === 'home' ? 'bg-slate-950 text-amber-500' : 'text-slate-500 bg-slate-50'}`}
             >
-              Dashboard
+              Home
+            </button>
+            <button
+              onClick={() => setActiveTab('ranks')}
+              className={`px-5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest ${activeTab === 'ranks' ? 'bg-slate-950 text-amber-500' : 'text-slate-500 bg-slate-50'}`}
+            >
+              Ranks
             </button>
             <button
               onClick={() => setActiveTab('settings')}
@@ -699,14 +793,20 @@ const Dashboard: React.FC<DashboardProps> = ({
               Settings
             </button>
             <button
-              onClick={() => setActiveTab('create-quiz')}
-              className={`px-5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest ${activeTab === 'create-quiz' ? 'bg-slate-950 text-amber-500' : 'text-slate-500 bg-slate-50'}`}
+              onClick={() => setActiveTab('create')}
+              className={`px-5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest ${activeTab === 'create' ? 'bg-slate-950 text-amber-500' : 'text-slate-500 bg-slate-50'}`}
             >
-              Create Quiz
+              Create
+            </button>
+            <button
+              onClick={() => setActiveTab('profile')}
+              className={`px-5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest ${activeTab === 'profile' ? 'bg-slate-950 text-amber-500' : 'text-slate-500 bg-slate-50'}`}
+            >
+              Profile
             </button>
           </div>
 
-          {activeTab === 'dashboard' && (
+          {activeTab === 'home' && (
             <div className="space-y-6">
               <section className="bg-white border border-slate-100 rounded-[2rem] p-6 shadow-sm">
                 <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4 mb-4">
@@ -731,7 +831,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                     </button>
                   </div>
                 </div>
-                <div className="flex flex-wrap gap-2 mb-4">
+                <div className="v3-filter-scroll flex gap-2 mb-4 overflow-x-auto no-scrollbar whitespace-nowrap">
                   <button
                     type="button"
                     onClick={() => setSelectedFolderId('all')}
@@ -747,7 +847,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                     Unfiled
                   </button>
                   {testFolders.map(folder => (
-                    <div key={folder.id} className="inline-flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-xl pr-1">
+                    <div key={folder.id} className="inline-flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-xl pr-1 shrink-0">
                       <button
                         type="button"
                         onClick={() => setSelectedFolderId(folder.id)}
@@ -767,7 +867,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                 </div>
                 <div className="flex flex-col sm:flex-row sm:items-center gap-2">
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Sort by:</p>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="v3-sort-scroll flex gap-2 overflow-x-auto no-scrollbar whitespace-nowrap">
                     {[
                       { key: 'updated', label: 'Latest' },
                       { key: 'name', label: 'Name' },
@@ -786,14 +886,14 @@ const Dashboard: React.FC<DashboardProps> = ({
                   </div>
                 </div>
               </section>
-              <div className="grid grid-cols-1 xl:grid-cols-3 gap-10">
+              <div className="v3-layout-split grid grid-cols-1 xl:grid-cols-3 gap-10">
               <div className="xl:col-span-2 space-y-10">
                 <section>
                   <div className="flex items-center justify-between mb-8">
                     <h2 className="text-xl font-bold text-slate-950 uppercase">Active Tests</h2>
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{viewableTests.length} visible</p>
                   </div>
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div className="v3-test-grid grid grid-cols-1 lg:grid-cols-2 gap-6">
                     {viewableTests.map(test => (
                       (() => {
                         const attempts = history.filter(h => h.testId === test.id).length;
@@ -804,7 +904,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                         const bundles = getTestBundles(test);
                         const hasBundles = isBundledCsvDynamicTest(test);
                         return (
-                      <div key={test.id} className={`bg-white p-8 rounded-[2.5rem] shadow-sm border transition-all flex flex-col h-full group min-w-0 ${isReadOnly ? 'border-slate-100 opacity-60' : 'border-slate-100 hover:border-amber-400'}`}>
+                      <div key={test.id} className={`bg-white p-[18px] sm:p-8 rounded-[2.5rem] shadow-sm border transition-all flex flex-col h-full group min-w-0 ${isReadOnly ? 'border-slate-100 opacity-60' : 'border-slate-100 hover:border-amber-400'}`}>
                         <div className="flex justify-between items-start mb-4 min-w-0">
                           <h3 className="font-bold text-xl text-slate-950 uppercase truncate leading-tight mr-2 min-w-0">{test.name}</h3>
                           <span className="bg-slate-50 text-slate-500 text-[8px] font-black px-3 py-1.5 rounded-lg uppercase whitespace-nowrap">{test.totalDurationSeconds / 60}m</span>
@@ -876,13 +976,13 @@ const Dashboard: React.FC<DashboardProps> = ({
                         )}
                         <div className="mt-auto flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-2 min-w-0">
                           <div className="flex flex-wrap items-center gap-2 min-w-0">
-                            <button disabled={isReadOnly || lowDataMode} onClick={() => setShowLeaderboard(test)} className="disabled:opacity-40 text-[9px] font-bold text-amber-600 uppercase tracking-widest hover:underline flex items-center gap-1">
+                            <button disabled={isReadOnly || lowDataMode} onClick={() => setShowLeaderboard(test)} className="v3-card-action disabled:opacity-40 text-[9px] font-bold text-amber-600 uppercase tracking-widest hover:underline flex items-center gap-1">
                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>Leaderboard
                             </button>
-                            <button disabled={isReadOnly} onClick={() => copyTestLink(test)} className="disabled:opacity-40 px-3 py-2 bg-emerald-50 rounded-xl text-[9px] font-bold uppercase tracking-widest text-emerald-700 hover:bg-emerald-100">
+                            <button disabled={isReadOnly} onClick={() => copyTestLink(test)} className="v3-card-action disabled:opacity-40 px-3 py-2 bg-emerald-50 rounded-xl text-[9px] font-bold uppercase tracking-widest text-emerald-700 hover:bg-emerald-100">
                               Copy Link
                             </button>
-                            <button disabled={isReadOnly} onClick={() => onSaveOfflineTest && onSaveOfflineTest(test)} className="disabled:opacity-40 px-3 py-2 bg-sky-50 rounded-xl text-[9px] font-bold uppercase tracking-widest text-sky-700 hover:bg-sky-100">
+                            <button disabled={isReadOnly} onClick={() => onSaveOfflineTest && onSaveOfflineTest(test)} className="v3-card-action disabled:opacity-40 px-3 py-2 bg-sky-50 rounded-xl text-[9px] font-bold uppercase tracking-widest text-sky-700 hover:bg-sky-100">
                               Save Offline
                             </button>
                           </div>
@@ -892,12 +992,12 @@ const Dashboard: React.FC<DashboardProps> = ({
                                 <button
                                   onClick={() => onStartTest(test, { quizMode: true })}
                                   disabled={isReadOnly}
-                                  className="px-5 py-3 bg-slate-900 text-amber-500 rounded-xl font-bold uppercase tracking-widest text-[9px] shadow-lg active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap text-center"
+                                  className="v3-card-action px-5 py-3 bg-slate-900 text-amber-500 rounded-xl font-bold uppercase tracking-widest text-[9px] shadow-lg active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap text-center"
                                 >
                                   Quiz Mode
                                 </button>
                               )}
-                              <button onClick={() => onStartTest(test)} disabled={isBlocked} className="px-8 py-3 bg-amber-500 text-slate-950 rounded-xl font-bold uppercase tracking-widest text-[9px] shadow-lg active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap text-center">
+                              <button onClick={() => onStartTest(test)} disabled={isBlocked} className="v3-card-action px-8 py-3 bg-amber-500 text-slate-950 rounded-xl font-bold uppercase tracking-widest text-[9px] shadow-lg active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap text-center">
                               {isReadOnly ? 'Activate First' : isBlocked ? 'Not Available' : 'Start Test'}
                               </button>
                             </div>
@@ -937,7 +1037,7 @@ const Dashboard: React.FC<DashboardProps> = ({
             </div>
           )}
 
-          {activeTab === 'create-quiz' && (
+          {activeTab === 'create' && (
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
               <div className="xl:col-span-1">
                 <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-xl space-y-6">
@@ -1066,6 +1166,78 @@ const Dashboard: React.FC<DashboardProps> = ({
             </div>
           )}
 
+          {activeTab === 'ranks' && (
+            <div className="space-y-4">
+              <section className="bg-white p-6 md:p-8 rounded-[2rem] border border-slate-100 shadow-sm">
+                <div className="flex items-center justify-between gap-3 mb-4">
+                  <div>
+                    <h2 className="text-lg font-bold text-slate-950 uppercase">Ranks</h2>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Community performance leaderboard</p>
+                  </div>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-amber-700 bg-amber-50 px-3 py-1 rounded-full">
+                    Top {Math.max(rankRows.length, 0)}
+                  </span>
+                </div>
+                {rankLoading ? (
+                  <p className="py-16 text-center text-[10px] font-black uppercase tracking-widest text-slate-400">Loading ranks...</p>
+                ) : rankError ? (
+                  <p className="py-16 text-center text-[10px] font-black uppercase tracking-widest text-red-600">{rankError}</p>
+                ) : rankRows.length === 0 ? (
+                  <p className="py-16 text-center text-[10px] font-black uppercase tracking-widest text-slate-400">No rank data yet.</p>
+                ) : (
+                  <div className="space-y-2 max-h-[60dvh] v2-scroll pr-1">
+                    {rankRows.map((row, idx) => (
+                      <div key={row.userId} className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 flex items-center gap-3">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black ${idx < 3 ? 'bg-amber-500 text-slate-950' : 'bg-white text-slate-500 border border-slate-200'}`}>{idx + 1}</div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-black uppercase text-slate-900 truncate">{row.userName}</p>
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">{row.attempts} attempts</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-lg font-black text-slate-900">{Math.round(row.averagePercent)}%</p>
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Best {Math.round(row.bestPercent)}%</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            </div>
+          )}
+
+          {activeTab === 'profile' && (
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+              <section className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
+                <h2 className="text-lg font-bold text-slate-950 uppercase mb-5">Profile</h2>
+                <div className="space-y-3 text-sm">
+                  <div className="flex justify-between"><span className="text-slate-400">Name</span><span className="font-bold text-slate-900">{user.name}</span></div>
+                  <div className="flex justify-between"><span className="text-slate-400">Email</span><span className="font-bold text-slate-900">{user.email}</span></div>
+                  <div className="flex justify-between"><span className="text-slate-400">Role</span><span className="font-bold uppercase text-slate-900">{user.role}</span></div>
+                  <div className="flex justify-between"><span className="text-slate-400">License</span><span className="font-bold text-slate-900">{licenseStatusLabel}</span></div>
+                </div>
+                <button onClick={onLogout} className="mt-6 w-full py-4 bg-red-50 border border-red-100 text-red-700 rounded-2xl text-[10px] font-black uppercase tracking-widest">
+                  Sign Out
+                </button>
+              </section>
+              <section className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
+                <h2 className="text-lg font-bold text-slate-950 uppercase mb-5">Recent Attempts</h2>
+                <div className="space-y-3 max-h-[55dvh] v2-scroll pr-1">
+                  {history.slice(0, 20).map(item => (
+                    <button key={item.id} onClick={() => onReviewResult(item)} className="w-full text-left p-4 rounded-xl border border-slate-100 bg-slate-50">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-700 truncate">{item.testName}</p>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mt-1">
+                        {new Date(item.completedAt).toLocaleDateString()} - {Math.round((item.score / (item.maxScore || 1)) * 100)}%
+                      </p>
+                    </button>
+                  ))}
+                  {history.length === 0 && (
+                    <p className="py-10 text-center text-[10px] font-black uppercase tracking-widest text-slate-400">No attempts yet.</p>
+                  )}
+                </div>
+              </section>
+            </div>
+          )}
+
           {activeTab === 'settings' && (
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
               <section className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
@@ -1117,6 +1289,12 @@ const Dashboard: React.FC<DashboardProps> = ({
                     <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Low-data Mode</span>
                     <button onClick={handleToggleLowDataMode} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest ${lowDataMode ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-700'}`}>
                       {lowDataMode ? 'On' : 'Off'}
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between bg-slate-50 border border-slate-100 rounded-2xl p-4">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Mobile UI Mode</span>
+                    <button onClick={() => setMobileUiMode((prev) => (prev === 'dark' ? 'light' : 'dark'))} className="px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest bg-slate-200 text-slate-700">
+                      {mobileUiMode === 'dark' ? 'Dark Glass' : 'Light Glass'}
                     </button>
                   </div>
                 </div>

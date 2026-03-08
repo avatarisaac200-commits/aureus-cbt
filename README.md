@@ -18,3 +18,28 @@ View your app in AI Studio: https://ai.studio/apps/drive/1bRJHLbhbTyGMwXcWLjdUYB
 2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
 3. Run the app:
    `npm run dev`
+
+## Firebase Leaderboard Automation
+
+This project now includes a Cloud Function that keeps `leaderboardPublic` in sync whenever `results` changes.
+
+### One-time setup
+
+1. Install Firebase CLI and login:
+   `npm i -g firebase-tools`
+   `firebase login`
+2. Select your Firebase project in this repo:
+   `firebase use <your-project-id>`
+3. Install function dependencies:
+   `cd functions && npm install`
+
+### Deploy
+
+1. Deploy rules:
+   `firebase deploy --only firestore:rules`
+2. Deploy functions:
+   `firebase deploy --only functions`
+
+### Backfill existing leaderboard data
+
+After deploy, open Admin Dashboard -> Question Bank -> **Rebuild Ranks** once.

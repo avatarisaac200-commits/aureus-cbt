@@ -716,6 +716,83 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
     }
   };
 
+  const rebuildLeaderboardPublic = async () => {
+    if (!window.confirm('Rebuild leaderboardPublic from all results now?')) return;
+    setLoading(true);
+    try {
+      const resultsSnap = await getDocs(query(collection(db, 'results'), limit(3000)));
+      const buckets: Record<string, { userName: string; attempts: number; totalPercent: number; bestPercent: number }> = {};
+
+      resultsSnap.docs.forEach((d) => {
+        const row = d.data() as ExamResult;
+        const userId = String(row.userId || '').trim();
+        if (!userId) return;
+        const maxScore = Number(row.maxScore || 0);
+        if (maxScore <= 0) return;
+        const percent = Math.max(0, Math.min(100, (Number(row.score || 0) / maxScore) * 100));
+        if (!buckets[userId]) {
+          buckets[userId] = {
+            userName: row.userName || 'Unknown User',
+            attempts: 0,
+            totalPercent: 0,
+            bestPercent: 0
+          };
+        }
+        buckets[userId].attempts += 1;
+        buckets[userId].totalPercent += percent;
+        buckets[userId].bestPercent = Math.max(buckets[userId].bestPercent, percent);
+      });
+
+      const existingSnap = await getDocs(query(collection(db, 'leaderboardPublic'), limit(3000)));
+      let batch = writeBatch(db);
+      let writes = 0;
+
+      for (const d of existingSnap.docs) {
+        batch.delete(doc(db, 'leaderboardPublic', d.id));
+        writes++;
+        if (writes >= 450) {
+          await batch.commit();
+          batch = writeBatch(db);
+          writes = 0;
+        }
+      }
+      if (writes > 0) {
+        await batch.commit();
+        batch = writeBatch(db);
+        writes = 0;
+      }
+
+      for (const [userId, bucket] of Object.entries(buckets)) {
+        const attempts = bucket.attempts;
+        const avg = attempts > 0 ? bucket.totalPercent / attempts : 0;
+        batch.set(doc(db, 'leaderboardPublic', userId), {
+          userId,
+          userName: bucket.userName,
+          attempts,
+          averagePercent: Number(avg.toFixed(2)),
+          bestPercent: Number(bucket.bestPercent.toFixed(2)),
+          updatedAt: new Date().toISOString()
+        });
+        writes++;
+        if (writes >= 450) {
+          await batch.commit();
+          batch = writeBatch(db);
+          writes = 0;
+        }
+      }
+
+      if (writes > 0) {
+        await batch.commit();
+      }
+
+      alert(`leaderboardPublic rebuilt for ${Object.keys(buckets).length} user(s).`);
+    } catch (err: any) {
+      alert('Leaderboard rebuild failed. ' + (err?.message || ''));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const loadManagedTests = async () => {
     setManagedTestsLoading(true);
     try {
@@ -1824,6 +1901,13 @@ Rules:
                 className="px-6 py-5 bg-white border border-amber-200 text-amber-700 rounded-2xl text-[9px] font-bold uppercase tracking-widest hover:bg-amber-50 transition-all disabled:opacity-50"
               >
                 {loading ? 'Working...' : 'Recalculate Scores'}
+              </button>
+              <button
+                onClick={rebuildLeaderboardPublic}
+                disabled={loading}
+                className="px-6 py-5 bg-white border border-sky-200 text-sky-700 rounded-2xl text-[9px] font-bold uppercase tracking-widest hover:bg-sky-50 transition-all disabled:opacity-50"
+              >
+                {loading ? 'Working...' : 'Rebuild Ranks'}
               </button>
             </div>
 

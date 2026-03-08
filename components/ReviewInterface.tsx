@@ -220,16 +220,17 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
         </button>
       </header>
 
-      <div className="flex-1 flex overflow-hidden relative min-h-0">
-        <aside className="hidden md:flex md:flex-col w-80 bg-white border-r border-slate-100 shrink-0">
+      <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative min-h-0">
+        <aside className="flex flex-col w-full md:w-80 bg-white border-b md:border-b-0 md:border-r border-slate-100 shrink-0 max-h-[180px] md:max-h-none">
            <div className="p-6 border-b border-slate-50 bg-slate-50/50">
               <h3 className="text-[10px] font-black text-slate-950 uppercase tracking-[0.3em]">Question List</h3>
            </div>
-           <div className="flex-1 v2-scroll p-6 space-y-8">
+           <div className="flex-1 v2-scroll p-3 md:p-6">
+             <div className="flex md:block gap-4 md:gap-8">
               {test.sections.map((section, sIdx) => (
-                <div key={sIdx}>
+                <div key={sIdx} className="shrink-0">
                   <p className="text-[9px] font-black text-amber-600 uppercase mb-3 tracking-widest">{section.name}</p>
-                  <div className="grid grid-cols-5 gap-2">
+                  <div className="grid grid-flow-col auto-cols-[40px] md:grid-flow-row md:grid-cols-5 md:auto-cols-auto gap-2">
                     {section.questionIds.map((id, qIdx) => {
                       const qUserAns = result.userAnswers[id];
                       const qCorrectAns = questions[id]?.correctAnswerIndex;
@@ -259,6 +260,7 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
                   </div>
                 </div>
               ))}
+             </div>
            </div>
         </aside>
 
@@ -268,7 +270,7 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
                <span className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">
                   {activeSection?.name} - Item {currentQuestionIndex + 1}
                </span>
-               <div className="flex gap-3">
+               <div className="flex gap-3 overflow-x-auto no-scrollbar whitespace-nowrap">
                  <button
                    type="button"
                    onClick={() => setIsTagDialogOpen(true)}
@@ -293,7 +295,7 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
                </div>
             </div>
 
-            <div className="text-xl md:text-3xl font-bold text-slate-900 mb-16 leading-tight tracking-tight">
+            <div className="text-[15px] md:text-3xl font-bold text-slate-900 mb-16 leading-tight tracking-tight">
               <ScientificText text={currentQuestion?.text || "Question unavailable for this attempt."} />
             </div>
 
