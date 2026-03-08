@@ -26,10 +26,11 @@ interface DashboardProps {
   onOpenUpdateManual?: () => void;
   currentUiMode?: MobileUiMode;
   onUiModeChange?: (mode: MobileUiMode) => void;
+  onUserProfileUpdate?: (patch: Partial<User>) => void;
 }
 
 type TestSortMode = 'updated' | 'name' | 'duration' | 'attempts';
-type MainTab = 'home' | 'ranks' | 'create' | 'settings' | 'profile';
+type MainTab = 'home' | 'ranks' | 'create' | 'reviews' | 'settings' | 'profile';
 type MobileUiMode = 'dark' | 'light';
 
 interface TestFolder {
@@ -148,7 +149,8 @@ const Dashboard: React.FC<DashboardProps> = ({
   onOpenActivationSupport,
   onOpenUpdateManual,
   currentUiMode = 'light',
-  onUiModeChange
+  onUiModeChange,
+  onUserProfileUpdate
 }) => {
   const parseIsoDate = (value?: string) => {
     const ms = Date.parse(value || '');
@@ -210,6 +212,10 @@ const Dashboard: React.FC<DashboardProps> = ({
   const [rankRows, setRankRows] = useState<RankRow[]>([]);
   const [rankLoading, setRankLoading] = useState(false);
   const [rankError, setRankError] = useState<string | null>(null);
+  const [profileName, setProfileName] = useState(user.name || '');
+  const [profileTitle, setProfileTitle] = useState(user.title || '');
+  const [profileAvatarUrl, setProfileAvatarUrl] = useState(user.avatarUrl || '');
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
   const isStudent = user.role === 'student';
   const licenseEndsMs = Date.parse(user.subscriptionEndsAt || '');
   const licenseEndsLabel = Number.isFinite(licenseEndsMs)
@@ -251,6 +257,12 @@ const Dashboard: React.FC<DashboardProps> = ({
       setSelectedFolderId(storedSelectedFolder as 'all' | 'unfiled' | string);
     }
   }, [user.id]);
+
+  useEffect(() => {
+    setProfileName(user.name || '');
+    setProfileTitle(user.title || '');
+    setProfileAvatarUrl(user.avatarUrl || '');
+  }, [user.name, user.title, user.avatarUrl]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -600,6 +612,48 @@ const Dashboard: React.FC<DashboardProps> = ({
     }
   };
 
+  const handleProfilePhotoUpload = (file: File | null) => {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      toast.warning('Invalid file', 'Please upload an image file.');
+      return;
+    }
+    if (file.size > 1024 * 1024) {
+      toast.warning('Image too large', 'Please use an image smaller than 1MB.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const next = String(reader.result || '');
+      if (!next) return;
+      setProfileAvatarUrl(next);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const saveProfile = async () => {
+    const nextName = profileName.trim();
+    if (!nextName) {
+      toast.warning('Missing name', 'Name cannot be empty.');
+      return;
+    }
+    setIsSavingProfile(true);
+    try {
+      const patch = {
+        name: nextName,
+        title: profileTitle.trim(),
+        avatarUrl: profileAvatarUrl.trim()
+      };
+      await updateDoc(doc(db, 'users', user.id), patch);
+      onUserProfileUpdate?.(patch);
+      toast.success('Profile updated', 'Your profile changes were saved.');
+    } catch (err: any) {
+      toast.error('Save failed', err?.message || 'Could not update profile.');
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
+
   const getTestBundles = (test: MockTest): CsvQuestionBundle[] => {
     if (!Array.isArray(test.csvBundles)) return [];
     return test.csvBundles.filter(bundle => Array.isArray(bundle.questionIds) && bundle.questionIds.length > 0);
@@ -718,7 +772,7 @@ const Dashboard: React.FC<DashboardProps> = ({
     { id: 'home', label: 'Home' },
     { id: 'ranks', label: 'Ranks' },
     { id: 'create', label: 'Create' },
-    { id: 'settings', label: 'Settings' },
+    { id: 'reviews', label: 'Reviews' },
     { id: 'profile', label: 'Profile' }
   ];
 
@@ -745,6 +799,14 @@ const Dashboard: React.FC<DashboardProps> = ({
       return (
         <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M12 5v14M5 12h14" />
+        </svg>
+      );
+    }
+    if (tabId === 'reviews') {
+      return (
+        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M5 5h14v14H5z" />
+          <path d="M8 9h8M8 12h8M8 15h5" />
         </svg>
       );
     }
@@ -802,7 +864,11 @@ const Dashboard: React.FC<DashboardProps> = ({
              <span className="hidden md:inline">Connection Stable</span>
            </div>
            <div className="w-9 h-9 rounded-full bg-[var(--panel-2)] border border-[var(--edge)] text-xs font-bold flex items-center justify-center text-[var(--gold)]">
-             {String(user.name || 'U').slice(0, 2).toUpperCase()}
+             {user.avatarUrl ? (
+               <img src={user.avatarUrl} alt="Profile" className="w-full h-full rounded-full object-cover" />
+             ) : (
+               String(user.name || 'U').slice(0, 2).toUpperCase()
+             )}
            </div>
          </div>
       </div>
@@ -839,6 +905,12 @@ const Dashboard: React.FC<DashboardProps> = ({
             {(user.role === 'admin' || user.role === 'root-admin') && onReturnToAdmin && (
               <button onClick={onReturnToAdmin} className="px-10 py-4 text-xs font-black text-amber-600 bg-amber-50 border border-amber-100 rounded-2xl hover:bg-amber-100 uppercase tracking-widest shadow-sm">Staff Settings</button>
             )}
+            <button
+              onClick={() => setActiveTab('reviews')}
+              className="px-6 py-3 text-xs font-black text-sky-700 bg-sky-50 border border-sky-100 rounded-2xl hover:bg-sky-100 uppercase tracking-widest shadow-sm"
+            >
+              Open Reviews
+            </button>
           </div>
 
           <div className="mb-8 bg-white rounded-2xl border border-slate-100 p-2 hidden md:inline-flex gap-2">
@@ -855,10 +927,10 @@ const Dashboard: React.FC<DashboardProps> = ({
               Ranks
             </button>
             <button
-              onClick={() => setActiveTab('settings')}
-              className={`px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest ${activeTab === 'settings' ? 'bg-slate-950 text-amber-500' : 'text-slate-500 bg-slate-50'}`}
+              onClick={() => setActiveTab('reviews')}
+              className={`px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest ${activeTab === 'reviews' ? 'bg-slate-950 text-amber-500' : 'text-slate-500 bg-slate-50'}`}
             >
-              Settings
+              Reviews
             </button>
             <button
               onClick={() => setActiveTab('create')}
@@ -1084,24 +1156,61 @@ const Dashboard: React.FC<DashboardProps> = ({
                 </section>
               </div>
 
-              <aside className={`bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-200 h-fit sticky top-12 transition-all ${isReadOnly ? 'opacity-60' : ''}`}>
-                <h2 className="text-lg font-bold mb-8 text-slate-950 uppercase text-center">Review Tests</h2>
+              <aside className={`hidden xl:block bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-200 h-fit sticky top-12 transition-all ${isReadOnly ? 'opacity-60' : ''}`}>
+                <h2 className="text-lg font-bold mb-5 text-slate-950 uppercase text-center">Quick Actions</h2>
                 <div className="space-y-3">
-                  {history.map(item => (
-                    <div key={item.id} className="p-5 bg-slate-50 rounded-2xl border border-slate-100 hover:border-amber-200 transition-all">
-                      <div className="flex justify-between items-start mb-2">
-                        <h4 className="text-xs font-bold text-slate-950 uppercase truncate max-w-[120px]">{item.testName}</h4>
-                        <span className="text-lg font-black text-slate-950">{Math.round((item.score / (item.maxScore || 1)) * 100)}%</span>
-                      </div>
-                      <button disabled={isReadOnly} onClick={() => onReviewResult(item)} className="disabled:opacity-40 text-xs font-bold text-amber-600 uppercase tracking-widest hover:underline transition-all">Review Test</button>
-                    </div>
-                  ))}
-                  {history.length === 0 && (
-                    <div className="py-20 text-center italic text-slate-300 font-bold uppercase text-xs tracking-widest">No history yet.</div>
-                  )}
+                  <button
+                    onClick={() => setActiveTab('reviews')}
+                    className="w-full py-4 bg-sky-50 border border-sky-100 text-sky-700 rounded-2xl text-xs font-black uppercase tracking-widest"
+                  >
+                    Go To Reviews
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('profile')}
+                    className="w-full py-4 bg-slate-50 border border-slate-200 text-slate-700 rounded-2xl text-xs font-black uppercase tracking-widest"
+                  >
+                    Edit Profile
+                  </button>
                 </div>
               </aside>
             </div>
+            </div>
+          )}
+
+          {activeTab === 'reviews' && (
+            <div className="space-y-4">
+              <section className="bg-white p-6 md:p-8 rounded-[2rem] border border-slate-100 shadow-sm">
+                <div className="flex items-center justify-between gap-3 mb-4">
+                  <div>
+                    <h2 className="text-lg font-bold text-slate-950 uppercase">Review Attempts</h2>
+                    <p className="text-xs font-black uppercase tracking-widest text-slate-500">All your completed tests in one place</p>
+                  </div>
+                  <span className="text-xs font-black uppercase tracking-widest text-amber-700 bg-amber-50 px-3 py-1 rounded-full">
+                    {history.length} attempt(s)
+                  </span>
+                </div>
+                <div className="space-y-3 max-h-[65dvh] v2-scroll pr-1">
+                  {history.map(item => (
+                    <div key={item.id} className="p-4 rounded-xl border border-slate-100 bg-slate-50 flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-black uppercase text-slate-900 truncate">{item.testName}</p>
+                        <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mt-1">
+                          {new Date(item.completedAt).toLocaleDateString()} - {item.status}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-lg font-black text-slate-900 whitespace-nowrap">{Math.round((item.score / (item.maxScore || 1)) * 100)}%</span>
+                        <button disabled={isReadOnly} onClick={() => onReviewResult(item)} className="disabled:opacity-40 px-4 py-2 bg-amber-50 border border-amber-100 text-amber-700 rounded-xl text-xs font-black uppercase tracking-widest">
+                          Review
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  {history.length === 0 && (
+                    <p className="py-16 text-center text-xs font-black uppercase tracking-widest text-slate-400">No attempts yet.</p>
+                  )}
+                </div>
+              </section>
             </div>
           )}
 
@@ -1277,30 +1386,66 @@ const Dashboard: React.FC<DashboardProps> = ({
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
               <section className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
                 <h2 className="text-lg font-bold text-slate-950 uppercase mb-5">Profile</h2>
-                <div className="space-y-3 text-sm">
-                  <div className="flex justify-between"><span className="text-slate-400">Name</span><span className="font-bold text-slate-900">{user.name}</span></div>
+                <div className="space-y-4 text-sm">
+                  <div className="flex items-center gap-4">
+                    <div className="w-16 h-16 rounded-full bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center">
+                      {profileAvatarUrl ? (
+                        <img src={profileAvatarUrl} alt="Profile" className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="text-slate-500 font-black">{String(profileName || user.name || 'U').slice(0, 2).toUpperCase()}</span>
+                      )}
+                    </div>
+                    <label className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-black uppercase tracking-widest text-slate-700 cursor-pointer">
+                      Upload Photo
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => handleProfilePhotoUpload(e.target.files?.[0] || null)}
+                      />
+                    </label>
+                  </div>
+                  <label className="block text-xs font-black uppercase tracking-widest text-slate-500">
+                    Full Name
+                    <input
+                      value={profileName}
+                      onChange={(e) => setProfileName(e.target.value)}
+                      className="mt-2 w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold"
+                    />
+                  </label>
+                  <label className="block text-xs font-black uppercase tracking-widest text-slate-500">
+                    Title
+                    <input
+                      value={profileTitle}
+                      onChange={(e) => setProfileTitle(e.target.value)}
+                      className="mt-2 w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold"
+                      placeholder="e.g. Medical Student"
+                    />
+                  </label>
                   <div className="flex justify-between"><span className="text-slate-400">Email</span><span className="font-bold text-slate-900">{user.email}</span></div>
                   <div className="flex justify-between"><span className="text-slate-400">Role</span><span className="font-bold uppercase text-slate-900">{user.role}</span></div>
                   <div className="flex justify-between"><span className="text-slate-400">License</span><span className="font-bold text-slate-900">{licenseStatusLabel}</span></div>
                 </div>
+                <button
+                  onClick={saveProfile}
+                  disabled={isSavingProfile}
+                  className="mt-6 w-full py-4 bg-slate-950 text-amber-500 rounded-2xl text-xs font-black uppercase tracking-widest disabled:opacity-40"
+                >
+                  {isSavingProfile ? 'Saving...' : 'Save Profile'}
+                </button>
                 <button onClick={onLogout} className="mt-6 w-full py-4 bg-red-50 border border-red-100 text-red-700 rounded-2xl text-xs font-black uppercase tracking-widest">
                   Sign Out
                 </button>
               </section>
               <section className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
-                <h2 className="text-lg font-bold text-slate-950 uppercase mb-5">Recent Attempts</h2>
-                <div className="space-y-3 max-h-[55dvh] v2-scroll pr-1">
-                  {history.slice(0, 20).map(item => (
-                    <button key={item.id} onClick={() => onReviewResult(item)} className="w-full text-left p-4 rounded-xl border border-slate-100 bg-slate-50">
-                      <p className="text-xs font-black uppercase tracking-widest text-slate-700 truncate">{item.testName}</p>
-                      <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mt-1">
-                        {new Date(item.completedAt).toLocaleDateString()} - {Math.round((item.score / (item.maxScore || 1)) * 100)}%
-                      </p>
-                    </button>
-                  ))}
-                  {history.length === 0 && (
-                    <p className="py-10 text-center text-xs font-black uppercase tracking-widest text-slate-400">No attempts yet.</p>
-                  )}
+                <h2 className="text-lg font-bold text-slate-950 uppercase mb-5">Quick Access</h2>
+                <div className="space-y-3">
+                  <button onClick={() => setActiveTab('reviews')} className="w-full py-4 bg-sky-50 border border-sky-100 text-sky-700 rounded-2xl text-xs font-black uppercase tracking-widest">
+                    Open Reviews
+                  </button>
+                  <button onClick={() => setActiveTab('settings')} className="w-full py-4 bg-slate-50 border border-slate-200 text-slate-700 rounded-2xl text-xs font-black uppercase tracking-widest">
+                    Open Settings
+                  </button>
                 </div>
               </section>
             </div>
@@ -1463,12 +1608,12 @@ const Dashboard: React.FC<DashboardProps> = ({
           )}
         </div>
       </div>
-      <nav className="fixed bottom-0 left-0 right-0 z-50 flex justify-around items-center bg-[var(--surface)] backdrop-blur-xl border-t border-[var(--edge)] py-2 pb-safe md:hidden">
+      <nav className="fixed bottom-0 left-0 right-0 z-50 flex justify-between items-center bg-[var(--surface)] backdrop-blur-xl border-t border-[var(--edge)] py-2 pb-safe px-1 md:hidden">
         {navTabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`flex flex-col items-center gap-1 px-4 py-2 rounded-xl min-h-[44px] text-xs uppercase tracking-widest font-semibold transition-all ${activeTab === tab.id ? 'text-[var(--gold)]' : 'text-[var(--muted)]'}`}
+            className={`flex-1 max-w-[86px] flex flex-col items-center justify-center gap-1 py-2 rounded-xl min-h-[46px] text-[10px] uppercase tracking-widest font-semibold transition-all ${activeTab === tab.id ? 'text-[var(--gold)]' : 'text-[var(--muted)]'}`}
           >
             <span className="inline-flex items-center justify-center leading-none">{renderTabIcon(tab.id)}</span>
             <span>{tab.label}</span>

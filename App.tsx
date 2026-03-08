@@ -29,6 +29,8 @@ const APP_THEME_STORAGE_KEY = 'appTheme';
 const APP_CUSTOM_THEME_STORAGE_KEY = 'appThemeCustom';
 const APP_THEME_LAST_USED_KEY = 'appTheme:lastUsed';
 const APP_UI_MODE_STORAGE_KEY = 'appUiMode';
+const UPDATE_MANUAL_VERSION = '3.0.0';
+const UPDATE_MANUAL_SEEN_PREFIX = 'updateManualSeen';
 const BROADCAST_NOTIFICATIONS_SEEN_AT_PREFIX = 'broadcastSeenAt';
 
 type MonetizationMode = 'pre-deadline' | 'post-deadline';
@@ -53,6 +55,7 @@ const isValidAppTheme = (value: string | null): value is AppTheme => {
 const getThemeStorageKey = (userId: string) => `${APP_THEME_STORAGE_KEY}:${userId}`;
 const getCustomThemeStorageKey = (userId: string) => `${APP_CUSTOM_THEME_STORAGE_KEY}:${userId}`;
 const getUiModeStorageKey = (userId: string) => `${APP_UI_MODE_STORAGE_KEY}:${userId}`;
+const getUpdateManualSeenKey = (userId: string) => `${UPDATE_MANUAL_SEEN_PREFIX}:${UPDATE_MANUAL_VERSION}:${userId}`;
 
 const sanitizeHex = (value: string, fallback: string) => {
   const v = String(value || '').trim();
@@ -393,6 +396,16 @@ const App: React.FC = () => {
       window.visualViewport?.removeEventListener('scroll', applyViewportHeight);
     };
   }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !currentUser || isLoading) return;
+    if (!['dashboard', 'admin', 'root-admin'].includes(currentView)) return;
+    const seenKey = getUpdateManualSeenKey(currentUser.id);
+    if (window.localStorage.getItem(seenKey) === '1') return;
+    window.localStorage.setItem(seenKey, '1');
+    setLastMainView(currentView);
+    setCurrentView('update-manual');
+  }, [currentUser, currentView, isLoading]);
 
   const getPromptDeferredUntil = (): number | null => {
     const raw = typeof window !== 'undefined' ? window.localStorage.getItem('licensePromptDeferredUntil') : null;
@@ -1294,6 +1307,7 @@ const App: React.FC = () => {
           onOpenUpdateManual={openUpdateManual}
           currentUiMode={uiMode}
           onUiModeChange={setUiMode}
+          onUserProfileUpdate={(patch) => setCurrentUser((prev) => (prev ? { ...prev, ...patch } : prev))}
         />
       )}
       {currentView === 'admin' && currentUser && (

@@ -7,36 +7,43 @@ interface UpdateManualProps {
 
 const sections = [
   {
-    title: 'How To Access Updates',
+    title: 'Universal Update Prompt',
     items: [
-      'The floating "What\'s New" button has been removed from the main app shell.',
-      'You can now open this page manually from Settings whenever you want.',
-      'This keeps exam flow cleaner and avoids extra UI during focused sessions.'
+      'This manual now opens automatically once per user after login.',
+      'Students, admins, and root-admins all see the update once for this version.',
+      'You can still reopen it anytime from Settings -> Open What\'s New.'
     ]
   },
   {
-    title: 'Themes And Readability',
+    title: 'Mobile Experience Refresh',
     items: [
-      'Theme palettes were refreshed with more modern, complementary colors.',
-      'Neo Black readability has been improved with better contrast and accent tuning.',
-      'Theme previews remain available in Settings under the Theme section.'
+      'Improved safe-area handling for home-screen installs (A2HS/PWA) on iOS and Android.',
+      'Top and bottom overlaps were reduced with viewport + notch aware sizing.',
+      'Mobile spacing, typography, and controls were compacted for cleaner usability.'
     ]
   },
   {
-    title: 'Per-User Theme Memory',
+    title: 'Theme + UI Mode System',
     items: [
-      'Theme choice is now saved per user profile on the same browser.',
-      'Logging out no longer forces the next user to inherit the previous user\'s theme.',
-      'Each account now loads its own saved theme preference after login.'
+      'Light mode is now default for new users.',
+      'Dark mode can be toggled from Settings.',
+      'Theme palettes now apply consistently across dashboard and review views.'
     ]
   },
   {
-    title: 'Admin Test Editing',
+    title: 'Review Stability For Dynamic Tests',
     items: [
-      'CSV dynamic tests now support inline content editing from Admin > Tests > Edit.',
-      'After CSV pool edits are saved, affected stored result scores are recalculated.',
-      'CSV per-user count, marks, and bundle settings can be updated while editing.',
-      'Enable Test Bundles splits a CSV dynamic pool into grouped bundles (by subject, topic, difficulty, or exam type) so learners can launch a specific bundle instead of one large pool.'
+      'Attempt question sets are now preserved for review using attempt-linked section data.',
+      'Legacy results are backfilled during review when possible.',
+      'Review now prioritizes stored attempt questions before fallback pool loading.'
+    ]
+  },
+  {
+    title: 'Navigation + Profile Upgrades',
+    items: [
+      'Dedicated Reviews page added for easier access to past attempts.',
+      'Bottom navigation was balanced for symmetry with Create centered.',
+      'Profile now supports editing name/title and uploading a profile photo.'
     ]
   }
 ];
@@ -49,7 +56,7 @@ const UpdateManual: React.FC<UpdateManualProps> = ({ onClose }) => {
           <div className="flex items-center gap-4">
             <img src={logo} alt="Aureus Medicos CBT Logo" className="w-14 h-14" />
             <div>
-              <p className="text-[11px] font-black uppercase tracking-[0.25em] text-amber-600">Version 2.0.2</p>
+              <p className="text-[11px] font-black uppercase tracking-[0.25em] text-amber-600">Version 3.0.0</p>
               <h1 className="text-2xl md:text-3xl font-black text-slate-900 leading-tight">Update Manual</h1>
               <p className="text-sm text-slate-500 mt-1">Recent improvements and behavior updates</p>
             </div>

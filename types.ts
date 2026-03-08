@@ -12,6 +12,7 @@ export interface User {
   password?: string;
   role: UserRole;
   title?: string;
+  avatarUrl?: string;
   emailVerified?: boolean;
   subscriptionStatus?: 'inactive' | 'active' | 'expired' | 'pending';
   subscriptionEndsAt?: string;
