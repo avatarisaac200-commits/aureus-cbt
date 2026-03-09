@@ -547,6 +547,14 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
            <button onClick={() => setCurrentQuestionIndex(prev => Math.max(0, prev - 1))} disabled={currentQuestionIndex === 0} className="flex-1 px-6 py-3 border-2 border-slate-100 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-slate-50 disabled:opacity-30">Prev</button>
            <button onClick={() => setCurrentQuestionIndex(prev => Math.min(activeSection.questionIds.length - 1, prev + 1))} disabled={currentQuestionIndex === activeSection.questionIds.length - 1} className="flex-1 px-6 py-3 border-2 border-slate-100 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-slate-50 disabled:opacity-30">Next</button>
          </div>
+         <div className="sm:hidden grid grid-cols-2 gap-2 w-full">
+           <button onClick={returnToLobby} className="px-4 py-3 border-2 border-slate-100 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-slate-50">
+             Go To Lobby
+           </button>
+           <button onClick={handleSectionSubmit} className="px-4 py-3 bg-amber-500 text-slate-950 rounded-xl text-xs font-bold uppercase tracking-widest shadow-md">
+             Submit Section
+           </button>
+         </div>
          <div className="hidden sm:flex gap-2 w-full sm:w-auto">
            <button onClick={exitToDashboard} className="flex-1 sm:flex-none px-6 py-3 border-2 border-red-100 text-red-600 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-red-50">Exit</button>
            <button onClick={returnToLobby} className="flex-1 sm:flex-none px-6 py-3 border-2 border-slate-100 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-slate-50">Lobby</button>
