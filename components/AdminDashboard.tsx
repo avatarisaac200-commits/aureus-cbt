@@ -70,6 +70,25 @@ const makeLicenseKey = () => {
 
 const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 const DEFAULT_DIFFICULTY: DifficultyLevel = 'medium';
+const CSV_IMPORT_HEADERS = [
+  'subject',
+  'topic',
+  'text',
+  'optionA',
+  'optionB',
+  'optionC',
+  'optionD',
+  'correctAnswer',
+  'explanation',
+  'difficulty',
+  'tags',
+  'source',
+  'year',
+  'examType',
+  'status',
+  'isActive'
+] as const;
+const CSV_IMPORT_HEADER_LINE = CSV_IMPORT_HEADERS.join(',');
 
 const parseList = (value: string) => value.split(',').map(item => item.trim()).filter(Boolean);
 const CSV_BUNDLE_CATEGORY_OPTIONS: CsvBundleCategoryField[] = ['subject', 'topic', 'difficulty', 'examType'];
@@ -251,6 +270,67 @@ const mapCsvRowsToStagedQuestions = (rows: Array<Record<string, string>>) => {
   }
 
   return { mapped, errors };
+};
+
+const escapeCsvCell = (value: unknown) => {
+  const text = String(value ?? '');
+  if (/[",\n]/.test(text)) return `"${text.replace(/"/g, '""')}"`;
+  return text;
+};
+
+const toAnswerLetter = (index: unknown) => {
+  const n = Number(index);
+  const letters = ['A', 'B', 'C', 'D'];
+  if (Number.isFinite(n) && n >= 0 && n <= 3) return letters[n];
+  return 'A';
+};
+
+const buildQuestionsCsv = (rows: Array<Pick<Question, 'subject' | 'topic' | 'text' | 'options' | 'correctAnswerIndex' | 'explanation' | 'difficulty' | 'tags' | 'source' | 'year' | 'examType' | 'status' | 'isActive'>>) => {
+  const lines = [
+    CSV_IMPORT_HEADER_LINE,
+    ...rows.map((q) => {
+      const options = Array.isArray(q.options) ? q.options : [];
+      const ordered = [options[0] || '', options[1] || '', options[2] || '', options[3] || ''];
+      const values = [
+        (q.subject || 'General').trim() || 'General',
+        (q.topic || 'General').trim() || 'General',
+        (q.text || '').trim(),
+        ordered[0],
+        ordered[1],
+        ordered[2],
+        ordered[3],
+        toAnswerLetter(q.correctAnswerIndex),
+        q.explanation || '',
+        normalizeDifficulty(String(q.difficulty || DEFAULT_DIFFICULTY)),
+        Array.isArray(q.tags) ? q.tags.join(', ') : '',
+        q.source || '',
+        q.year ?? '',
+        q.examType || '',
+        q.status === 'draft' ? 'draft' : 'approved',
+        q.isActive === false ? 'false' : 'true'
+      ];
+      return values.map(escapeCsvCell).join(',');
+    })
+  ];
+  return lines.join('\n');
+};
+
+const downloadCsv = (fileName: string, csvContent: string) => {
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(url);
+};
+
+const pickCsvFile = (files: FileList | null) => {
+  if (!files || files.length === 0) return null;
+  const list = Array.from(files);
+  return list.find((file) => file.name.toLowerCase().endsWith('.csv') || file.type.toLowerCase().includes('csv')) || null;
 };
 
 const normalizeExtractedQuestions = (input: any): StagedQuestion[] => {
@@ -473,6 +553,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
   const [stagedQuestions, setStagedQuestions] = useState<StagedQuestion[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const csvInputRef = useRef<HTMLInputElement>(null);
+  const dynamicCsvInputRef = useRef<HTMLInputElement>(null);
+  const [isImportCsvDragActive, setIsImportCsvDragActive] = useState(false);
+  const [isDynamicCsvDragActive, setIsDynamicCsvDragActive] = useState(false);
   const [singleKeyDurationDays, setSingleKeyDurationDays] = useState(365);
   const [bulkKeyCount, setBulkKeyCount] = useState(10);
   const [bulkKeyDurationDays, setBulkKeyDurationDays] = useState(365);
@@ -1742,6 +1825,63 @@ Rules:
     }
   };
 
+  const exportTestQuestionsToCsv = async (test: MockTest) => {
+    const ids = Array.from(new Set((test.sections || []).flatMap((section) => section.questionIds || [])));
+    if (ids.length === 0) {
+      notify('No questions found in this test.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const questionMap: Record<string, Question> = {};
+      for (const chunk of chunkArray(ids, 10)) {
+        const qSnap = await getDocs(query(collection(db, 'questions'), where(documentId(), 'in', chunk)));
+        qSnap.docs.forEach((d) => {
+          questionMap[d.id] = { ...d.data(), id: d.id } as Question;
+        });
+      }
+
+      const rows = ids.map((id) => questionMap[id]).filter(Boolean);
+      if (rows.length === 0) {
+        notify('Could not load test questions for export.');
+        return;
+      }
+
+      const safeName = (test.name || 'test').replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'test';
+      const datePart = new Date().toISOString().slice(0, 10);
+      const csv = buildQuestionsCsv(rows);
+      downloadCsv(`${safeName}-questions-${datePart}.csv`, csv);
+
+      const missing = ids.length - rows.length;
+      if (missing > 0) {
+        notify(`Exported ${rows.length} question(s). ${missing} missing question(s) were skipped.`);
+      } else {
+        notify(`Exported ${rows.length} question(s) to CSV.`);
+      }
+    } catch (err: any) {
+      notify('Failed to export CSV. ' + (err?.message || ''));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleImportCsvDrop = (e: React.DragEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    setIsImportCsvDragActive(false);
+    const file = pickCsvFile(e.dataTransfer?.files || null);
+    if (!file) return notify('Please drop a CSV file.');
+    processCSV(file);
+  };
+
+  const handleDynamicCsvDrop = (e: React.DragEvent<HTMLLabelElement>) => {
+    e.preventDefault();
+    setIsDynamicCsvDragActive(false);
+    const file = pickCsvFile(e.dataTransfer?.files || null);
+    if (!file) return notify('Please drop a CSV file.');
+    processCsvForDynamicTest(file);
+  };
+
   const saveGeneratedKeyDocs = async (codes: string[], durationDays: number) => {
     const nowIso = new Date().toISOString();
     const batch = writeBatch(db);
@@ -2104,10 +2244,20 @@ Rules:
                     <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">CSV Pool</p>
                     <input
                       type="file"
+                      ref={dynamicCsvInputRef}
                       accept=".csv,text/csv"
                       onChange={(e) => e.target.files?.[0] && processCsvForDynamicTest(e.target.files[0])}
                       className="w-full p-3 bg-slate-50 border rounded-2xl text-xs font-bold"
                     />
+                    <label
+                      onClick={() => dynamicCsvInputRef.current?.click()}
+                      onDragOver={(e) => { e.preventDefault(); setIsDynamicCsvDragActive(true); }}
+                      onDragLeave={() => setIsDynamicCsvDragActive(false)}
+                      onDrop={handleDynamicCsvDrop}
+                      className={`w-full block p-5 border-2 border-dashed rounded-2xl text-center text-xs font-bold uppercase tracking-widest cursor-pointer transition-all ${isDynamicCsvDragActive ? 'border-emerald-400 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-white text-slate-500 hover:border-emerald-300'}`}
+                    >
+                      Drag and drop CSV here
+                    </label>
                     <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">
                       {csvDynamicFileName ? `${csvDynamicFileName} loaded (${csvDynamicQuestions.length} questions)` : 'No CSV loaded yet'}
                     </p>
@@ -2422,6 +2572,7 @@ Rules:
                         <p className="text-sm text-slate-500">{test.description || 'No instructions set.'}</p>
                         <div className="flex flex-wrap gap-2">
                           <button onClick={() => copyTestLink(test)} className="px-5 py-2 bg-emerald-50 rounded-xl text-xs font-bold uppercase tracking-widest text-emerald-700 hover:bg-emerald-100">Copy Link</button>
+                          <button onClick={() => exportTestQuestionsToCsv(test)} className="px-5 py-2 bg-indigo-50 rounded-xl text-xs font-bold uppercase tracking-widest text-indigo-700 hover:bg-indigo-100">Export CSV</button>
                           <button onClick={() => startEditTest(test)} className="px-5 py-2 bg-slate-100 rounded-xl text-xs font-bold uppercase tracking-widest text-slate-700 hover:bg-slate-200">Edit</button>
                           <button onClick={() => moveTestToTop(test)} className="px-5 py-2 bg-violet-50 rounded-xl text-xs font-bold uppercase tracking-widest text-violet-700 hover:bg-violet-100">Back To Top</button>
                           {(test.generationMode || 'fixed') === 'dynamic' && (
@@ -2630,11 +2781,21 @@ Rules:
                       <h3 className="text-sm font-bold mb-2 uppercase text-slate-900">Import From CSV</h3>
                       <p className="text-xs text-slate-400 font-medium">Fast bulk upload with row validation and dedupe.</p>
                     </button>
+                    <button
+                      onClick={() => csvInputRef.current?.click()}
+                      onDragOver={(e) => { e.preventDefault(); setIsImportCsvDragActive(true); }}
+                      onDragLeave={() => setIsImportCsvDragActive(false)}
+                      onDrop={handleImportCsvDrop}
+                      className={`bg-white p-8 rounded-[2rem] border-2 border-dashed transition-all shadow-sm group text-left ${isImportCsvDragActive ? 'border-emerald-400 bg-emerald-50' : 'border-slate-100 hover:border-emerald-400'}`}
+                    >
+                      <h3 className="text-sm font-bold mb-2 uppercase text-slate-900">Drop CSV Here</h3>
+                      <p className="text-xs text-slate-400 font-medium">You can drag and drop a CSV file to import.</p>
+                    </button>
                   </div>
                   <div className="bg-white p-6 rounded-2xl border border-slate-100 text-left">
                     <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">CSV Headers</p>
                     <code className="text-xs text-slate-700 break-words">
-                      subject,topic,text,optionA,optionB,optionC,optionD,correctAnswer,explanation,difficulty,tags,source,year,examType,status,isActive
+                      {CSV_IMPORT_HEADER_LINE}
                     </code>
                   </div>
                 </div>
