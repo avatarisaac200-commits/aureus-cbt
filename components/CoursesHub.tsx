@@ -48,6 +48,38 @@ const injectViewport = (html: string) => {
   return `<!doctype html><html><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /></head><body>${html}</body></html>`;
 };
 
+const buildSafeCourseDocument = (html: string) => {
+  const withViewport = injectViewport(html);
+  const guardScript = `
+<script>
+(() => {
+  document.addEventListener('submit', (event) => {
+    event.preventDefault();
+  }, true);
+  document.addEventListener('click', (event) => {
+    const target = event.target;
+    if (!target || !target.closest) return;
+    const anchor = target.closest('a[href]');
+    if (!anchor) return;
+    const href = (anchor.getAttribute('href') || '').trim();
+    if (!href || href === '#') {
+      event.preventDefault();
+      return;
+    }
+    if (/^https?:\\/\\//i.test(href)) {
+      event.preventDefault();
+      window.open(href, '_blank', 'noopener,noreferrer');
+    }
+  }, true);
+})();
+</script>`;
+
+  if (/<\/body>/i.test(withViewport)) {
+    return withViewport.replace(/<\/body>/i, `${guardScript}</body>`);
+  }
+  return `${withViewport}${guardScript}`;
+};
+
 const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBack }) => {
   const [tab, setTab] = useState<CoursesTab>('library');
   const [courses, setCourses] = useState<Course[]>([]);
@@ -72,6 +104,7 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
   const [checkedSections, setCheckedSections] = useState<Record<number, boolean>>({});
   const [lastSession, setLastSession] = useState<CourseSession | null>(null);
   const [frameLoaded, setFrameLoaded] = useState(false);
+  const [activeCourseDoc, setActiveCourseDoc] = useState('');
   const isAdmin = user.role === 'admin' || user.role === 'root-admin';
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const endAtRef = useRef<number | null>(null);
@@ -245,6 +278,7 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
     setCheckedSections({});
     setLastSession(null);
     setFrameLoaded(false);
+    setActiveCourseDoc(buildSafeCourseDocument(course.contentHtml));
     endAtRef.current = null;
     setIsRunning(true);
   };
@@ -301,6 +335,7 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
     setActiveCourse(null);
     setStartedAtIso(null);
     setLastSession(null);
+    setActiveCourseDoc('');
   };
 
   return (
@@ -505,8 +540,8 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
         )}
 
         {activeCourse && (
-          <section className="bg-white border border-slate-100 rounded-2xl overflow-hidden">
-            <div className="p-4 md:p-5 border-b border-slate-100 bg-slate-950 text-white flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          <section className="fixed inset-0 z-[160] bg-slate-950 flex flex-col">
+            <div className="p-3 md:p-4 border-b border-slate-800 bg-slate-950 text-white flex flex-col md:flex-row md:items-center md:justify-between gap-3 safe-top">
               <div>
                 <p className="text-[11px] font-black uppercase tracking-widest text-amber-400">Active Course</p>
                 <h2 className="text-lg font-black uppercase">{activeCourse.title}</h2>
@@ -535,11 +570,11 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
                 </button>
               </div>
             </div>
-            <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] min-h-[70dvh]">
-              <aside className="border-r border-slate-100 p-4 bg-slate-50">
+            <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] min-h-0 flex-1">
+              <aside className="border-r border-slate-200 p-4 bg-slate-50 overflow-y-auto">
                 <p className="text-xs font-black uppercase tracking-widest text-slate-500 mb-2">Outline Checklist</p>
                 <div className="text-xs font-black uppercase tracking-widest text-amber-700 mb-4">{progressPercent}% complete</div>
-                <div className="space-y-2 max-h-[60dvh] overflow-y-auto">
+                <div className="space-y-2">
                   {activeOutline.map((heading, idx) => (
                     <label key={`${heading}-${idx}`} className="flex items-start gap-2 p-2 rounded-lg bg-white border border-slate-200 text-xs">
                       <input
@@ -552,7 +587,7 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
                   ))}
                 </div>
               </aside>
-              <div className="relative">
+              <div className="relative min-h-0">
                 {!frameLoaded && (
                   <div className="absolute inset-0 z-10 bg-white/95 flex items-center justify-center">
                     <p className="text-xs font-black uppercase tracking-widest text-slate-500">Rendering course...</p>
@@ -560,15 +595,15 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
                 )}
                 <iframe
                   title={activeCourse.title}
-                  srcDoc={injectViewport(activeCourse.contentHtml)}
+                  srcDoc={activeCourseDoc}
                   onLoad={() => setFrameLoaded(true)}
-                  className="w-full h-[70dvh] border-0 bg-white"
-                  sandbox="allow-scripts allow-forms allow-modals allow-downloads allow-popups allow-same-origin"
+                  className="w-full h-full border-0 bg-white"
+                  sandbox="allow-scripts allow-forms allow-modals allow-downloads allow-popups"
                 />
               </div>
             </div>
             {lastSession && (
-              <div className="p-4 border-t border-slate-100 bg-emerald-50 flex items-center justify-between gap-3">
+              <div className="p-4 border-t border-slate-200 bg-emerald-50 flex items-center justify-between gap-3 safe-bottom">
                 <div>
                   <p className="text-xs font-black uppercase tracking-widest text-emerald-700">Session Saved</p>
                   <p className="text-xs font-bold uppercase tracking-widest text-emerald-800">
@@ -580,6 +615,7 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
                     setActiveCourse(null);
                     setStartedAtIso(null);
                     setLastSession(null);
+                    setActiveCourseDoc('');
                   }}
                   className="px-4 py-2 rounded-xl bg-white border border-emerald-200 text-xs font-black uppercase tracking-widest text-emerald-700"
                 >

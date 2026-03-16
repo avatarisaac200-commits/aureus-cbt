@@ -217,6 +217,7 @@ const App: React.FC = () => {
   const [customTheme, setCustomTheme] = useState<CustomThemeConfig>(DEFAULT_CUSTOM_THEME);
   const [broadcastToasts, setBroadcastToasts] = useState<Array<{ id: string; title: string; message: string }>>([]);
   const isFlushingQueueRef = useRef(false);
+  const bootFallbackNotifiedRef = useRef(false);
 
   const getDefaultViewForRole = (role: User['role']) => {
     if (role === 'root-admin') return 'root-admin';
@@ -957,6 +958,23 @@ const App: React.FC = () => {
     });
     return () => unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (!isLoading) {
+      bootFallbackNotifiedRef.current = false;
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      if (!isLoading) return;
+      setCurrentView((prev) => (prev === 'verify-email' ? prev : 'auth'));
+      setIsLoading(false);
+      if (!bootFallbackNotifiedRef.current) {
+        toast.warning('Recovered from slow startup', 'Continuing to sign-in screen. You can retry login immediately.');
+        bootFallbackNotifiedRef.current = true;
+      }
+    }, 12000);
+    return () => window.clearTimeout(timer);
+  }, [isLoading]);
 
   useEffect(() => {
     const flushPendingResults = async () => {
