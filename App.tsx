@@ -1,22 +1,23 @@
 ﻿
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { User, MockTest, ExamResult, Question, TestSection, TestAttempt, DifficultyLevel, SharedQuiz, ViewState, BroadcastNotification, CustomThemeConfig } from './types';
 import { auth, db } from './firebase';
 import { onAuthStateChanged, sendEmailVerification } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 import { doc, getDoc, getDocFromServer, collection, getDocs, query, where, limit, documentId, updateDoc, addDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
-import Auth from './components/Auth';
-import Dashboard from './components/Dashboard';
-import AdminDashboard from './components/AdminDashboard';
-import RootAdminDashboard from './components/RootAdminDashboard';
-import ExamInterface from './components/ExamInterface';
-import ResultScreen from './components/ResultScreen';
-import ReviewInterface from './components/ReviewInterface';
-import UpdateManual from './components/UpdateManual';
-import CoursesHub from './components/CoursesHub';
 import logo from './assets/logo.png';
 import { AppTheme } from './theme';
 import { clearGlassAccent, syncGlassAccent } from './glassAccent';
 import { toast } from './components/ui/Toast';
+
+const Auth = lazy(() => import('./components/Auth'));
+const Dashboard = lazy(() => import('./components/Dashboard'));
+const AdminDashboard = lazy(() => import('./components/AdminDashboard'));
+const RootAdminDashboard = lazy(() => import('./components/RootAdminDashboard'));
+const ExamInterface = lazy(() => import('./components/ExamInterface'));
+const ResultScreen = lazy(() => import('./components/ResultScreen'));
+const ReviewInterface = lazy(() => import('./components/ReviewInterface'));
+const UpdateManual = lazy(() => import('./components/UpdateManual'));
+const CoursesHub = lazy(() => import('./components/CoursesHub'));
 
 const DEFAULT_FREE_ACCESS_ENDS_AT_ISO = '2026-04-01T23:00:00.000Z'; // April 2, 2026 00:00 WAT
 const DEADLINE_CONFIG_DOC_ID = 'deadline_config';
@@ -77,6 +78,43 @@ const normalizeCustomTheme = (value: any): CustomThemeConfig => {
     card: sanitizeHex(source.card, DEFAULT_CUSTOM_THEME.card),
     border: sanitizeHex(source.border, DEFAULT_CUSTOM_THEME.border)
   };
+};
+
+const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> => {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`${label} timeout`)), timeoutMs);
+      })
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+};
+
+const viewToPath = (view: ViewState) => {
+  if (view === 'auth') return '/auth';
+  if (view === 'verify-email') return '/verify-email';
+  if (view === 'dashboard') return '/dashboard';
+  if (view === 'courses') return '/courses';
+  if (view === 'admin') return '/admin';
+  if (view === 'root-admin') return '/root-admin';
+  if (view === 'update-manual') return '/whats-new';
+  return null;
+};
+
+const pathToView = (path: string): ViewState | null => {
+  const normalized = path.toLowerCase();
+  if (normalized === '/auth') return 'auth';
+  if (normalized === '/verify-email') return 'verify-email';
+  if (normalized === '/dashboard' || normalized === '/') return 'dashboard';
+  if (normalized === '/courses') return 'courses';
+  if (normalized === '/admin') return 'admin';
+  if (normalized === '/root-admin') return 'root-admin';
+  if (normalized === '/whats-new') return 'update-manual';
+  return null;
 };
 
 interface MonetizationModalProps {
@@ -398,6 +436,15 @@ const App: React.FC = () => {
       window.visualViewport?.removeEventListener('scroll', applyViewportHeight);
     };
   }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || isLoading) return;
+    const targetPath = viewToPath(currentView);
+    if (!targetPath) return;
+    if (window.location.pathname !== targetPath) {
+      window.history.replaceState({}, '', targetPath);
+    }
+  }, [currentView, isLoading]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || !currentUser || isLoading) return;
@@ -876,14 +923,14 @@ const App: React.FC = () => {
 
   const checkUserStatus = async (firebaseUser: any) => {
     try {
-      await firebaseUser.reload();
+      await withTimeout(firebaseUser.reload(), 12000, 'Auth refresh');
       const updatedUser = auth.currentUser;
       if (!updatedUser) {
         setIsLoading(false);
         return;
       }
 
-      const userDoc = await getDoc(doc(db, 'users', updatedUser.uid));
+      const userDoc = await withTimeout(getDoc(doc(db, 'users', updatedUser.uid)), 12000, 'User profile load');
       if (userDoc.exists()) {
         const userData = userDoc.data() as User;
         const isOfficialEmail = updatedUser.email?.toLowerCase().endsWith('@aureusmedicos.com');
@@ -920,7 +967,20 @@ const App: React.FC = () => {
             setCurrentView(getDefaultViewForRole(userData.role));
           }
         } else {
-          setCurrentView(getDefaultViewForRole(userData.role));
+          const requestedView = typeof window !== 'undefined' ? pathToView(window.location.pathname) : null;
+          if (requestedView === 'courses') {
+            setCurrentView('courses');
+          } else if (requestedView === 'update-manual') {
+            setCurrentView('update-manual');
+          } else if (requestedView === 'admin' && (userData.role === 'admin' || userData.role === 'root-admin')) {
+            setCurrentView('admin');
+          } else if (requestedView === 'root-admin' && userData.role === 'root-admin') {
+            setCurrentView('root-admin');
+          } else if (requestedView === 'verify-email') {
+            setCurrentView('verify-email');
+          } else {
+            setCurrentView(getDefaultViewForRole(userData.role));
+          }
         }
       } else {
         setCurrentUser(null);
@@ -939,7 +999,7 @@ const App: React.FC = () => {
       if (firebaseUser) {
         await checkUserStatus(firebaseUser);
         try {
-          const configSnap = await getDoc(doc(db, 'licenseKeys', DEADLINE_CONFIG_DOC_ID));
+          const configSnap = await withTimeout(getDoc(doc(db, 'licenseKeys', DEADLINE_CONFIG_DOC_ID)), 12000, 'Deadline config load');
           const configured = configSnap.exists() ? (configSnap.data() as any)?.freeAccessEndsAt : null;
           if (typeof configured === 'string' && Number.isFinite(Date.parse(configured))) {
             setFreeAccessEndsAtIso(configured);
@@ -1278,6 +1338,14 @@ const App: React.FC = () => {
       className={`v2-app theme-${theme} ui-mode-${uiMode} min-h-[100svh] w-full overflow-x-hidden flex flex-col`}
       style={{ minHeight: 'calc(var(--app-vh, 1vh) * 100)', height: 'calc(var(--app-vh, 1vh) * 100)' }}
     >
+      <Suspense
+        fallback={
+          <div className="h-full w-full flex flex-col items-center justify-center bg-slate-950 p-8 text-center">
+            <img src={logo} className="w-16 h-16 animate-pulse mb-6" alt="Aureus Medicos CBT Logo" />
+            <p className="text-amber-500 text-xs font-black uppercase tracking-[0.4em] mb-2">Loading Screen</p>
+          </div>
+        }
+      >
       {currentView === 'auth' && <Auth onLogin={checkUserStatus} />}
       {currentView === 'dashboard' && currentUser && (
         <Dashboard 
@@ -1407,6 +1475,7 @@ const App: React.FC = () => {
           ))}
         </div>
       )}
+      </Suspense>
     </div>
   );
 };

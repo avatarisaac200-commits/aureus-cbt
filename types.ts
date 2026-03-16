@@ -175,7 +175,7 @@ export interface BroadcastNotification {
   createdByName: string;
 }
 
-export type CourseFileVersion = 'html-v1';
+export type CourseFileVersion = 'html-v1' | 'cbtcourse-v1';
 
 export interface Course {
   id: string;

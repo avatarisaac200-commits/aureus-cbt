@@ -13,7 +13,22 @@ interface CoursesHubProps {
 
 type CoursesTab = 'library' | 'history' | 'manage';
 
-const ACCEPTED_EXTENSIONS = new Set(['html', 'htm', 'xhtml']);
+const ACCEPTED_EXTENSIONS = new Set(['html', 'htm', 'xhtml', 'cbtcourse']);
+const NATIVE_COURSE_FORMAT = 'cbtcourse-v1';
+const MAX_UPLOAD_SIZE_BYTES = 1024 * 1024 * 2;
+const CBTCOURSE_TEMPLATE = `{
+  "format": "cbtcourse-v1",
+  "meta": {
+    "title": "Trigonometry Crash Course",
+    "description": "Year 1 university trigonometry fundamentals to advanced topics.",
+    "tags": ["math", "trigonometry", "year-1"],
+    "estimatedDurationMinutes": 120
+  },
+  "content": {
+    "headHtml": "<style>body{font-family:system-ui,Segoe UI,Arial,sans-serif;line-height:1.6;margin:0;padding:0 16px 48px;} .hero{padding:20px 0;border-bottom:1px solid #ddd;} @media (max-width:768px){body{padding:0 12px 40px;}}</style>",
+    "bodyHtml": "<main><section class='hero'><h1>Trigonometry</h1><p>Welcome to the native CBT course format.</p></section><section id='sec-1'><h2>Angles</h2><p>Radians and degrees conversion.</p></section></main>"
+  }
+}`;
 
 const formatClock = (seconds: number) => {
   const safe = Math.max(0, Math.floor(seconds));
@@ -53,6 +68,19 @@ const buildSafeCourseDocument = (html: string) => {
   const guardScript = `
 <script>
 (() => {
+  const normalizeHash = (href) => {
+    const hashIdx = href.indexOf('#');
+    if (hashIdx < 0) return '';
+    return href.slice(hashIdx);
+  };
+  const scrollToHash = (hash) => {
+    const id = (hash || '').replace(/^#/, '').trim();
+    if (!id) return;
+    const target = document.getElementById(id);
+    if (target && target.scrollIntoView) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
   document.addEventListener('submit', (event) => {
     event.preventDefault();
   }, true);
@@ -62,14 +90,34 @@ const buildSafeCourseDocument = (html: string) => {
     const anchor = target.closest('a[href]');
     if (!anchor) return;
     const href = (anchor.getAttribute('href') || '').trim();
+    const absoluteHref = (anchor.href || '').trim();
     if (!href || href === '#') {
       event.preventDefault();
       return;
     }
+    if (href.startsWith('#')) {
+      event.preventDefault();
+      scrollToHash(href);
+      return;
+    }
+    if (absoluteHref && absoluteHref.includes('#')) {
+      const asUrl = new URL(absoluteHref, window.location.href);
+      if (asUrl.pathname === window.location.pathname) {
+        event.preventDefault();
+        scrollToHash(asUrl.hash);
+        return;
+      }
+    }
     if (/^https?:\\/\\//i.test(href)) {
       event.preventDefault();
       window.open(href, '_blank', 'noopener,noreferrer');
+      return;
     }
+    if (/^javascript:/i.test(href)) {
+      event.preventDefault();
+      return;
+    }
+    event.preventDefault();
   }, true);
 })();
 </script>`;
@@ -78,6 +126,35 @@ const buildSafeCourseDocument = (html: string) => {
     return withViewport.replace(/<\/body>/i, `${guardScript}</body>`);
   }
   return `${withViewport}${guardScript}`;
+};
+
+const parseNativeCourseFile = (raw: string) => {
+  const parsed = JSON.parse(raw);
+  if (!parsed || typeof parsed !== 'object') {
+    throw new Error('Invalid cbtcourse file.');
+  }
+  if (parsed.format !== NATIVE_COURSE_FORMAT) {
+    throw new Error(`Unsupported course format. Expected "${NATIVE_COURSE_FORMAT}".`);
+  }
+
+  const meta = parsed.meta && typeof parsed.meta === 'object' ? parsed.meta : {};
+  const content = parsed.content && typeof parsed.content === 'object' ? parsed.content : {};
+
+  const contentHtml = typeof content.html === 'string'
+    ? content.html
+    : `<!doctype html><html><head>${typeof content.headHtml === 'string' ? content.headHtml : ''}</head><body>${typeof content.bodyHtml === 'string' ? content.bodyHtml : ''}</body></html>`;
+
+  if (!contentHtml.trim()) {
+    throw new Error('cbtcourse content is empty. Provide content.html or content.bodyHtml.');
+  }
+
+  return {
+    title: typeof meta.title === 'string' ? meta.title.trim() : '',
+    description: typeof meta.description === 'string' ? meta.description.trim() : '',
+    tags: Array.isArray(meta.tags) ? meta.tags.map((v: any) => String(v || '').trim()).filter(Boolean) : [],
+    estimatedDurationMinutes: Math.max(1, Math.min(300, Number(meta.estimatedDurationMinutes) || 30)),
+    contentHtml
+  };
 };
 
 const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBack }) => {
@@ -94,6 +171,7 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
   const [uploadEstimatedMinutes, setUploadEstimatedMinutes] = useState(30);
   const [uploadFileName, setUploadFileName] = useState('');
   const [uploadHtml, setUploadHtml] = useState('');
+  const [uploadVersion, setUploadVersion] = useState<Course['version']>('html-v1');
   const [uploadPublished, setUploadPublished] = useState(true);
   const [activeCourse, setActiveCourse] = useState<Course | null>(null);
   const [launchMinutes, setLaunchMinutes] = useState(30);
@@ -105,6 +183,7 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
   const [lastSession, setLastSession] = useState<CourseSession | null>(null);
   const [frameLoaded, setFrameLoaded] = useState(false);
   const [activeCourseDoc, setActiveCourseDoc] = useState('');
+  const [showOutlineMobile, setShowOutlineMobile] = useState(false);
   const isAdmin = user.role === 'admin' || user.role === 'root-admin';
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const endAtRef = useRef<number | null>(null);
@@ -189,25 +268,68 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
     setUploadEstimatedMinutes(30);
     setUploadFileName('');
     setUploadHtml('');
+    setUploadVersion('html-v1');
     setUploadPublished(true);
+  };
+
+  const copyTemplateToClipboard = async () => {
+    try {
+      await navigator.clipboard.writeText(CBTCOURSE_TEMPLATE);
+      toast.success('Template copied', 'cbtcourse template copied to clipboard.');
+    } catch {
+      toast.warning('Copy failed', 'Clipboard unavailable. Copy manually from the template block.');
+    }
+  };
+
+  const downloadTemplateFile = () => {
+    try {
+      const blob = new Blob([CBTCOURSE_TEMPLATE], { type: 'application/json;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'template.cbtcourse';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error('Download failed', 'Could not generate template file.');
+    }
   };
 
   const handleUploadFile = async (file: File | null) => {
     if (!file) return;
     const ext = (file.name.split('.').pop() || '').toLowerCase();
     if (!ACCEPTED_EXTENSIONS.has(ext)) {
-      toast.warning('Invalid file', 'Please upload an HTML file (.html, .htm, .xhtml).');
+      toast.warning('Invalid file', 'Please upload .html/.htm/.xhtml or .cbtcourse.');
       return;
     }
-    if (file.size > 1024 * 1024 * 2) {
+    if (file.size > MAX_UPLOAD_SIZE_BYTES) {
       toast.warning('File too large', 'Maximum file size is 2MB.');
       return;
     }
-    const text = await file.text();
-    setUploadHtml(text);
-    setUploadFileName(file.name);
-    if (!uploadTitle.trim()) {
-      setUploadTitle(file.name.replace(/\.[^.]+$/, '').trim());
+    try {
+      const text = await file.text();
+      if (ext === 'cbtcourse') {
+        const parsed = parseNativeCourseFile(text);
+        setUploadHtml(parsed.contentHtml);
+        setUploadVersion('cbtcourse-v1');
+        setUploadFileName(file.name);
+        if (parsed.title) setUploadTitle(parsed.title);
+        if (parsed.description) setUploadDescription(parsed.description);
+        if (parsed.tags.length > 0) setUploadTags(parsed.tags.join(', '));
+        setUploadEstimatedMinutes(parsed.estimatedDurationMinutes);
+      } else {
+        setUploadHtml(text);
+        setUploadVersion('html-v1');
+        setUploadFileName(file.name);
+        if (!uploadTitle.trim()) {
+          setUploadTitle(file.name.replace(/\.[^.]+$/, '').trim());
+        }
+      }
+      toast.success('File loaded', `Detected ${ext === 'cbtcourse' ? 'native cbtcourse-v1' : 'HTML'} course file.`);
+    } catch (err: any) {
+      toast.error('File parse failed', err?.message || 'Could not parse selected file.');
     }
   };
 
@@ -224,7 +346,7 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
     }
     const ext = (uploadFileName.split('.').pop() || '').toLowerCase();
     if (!ACCEPTED_EXTENSIONS.has(ext)) {
-      toast.warning('Invalid file', 'Only HTML files are supported in v3.15.');
+      toast.warning('Invalid file', 'Only .html/.htm/.xhtml/.cbtcourse files are supported.');
       return;
     }
 
@@ -234,7 +356,7 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
       await addDoc(collection(db, 'courses'), {
         title,
         description: uploadDescription.trim(),
-        version: 'html-v1',
+        version: uploadVersion,
         fileName: uploadFileName,
         fileExtension: ext,
         contentHtml: uploadHtml,
@@ -278,6 +400,7 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
     setCheckedSections({});
     setLastSession(null);
     setFrameLoaded(false);
+    setShowOutlineMobile(false);
     setActiveCourseDoc(buildSafeCourseDocument(course.contentHtml));
     endAtRef.current = null;
     setIsRunning(true);
@@ -336,6 +459,7 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
     setStartedAtIso(null);
     setLastSession(null);
     setActiveCourseDoc('');
+    setShowOutlineMobile(false);
   };
 
   return (
@@ -473,7 +597,10 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
 
         {!activeCourse && tab === 'manage' && isAdmin && (
           <section className="bg-white border border-slate-100 rounded-2xl p-5 space-y-4">
-            <h2 className="text-lg font-black text-slate-900 uppercase">Upload Course (HTML v1)</h2>
+            <h2 className="text-lg font-black text-slate-900 uppercase">Upload Course (HTML + Native)</h2>
+            <p className="text-xs text-slate-500">
+              Supported files: <strong>.html/.htm/.xhtml</strong> and <strong>.cbtcourse</strong> (native optimized format).
+            </p>
             <input
               value={uploadTitle}
               onChange={(e) => setUploadTitle(e.target.value)}
@@ -505,15 +632,19 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
             </div>
             <div className="flex items-center gap-3">
               <label className="px-4 py-3 rounded-xl border border-slate-200 bg-white text-xs font-black uppercase tracking-widest text-slate-700 cursor-pointer">
-                Select HTML
+                Select Course File
                 <input
                   type="file"
-                  accept=".html,.htm,.xhtml,text/html"
+                  accept=".html,.htm,.xhtml,.cbtcourse,text/html,application/json"
                   className="hidden"
                   onChange={(e) => void handleUploadFile(e.target.files?.[0] || null)}
                 />
               </label>
               <span className="text-xs font-bold uppercase tracking-widest text-slate-500 truncate">{uploadFileName || 'No file selected'}</span>
+            </div>
+            <div className="p-3 rounded-xl border border-slate-200 bg-slate-50">
+              <p className="text-[11px] font-black uppercase tracking-widest text-slate-500 mb-1">Detected Format</p>
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-700">{uploadVersion}</p>
             </div>
             <label className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-slate-700">
               <input
@@ -536,42 +667,82 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
             >
               {isUploading ? 'Uploading...' : 'Save Course'}
             </button>
+
+            <div className="mt-4 p-4 rounded-2xl border border-amber-100 bg-amber-50 space-y-3">
+              <h3 className="text-sm font-black uppercase tracking-widest text-amber-800">cbtcourse File Manual</h3>
+              <p className="text-xs text-amber-900 leading-relaxed">
+                Use <strong>.cbtcourse</strong> when you want native metadata + predictable rendering in this app. HTML files still work natively.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => void copyTemplateToClipboard()}
+                  className="px-4 py-2 rounded-xl bg-slate-950 text-amber-500 text-xs font-black uppercase tracking-widest"
+                >
+                  Copy Template
+                </button>
+                <button
+                  type="button"
+                  onClick={downloadTemplateFile}
+                  className="px-4 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-xs font-black uppercase tracking-widest"
+                >
+                  Download .cbtcourse
+                </button>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-950 text-amber-400 p-3 text-[11px] font-mono max-h-56 overflow-auto whitespace-pre-wrap">
+                {CBTCOURSE_TEMPLATE}
+              </div>
+              <div className="text-xs text-amber-900 leading-relaxed space-y-1">
+                <p><strong>Spec:</strong> `format` must be `cbtcourse-v1`.</p>
+                <p><strong>meta.title:</strong> optional but recommended (autofills upload title).</p>
+                <p><strong>meta.description/tags/estimatedDurationMinutes:</strong> optional metadata.</p>
+                <p><strong>content.html:</strong> full HTML document string, OR use `content.headHtml` + `content.bodyHtml`.</p>
+                <p><strong>Navigation links:</strong> use section ids (`href="#sec-topic"`) for smooth in-course scrolling.</p>
+                <p><strong>Mobile:</strong> include responsive CSS (`@media (max-width: 768px)`) and a viewport meta tag (app injects one if missing).</p>
+              </div>
+            </div>
           </section>
         )}
 
         {activeCourse && (
           <section className="fixed inset-0 z-[160] bg-slate-950 flex flex-col">
-            <div className="p-3 md:p-4 border-b border-slate-800 bg-slate-950 text-white flex flex-col md:flex-row md:items-center md:justify-between gap-3 safe-top">
+            <div className="p-3 md:p-4 border-b border-slate-800 bg-slate-950 text-white flex flex-col md:flex-row md:items-center md:justify-between gap-2 safe-top">
               <div>
                 <p className="text-[11px] font-black uppercase tracking-widest text-amber-400">Active Course</p>
-                <h2 className="text-lg font-black uppercase">{activeCourse.title}</h2>
+                <h2 className="text-base md:text-lg font-black uppercase">{activeCourse.title}</h2>
               </div>
-              <div className="flex items-center gap-2 md:gap-3">
-                <span className={`px-3 py-2 rounded-xl text-xs font-black uppercase tracking-widest ${timeRemaining <= 60 ? 'bg-red-500 text-white' : 'bg-slate-800 text-amber-400'}`}>
+              <div className="flex items-center gap-2 flex-wrap justify-start md:justify-end">
+                <span className={`px-3 py-2 rounded-xl text-[11px] md:text-xs font-black uppercase tracking-widest ${timeRemaining <= 60 ? 'bg-red-500 text-white' : 'bg-slate-800 text-amber-400'}`}>
                   {formatClock(timeRemaining)}
                 </span>
                 <button
+                  onClick={() => setShowOutlineMobile((prev) => !prev)}
+                  className="lg:hidden px-3 py-2 rounded-xl text-[11px] font-black uppercase tracking-widest bg-slate-800 text-slate-100"
+                >
+                  {showOutlineMobile ? 'Hide Outline' : 'Outline'}
+                </button>
+                <button
                   onClick={() => setIsRunning((prev) => !prev)}
-                  className="px-3 py-2 rounded-xl text-xs font-black uppercase tracking-widest bg-slate-800 text-slate-100"
+                  className="px-3 py-2 rounded-xl text-[11px] md:text-xs font-black uppercase tracking-widest bg-slate-800 text-slate-100"
                 >
                   {isRunning ? 'Pause' : 'Resume'}
                 </button>
                 <button
                   onClick={() => void finishSession('completed')}
-                  className="px-3 py-2 rounded-xl text-xs font-black uppercase tracking-widest bg-emerald-500 text-white"
+                  className="px-3 py-2 rounded-xl text-[11px] md:text-xs font-black uppercase tracking-widest bg-emerald-500 text-white"
                 >
                   Complete
                 </button>
                 <button
                   onClick={() => void closePlayer()}
-                  className="px-3 py-2 rounded-xl text-xs font-black uppercase tracking-widest bg-red-500 text-white"
+                  className="px-3 py-2 rounded-xl text-[11px] md:text-xs font-black uppercase tracking-widest bg-red-500 text-white"
                 >
                   Exit
                 </button>
               </div>
             </div>
-            <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] min-h-0 flex-1">
-              <aside className="border-r border-slate-200 p-4 bg-slate-50 overflow-y-auto">
+            <div className="relative min-h-0 flex-1 lg:grid lg:grid-cols-[300px_1fr]">
+              <aside className="hidden lg:block border-r border-slate-200 p-4 bg-slate-50 overflow-y-auto">
                 <p className="text-xs font-black uppercase tracking-widest text-slate-500 mb-2">Outline Checklist</p>
                 <div className="text-xs font-black uppercase tracking-widest text-amber-700 mb-4">{progressPercent}% complete</div>
                 <div className="space-y-2">
@@ -587,7 +758,7 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
                   ))}
                 </div>
               </aside>
-              <div className="relative min-h-0">
+              <div className="relative min-h-0 h-full">
                 {!frameLoaded && (
                   <div className="absolute inset-0 z-10 bg-white/95 flex items-center justify-center">
                     <p className="text-xs font-black uppercase tracking-widest text-slate-500">Rendering course...</p>
@@ -601,6 +772,39 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
                   sandbox="allow-scripts allow-forms allow-modals allow-downloads allow-popups"
                 />
               </div>
+              {showOutlineMobile && (
+                <button
+                  type="button"
+                  onClick={() => setShowOutlineMobile(false)}
+                  className="lg:hidden absolute inset-0 bg-slate-950/45 z-20"
+                  aria-label="Close outline"
+                />
+              )}
+              <aside className={`lg:hidden absolute left-0 top-0 bottom-0 w-[86vw] max-w-[340px] border-r border-slate-200 p-4 bg-slate-50 overflow-y-auto z-30 transition-transform duration-200 ${showOutlineMobile ? 'translate-x-0' : '-translate-x-full'}`}>
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-xs font-black uppercase tracking-widest text-slate-500">Outline Checklist</p>
+                  <button
+                    type="button"
+                    onClick={() => setShowOutlineMobile(false)}
+                    className="px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border border-slate-300 text-slate-600"
+                  >
+                    Close
+                  </button>
+                </div>
+                <div className="text-xs font-black uppercase tracking-widest text-amber-700 mb-4">{progressPercent}% complete</div>
+                <div className="space-y-2 pb-10">
+                  {activeOutline.map((heading, idx) => (
+                    <label key={`mobile-${heading}-${idx}`} className="flex items-start gap-2 p-2 rounded-lg bg-white border border-slate-200 text-xs">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(checkedSections[idx])}
+                        onChange={(e) => setCheckedSections((prev) => ({ ...prev, [idx]: e.target.checked }))}
+                      />
+                      <span className="font-semibold text-slate-700">{heading}</span>
+                    </label>
+                  ))}
+                </div>
+              </aside>
             </div>
             {lastSession && (
               <div className="p-4 border-t border-slate-200 bg-emerald-50 flex items-center justify-between gap-3 safe-bottom">
