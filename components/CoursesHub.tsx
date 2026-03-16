@@ -81,6 +81,36 @@ const buildSafeCourseDocument = (html: string) => {
       target.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   };
+  const hasMathExpressions = () => {
+    const text = document.body ? (document.body.innerText || '') : '';
+    return /\\\\\\(|\\\\\\)|\\\\\\[|\\\\\\]|\\$\\$[^$]+\\$\\$|\\$[^$]+\\$/.test(text);
+  };
+  const triggerMathTypeset = () => {
+    if (window.MathJax && window.MathJax.typesetPromise) {
+      window.MathJax.typesetPromise().catch(() => {});
+    }
+  };
+  const ensureMathJax = () => {
+    if (!hasMathExpressions()) return;
+    if (window.MathJax && window.MathJax.typesetPromise) {
+      triggerMathTypeset();
+      return;
+    }
+    const existing = document.querySelector('script[src*="mathjax"]');
+    if (existing) {
+      existing.addEventListener('load', triggerMathTypeset, { once: true });
+      return;
+    }
+    window.MathJax = window.MathJax || {
+      tex: { inlineMath: [['$', '$'], ['\\\\(', '\\\\)']], displayMath: [['$$', '$$'], ['\\\\[', '\\\\]']] },
+      svg: { fontCache: 'global' }
+    };
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js';
+    script.async = true;
+    script.onload = () => triggerMathTypeset();
+    document.head.appendChild(script);
+  };
   document.addEventListener('submit', (event) => {
     event.preventDefault();
   }, true);
@@ -119,6 +149,13 @@ const buildSafeCourseDocument = (html: string) => {
     }
     event.preventDefault();
   }, true);
+  ensureMathJax();
+  const mathObserver = new MutationObserver(() => {
+    triggerMathTypeset();
+  });
+  if (document.body) {
+    mathObserver.observe(document.body, { childList: true, subtree: true });
+  }
 })();
 </script>`;
 
@@ -769,7 +806,7 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
                   srcDoc={activeCourseDoc}
                   onLoad={() => setFrameLoaded(true)}
                   className="w-full h-full border-0 bg-white"
-                  sandbox="allow-scripts allow-forms allow-modals allow-downloads allow-popups"
+                  sandbox="allow-scripts allow-forms allow-modals allow-downloads allow-popups allow-same-origin"
                 />
               </div>
               {showOutlineMobile && (
