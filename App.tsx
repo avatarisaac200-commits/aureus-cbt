@@ -12,6 +12,7 @@ import ExamInterface from './components/ExamInterface';
 import ResultScreen from './components/ResultScreen';
 import ReviewInterface from './components/ReviewInterface';
 import UpdateManual from './components/UpdateManual';
+import CoursesHub from './components/CoursesHub';
 import logo from './assets/logo.png';
 import { AppTheme } from './theme';
 import { clearGlassAccent, syncGlassAccent } from './glassAccent';
@@ -29,7 +30,7 @@ const APP_THEME_STORAGE_KEY = 'appTheme';
 const APP_CUSTOM_THEME_STORAGE_KEY = 'appThemeCustom';
 const APP_THEME_LAST_USED_KEY = 'appTheme:lastUsed';
 const APP_UI_MODE_STORAGE_KEY = 'appUiMode';
-const UPDATE_MANUAL_VERSION = '3.0.0';
+const UPDATE_MANUAL_VERSION = '3.15.0';
 const UPDATE_MANUAL_SEEN_PREFIX = 'updateManualSeen';
 const BROADCAST_NOTIFICATIONS_SEEN_AT_PREFIX = 'broadcastSeenAt';
 
@@ -55,7 +56,7 @@ const isValidAppTheme = (value: string | null): value is AppTheme => {
 const getThemeStorageKey = (userId: string) => `${APP_THEME_STORAGE_KEY}:${userId}`;
 const getCustomThemeStorageKey = (userId: string) => `${APP_CUSTOM_THEME_STORAGE_KEY}:${userId}`;
 const getUiModeStorageKey = (userId: string) => `${APP_UI_MODE_STORAGE_KEY}:${userId}`;
-const getUpdateManualSeenKey = (userId: string) => `${UPDATE_MANUAL_SEEN_PREFIX}:${UPDATE_MANUAL_VERSION}:${userId}`;
+const getUpdateManualSeenKey = () => `${UPDATE_MANUAL_SEEN_PREFIX}:${UPDATE_MANUAL_VERSION}:global`;
 
 const sanitizeHex = (value: string, fallback: string) => {
   const v = String(value || '').trim();
@@ -400,7 +401,7 @@ const App: React.FC = () => {
   useEffect(() => {
     if (typeof window === 'undefined' || !currentUser || isLoading) return;
     if (!['dashboard', 'admin', 'root-admin'].includes(currentView)) return;
-    const seenKey = getUpdateManualSeenKey(currentUser.id);
+    const seenKey = getUpdateManualSeenKey();
     if (window.localStorage.getItem(seenKey) === '1') return;
     window.localStorage.setItem(seenKey, '1');
     setLastMainView(currentView);
@@ -1289,6 +1290,7 @@ const App: React.FC = () => {
             setCurrentView('review');
           }}
           onReturnToAdmin={() => setCurrentView(currentUser.role === 'root-admin' ? 'root-admin' : 'admin')}
+          onOpenCourses={() => setCurrentView('courses')}
           onSaveOfflineTest={saveTestForOffline}
           isReadOnly={isReadOnlyForUnactivatedUser(currentUser)}
           deadlineLabel={deadlineLabel}
@@ -1310,12 +1312,20 @@ const App: React.FC = () => {
           onUserProfileUpdate={(patch) => setCurrentUser((prev) => (prev ? { ...prev, ...patch } : prev))}
         />
       )}
+      {currentView === 'courses' && currentUser && (
+        <CoursesHub
+          user={currentUser}
+          isReadOnly={isReadOnlyForUnactivatedUser(currentUser)}
+          onBack={() => setCurrentView('dashboard')}
+        />
+      )}
       {currentView === 'admin' && currentUser && (
         <AdminDashboard 
           user={currentUser} 
           initialTab={adminDefaultTab as any}
           onLogout={() => auth.signOut()} 
           onSwitchToStudent={() => setCurrentView('dashboard')}
+          onOpenCourses={() => setCurrentView('courses')}
         />
       )}
       {currentView === 'root-admin' && currentUser && (
@@ -1347,7 +1357,7 @@ const App: React.FC = () => {
         <ReviewInterface result={reviewResult} onExit={() => setCurrentView('dashboard')} />
       )}
       {currentView === 'update-manual' && (
-        <UpdateManual onClose={closeUpdateManual} />
+        <UpdateManual version={UPDATE_MANUAL_VERSION} onClose={closeUpdateManual} />
       )}
       {showMonetizationModal && (
         <MonetizationModal

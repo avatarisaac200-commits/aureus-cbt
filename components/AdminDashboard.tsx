@@ -15,6 +15,7 @@ interface AdminDashboardProps {
   initialTab?: AdminTab;
   onLogout: () => void;
   onSwitchToStudent: () => void;
+  onOpenCourses?: () => void;
 }
 
 type AdminTab = 'questions' | 'create-test' | 'tests' | 'import' | 'analytics' | 'license-keys';
@@ -477,7 +478,7 @@ Rules:
   }
 };
 
-const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'questions', onLogout, onSwitchToStudent }) => {
+const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'questions', onLogout, onSwitchToStudent, onOpenCourses }) => {
   const notify = (message: string) => {
     toast.info('Notice', String(message));
   };
@@ -1986,6 +1987,9 @@ Rules:
           </div>
         </div>
         <div className="flex gap-2">
+          {onOpenCourses && (
+            <button onClick={onOpenCourses} className="px-5 py-2 text-xs font-bold text-emerald-700 border border-emerald-100 rounded-xl hover:bg-emerald-50 uppercase tracking-widest">Courses</button>
+          )}
           <button onClick={onSwitchToStudent} className="px-5 py-2 text-xs font-bold text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50 uppercase tracking-widest">Student View</button>
           <button onClick={onLogout} className="px-5 py-2 text-xs font-bold text-red-600 border border-red-50 rounded-xl hover:bg-red-50 uppercase tracking-widest">Logout</button>
         </div>

@@ -12,6 +12,7 @@ interface DashboardProps {
   onLogout: () => void;
   onStartTest: (test: MockTest, options?: { quizMode?: boolean }) => void;
   onReviewResult: (result: ExamResult) => void;
+  onOpenCourses?: () => void;
   onSaveOfflineTest?: (test: MockTest) => void;
   onReturnToAdmin?: () => void;
   isReadOnly?: boolean;
@@ -136,6 +137,7 @@ const Dashboard: React.FC<DashboardProps> = ({
   onLogout,
   onStartTest,
   onReviewResult,
+  onOpenCourses,
   onSaveOfflineTest,
   onReturnToAdmin,
   isReadOnly = false,
@@ -917,6 +919,14 @@ const Dashboard: React.FC<DashboardProps> = ({
             >
               Open Reviews
             </button>
+            {onOpenCourses && (
+              <button
+                onClick={onOpenCourses}
+                className="px-6 py-3 text-xs font-black text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-2xl hover:bg-emerald-100 uppercase tracking-widest shadow-sm"
+              >
+                Open Courses
+              </button>
+            )}
           </div>
 
           <div className="mb-8 bg-white rounded-2xl border border-slate-100 p-2 hidden md:inline-flex gap-2">
@@ -1177,6 +1187,14 @@ const Dashboard: React.FC<DashboardProps> = ({
                   >
                     Edit Profile
                   </button>
+                  {onOpenCourses && (
+                    <button
+                      onClick={onOpenCourses}
+                      className="w-full py-4 bg-emerald-50 border border-emerald-100 text-emerald-700 rounded-2xl text-xs font-black uppercase tracking-widest"
+                    >
+                      Open Courses
+                    </button>
+                  )}
                 </div>
               </aside>
             </div>
@@ -1589,7 +1607,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                       window.localStorage.removeItem(`appTheme:${user.id}`);
                       window.localStorage.removeItem(`appThemeCustom:${user.id}`);
                       Object.keys(window.localStorage).forEach((key) => {
-                        if (key.startsWith('testpkg:offline:') || key === 'pendingResultsQueue') {
+                        if (key.startsWith('testpkg:offline:') || key === 'pendingResultsQueue' || key.startsWith('updateManualSeen:')) {
                           window.localStorage.removeItem(key);
                         }
                       });

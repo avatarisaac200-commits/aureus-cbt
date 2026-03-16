@@ -111,6 +111,31 @@ service cloud.firestore {
         );
     }
 
+    match /courses/{courseId} {
+      allow get, list: if
+        signedIn() &&
+        (
+          isAdmin() ||
+          resource.data.isPublished == true
+        );
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /courseSessions/{sessionId} {
+      allow create: if
+        signedIn() &&
+        request.resource.data.userId == request.auth.uid;
+
+      allow get, list: if
+        signedIn() &&
+        (
+          isAdmin() ||
+          resource.data.userId == request.auth.uid
+        );
+
+      allow update, delete: if isAdmin();
+    }
+
     match /licenseKeys/{keyId} {
       allow get: if signedIn();
       allow list: if isRootAdmin();

@@ -175,6 +175,41 @@ export interface BroadcastNotification {
   createdByName: string;
 }
 
+export type CourseFileVersion = 'html-v1';
+
+export interface Course {
+  id: string;
+  title: string;
+  description?: string;
+  version: CourseFileVersion;
+  fileName: string;
+  fileExtension: string;
+  contentHtml: string;
+  tags?: string[];
+  estimatedDurationMinutes: number;
+  isPublished: boolean;
+  createdBy: string;
+  creatorName: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CourseSession {
+  id: string;
+  userId: string;
+  userName: string;
+  courseId: string;
+  courseTitle: string;
+  startedAt: string;
+  endedAt: string;
+  durationSeconds: number;
+  elapsedSeconds: number;
+  completedSections: number;
+  totalSections: number;
+  progressPercent: number;
+  status: 'completed' | 'timed-out' | 'abandoned';
+}
+
 export interface CustomThemeConfig {
   bgStart: string;
   bgEnd: string;
@@ -188,4 +223,4 @@ export interface CustomThemeConfig {
   border: string;
 }
 
-export type ViewState = 'auth' | 'verify-email' | 'dashboard' | 'exam' | 'admin' | 'root-admin' | 'results' | 'review' | 'update-manual';
+export type ViewState = 'auth' | 'verify-email' | 'dashboard' | 'courses' | 'exam' | 'admin' | 'root-admin' | 'results' | 'review' | 'update-manual';
