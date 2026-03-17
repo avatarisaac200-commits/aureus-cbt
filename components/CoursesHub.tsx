@@ -39,6 +39,11 @@ const formatClock = (seconds: number) => {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 };
 
+const parseIsoDateMs = (value?: string) => {
+  const ms = Date.parse(value || '');
+  return Number.isFinite(ms) ? ms : 0;
+};
+
 const parseOutline = (html: string) => {
   if (typeof window === 'undefined') return [] as string[];
   try {
@@ -227,34 +232,68 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
 
   useEffect(() => {
     setLoadingCourses(true);
-    const courseQuery = isAdmin
+    const primaryQuery = isAdmin
       ? query(collection(db, 'courses'), orderBy('updatedAt', 'desc'), limit(200))
       : query(collection(db, 'courses'), where('isPublished', '==', true), orderBy('updatedAt', 'desc'), limit(200));
-    const unsub = onSnapshot(courseQuery, (snap) => {
-      const rows = snap.docs.map((d) => ({ ...d.data(), id: d.id } as Course));
-      setCourses(rows);
-      setLoadingCourses(false);
-    }, () => {
-      setLoadingCourses(false);
-      toast.error('Courses load failed', 'Could not load courses right now.');
-    });
-    return () => unsub();
+    const fallbackQuery = isAdmin
+      ? null
+      : query(collection(db, 'courses'), where('isPublished', '==', true), limit(200));
+
+    let unsub: (() => void) | null = null;
+    const attach = (q: any, withClientSort: boolean, allowFallback: boolean) => {
+      unsub = onSnapshot(q, (snap) => {
+        const rows = snap.docs
+          .map((d) => ({ ...d.data(), id: d.id } as Course))
+          .sort((a, b) => (
+            withClientSort
+              ? parseIsoDateMs(b.updatedAt || b.createdAt) - parseIsoDateMs(a.updatedAt || a.createdAt)
+              : 0
+          ));
+        setCourses(rows);
+        setLoadingCourses(false);
+      }, (err: any) => {
+        if (allowFallback && fallbackQuery && err?.code === 'failed-precondition') {
+          unsub?.();
+          attach(fallbackQuery, true, false);
+          return;
+        }
+        setLoadingCourses(false);
+        toast.error('Courses load failed', err?.code === 'permission-denied' ? 'Permission denied for courses.' : 'Could not load courses right now.');
+      });
+    };
+    attach(primaryQuery, false, true);
+    return () => { if (unsub) unsub(); };
   }, [isAdmin]);
 
   useEffect(() => {
     setLoadingSessions(true);
-    const sessionQuery = isAdmin
+    const primaryQuery = isAdmin
       ? query(collection(db, 'courseSessions'), orderBy('endedAt', 'desc'), limit(200))
       : query(collection(db, 'courseSessions'), where('userId', '==', user.id), orderBy('endedAt', 'desc'), limit(200));
-    const unsub = onSnapshot(sessionQuery, (snap) => {
-      const rows = snap.docs.map((d) => ({ ...d.data(), id: d.id } as CourseSession));
-      setSessions(rows);
-      setLoadingSessions(false);
-    }, () => {
-      setLoadingSessions(false);
-      toast.error('Session load failed', 'Could not load session history.');
-    });
-    return () => unsub();
+    const fallbackQuery = isAdmin
+      ? null
+      : query(collection(db, 'courseSessions'), where('userId', '==', user.id), limit(200));
+
+    let unsub: (() => void) | null = null;
+    const attach = (q: any, withClientSort: boolean, allowFallback: boolean) => {
+      unsub = onSnapshot(q, (snap) => {
+        const rows = snap.docs
+          .map((d) => ({ ...d.data(), id: d.id } as CourseSession))
+          .sort((a, b) => (withClientSort ? parseIsoDateMs(b.endedAt) - parseIsoDateMs(a.endedAt) : 0));
+        setSessions(rows);
+        setLoadingSessions(false);
+      }, (err: any) => {
+        if (allowFallback && fallbackQuery && err?.code === 'failed-precondition') {
+          unsub?.();
+          attach(fallbackQuery, true, false);
+          return;
+        }
+        setLoadingSessions(false);
+        toast.error('Session load failed', err?.code === 'permission-denied' ? 'Permission denied for session history.' : 'Could not load session history.');
+      });
+    };
+    attach(primaryQuery, false, true);
+    return () => { if (unsub) unsub(); };
   }, [isAdmin, user.id]);
 
   useEffect(() => {
