@@ -39,6 +39,7 @@ const queuePendingResult = (payload: Omit<ExamResult, 'id'>) => {
 };
 
 const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedback = false, resolvedSections, attemptId, packagedQuestions, onFinish, onExit }) => {
+  const isTimedMode = !instantFeedback;
   const [view, setView] = useState<'lobby' | 'testing'>('lobby');
   const [activeSectionIndex, setActiveSectionIndex] = useState<number | null>(null);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -191,6 +192,7 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
   }, [allQuestions, answers, onFinish, test, user.id, user.name, effectiveSections, attemptId, shuffledSections]);
 
   useEffect(() => {
+    if (!isTimedMode) return;
     if (!hasStarted) return;
 
     if (endTimeRef.current === null) {
@@ -225,7 +227,7 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
       document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
       window.removeEventListener('focus', handleVisibilityOrFocus);
     };
-  }, [calculateResult, hasStarted]);
+  }, [calculateResult, hasStarted, isTimedMode]);
 
   const enterSection = (idx: number) => {
     setHasStarted(true);
@@ -274,6 +276,7 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
     setAnswers(prev => ({ ...prev, [questionId]: optionIndex }));
     if (instantFeedback) {
       setRevealedAnswers(prev => ({ ...prev, [questionId]: true }));
+      setShowMoreInfo(true);
     }
   };
 
@@ -318,6 +321,11 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
     let cancelled = false;
     const run = async () => {
       try {
+        const localExplanation = currentQuestion.explanation?.trim();
+        if (localExplanation) {
+          setAiExplanation(localExplanation);
+          setAiSource('fallback');
+        }
         setAiLoading(true);
         setAiError('');
         const result = await getOrCreateAiExplanation(currentQuestion);
@@ -368,9 +376,15 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <div className="bg-slate-900 border border-slate-800 px-5 py-2 rounded-xl text-amber-400 font-mono text-xl font-bold">
-              {hasStarted ? formatTime(timeRemaining) : "READY"}
-            </div>
+            {isTimedMode ? (
+              <div className="bg-slate-900 border border-slate-800 px-5 py-2 rounded-xl text-amber-400 font-mono text-xl font-bold">
+                {hasStarted ? formatTime(timeRemaining) : "READY"}
+              </div>
+            ) : (
+              <div className="bg-slate-900 border border-slate-800 px-5 py-2 rounded-xl text-emerald-400 font-mono text-sm font-bold uppercase tracking-widest">
+                Untimed
+              </div>
+            )}
             <button
               onClick={exitToDashboard}
               className="px-4 py-2 border border-slate-700 text-slate-100 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-slate-900/70"
@@ -442,7 +456,11 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
           >
             Exit
           </button>
-          <div className={`font-mono text-xl font-bold bg-slate-900 px-4 py-1.5 rounded-xl border border-slate-800 ${timerToneClass}`}>{formatTime(timeRemaining)}</div>
+          {isTimedMode ? (
+            <div className={`font-mono text-xl font-bold bg-slate-900 px-4 py-1.5 rounded-xl border border-slate-800 ${timerToneClass}`}>{formatTime(timeRemaining)}</div>
+          ) : (
+            <div className="font-mono text-sm font-bold bg-slate-900 px-4 py-2 rounded-xl border border-slate-800 text-emerald-400 uppercase tracking-widest">Untimed</div>
+          )}
           <button onClick={() => setShowNav(!showNav)} className="md:hidden p-2 text-amber-500 bg-slate-900 rounded-xl border border-slate-800"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16m-7 6h7"></path></svg></button>
         </div>
       </header>
@@ -505,7 +523,7 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
             )}
             {instantFeedback && showMoreInfo && isCurrentRevealed && (
               <div className="mt-6 p-5 rounded-2xl border border-sky-100 bg-sky-50">
-                <h4 className="text-xs font-bold uppercase tracking-widest text-sky-700 mb-3">AI More Info</h4>
+                <h4 className="text-xs font-bold uppercase tracking-widest text-sky-700 mb-3">Explanation</h4>
                 {aiLoading && <p className="text-xs font-bold uppercase tracking-widest text-sky-700">Loading explanation...</p>}
                 {!aiLoading && aiError && <p className="text-xs font-bold uppercase tracking-widest text-red-600">{aiError}</p>}
                 {!aiLoading && !aiError && aiSource === 'fallback' && (
