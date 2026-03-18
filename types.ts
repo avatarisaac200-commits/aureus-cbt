@@ -192,6 +192,12 @@ export interface Course {
   creatorName: string;
   createdAt: string;
   updatedAt: string;
+  enrollmentCount?: number;
+  sessionCount?: number;
+  completionRate?: number;
+  averageProgressPercent?: number;
+  averageElapsedSeconds?: number;
+  analyticsUpdatedAt?: string;
 }
 
 export interface CourseSession {

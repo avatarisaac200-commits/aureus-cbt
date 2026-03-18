@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Course, CourseSession, User } from '../types';
 import { db } from '../firebase';
-import { addDoc, collection, doc, limit, onSnapshot, orderBy, query, updateDoc, where } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+import { addDoc, collection, doc, getDoc, limit, onSnapshot, orderBy, query, setDoc, updateDoc, where } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import { toast } from './ui/Toast';
 import { confirmDialog } from './ui/ConfirmDialog';
 
@@ -16,6 +16,7 @@ type CoursesTab = 'library' | 'history' | 'manage';
 const ACCEPTED_EXTENSIONS = new Set(['html', 'htm', 'xhtml', 'cbtcourse']);
 const NATIVE_COURSE_FORMAT = 'cbtcourse-v1';
 const MAX_UPLOAD_SIZE_BYTES = 1024 * 1024 * 2;
+const COURSE_SHARE_QUERY_KEY = 'course';
 const CBTCOURSE_TEMPLATE = `{
   "format": "cbtcourse-v1",
   "meta": {
@@ -42,6 +43,29 @@ const formatClock = (seconds: number) => {
 const parseIsoDateMs = (value?: string) => {
   const ms = Date.parse(value || '');
   return Number.isFinite(ms) ? ms : 0;
+};
+
+const formatCompactNumber = (value: number) => {
+  try {
+    return new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(Math.max(0, value || 0));
+  } catch {
+    return String(Math.max(0, value || 0));
+  }
+};
+
+const roundOne = (value: number) => Number(Number(value || 0).toFixed(1));
+
+const toDayStamp = (value?: string) => {
+  const ms = parseIsoDateMs(value);
+  if (!ms) return '';
+  return new Date(ms).toISOString().slice(0, 10);
+};
+
+const getCourseShareUrl = (courseId: string) => {
+  if (typeof window === 'undefined') return `/courses?${COURSE_SHARE_QUERY_KEY}=${encodeURIComponent(courseId)}`;
+  const url = new URL(window.location.origin + '/courses');
+  url.searchParams.set(COURSE_SHARE_QUERY_KEY, courseId);
+  return url.toString();
 };
 
 const parseOutline = (html: string) => {
@@ -203,6 +227,7 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
   const [tab, setTab] = useState<CoursesTab>('library');
   const [courses, setCourses] = useState<Course[]>([]);
   const [sessions, setSessions] = useState<CourseSession[]>([]);
+  const [publicEnrollments, setPublicEnrollments] = useState<Array<{ id: string; courseId: string; userId: string }>>([]);
   const [loadingCourses, setLoadingCourses] = useState(true);
   const [loadingSessions, setLoadingSessions] = useState(true);
   const [search, setSearch] = useState('');
@@ -297,6 +322,24 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
   }, [isAdmin, user.id]);
 
   useEffect(() => {
+    const enrollmentsQuery = query(collection(db, 'courseEnrollmentsPublic'), limit(5000));
+    const unsub = onSnapshot(enrollmentsQuery, (snap) => {
+      const rows = snap.docs.map((d) => {
+        const data = d.data() || {};
+        return {
+          id: d.id,
+          courseId: String(data.courseId || ''),
+          userId: String(data.userId || '')
+        };
+      }).filter((row) => row.courseId && row.userId);
+      setPublicEnrollments(rows);
+    }, () => {
+      setPublicEnrollments([]);
+    });
+    return () => unsub();
+  }, []);
+
+  useEffect(() => {
     if (!isRunning || !activeCourse) return;
     if (endAtRef.current === null) {
       endAtRef.current = Date.now() + (timeRemaining * 1000);
@@ -332,6 +375,188 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
       return course.title.toLowerCase().includes(q) || (course.description || '').toLowerCase().includes(q) || tags.includes(q);
     });
   }, [courses, search]);
+
+  const personalSessions = useMemo(() => {
+    if (!isAdmin) return sessions;
+    return sessions.filter((session) => session.userId === user.id);
+  }, [isAdmin, sessions, user.id]);
+
+  const loadedSessionStatsByCourse = useMemo(() => {
+    const map = new Map<string, {
+      sessionCount: number;
+      enrollmentCount: number;
+      completionRate: number;
+      averageProgressPercent: number;
+      averageElapsedSeconds: number;
+    }>();
+    const byCourse = new Map<string, CourseSession[]>();
+    sessions.forEach((session) => {
+      const list = byCourse.get(session.courseId) || [];
+      list.push(session);
+      byCourse.set(session.courseId, list);
+    });
+
+    byCourse.forEach((rows, courseId) => {
+      const learnerIds = new Set(rows.map((row) => row.userId).filter(Boolean));
+      const sessionCount = rows.length;
+      const completed = rows.filter((row) => row.status === 'completed').length;
+      const totalProgress = rows.reduce((sum, row) => sum + Math.max(0, Math.min(100, Number(row.progressPercent) || 0)), 0);
+      const totalElapsed = rows.reduce((sum, row) => sum + Math.max(0, Number(row.elapsedSeconds) || 0), 0);
+      map.set(courseId, {
+        sessionCount,
+        enrollmentCount: learnerIds.size,
+        completionRate: sessionCount > 0 ? roundOne((completed / sessionCount) * 100) : 0,
+        averageProgressPercent: sessionCount > 0 ? roundOne(totalProgress / sessionCount) : 0,
+        averageElapsedSeconds: sessionCount > 0 ? Math.round(totalElapsed / sessionCount) : 0
+      });
+    });
+    return map;
+  }, [sessions]);
+
+  const publicEnrollmentCountByCourse = useMemo(() => {
+    const map = new Map<string, number>();
+    publicEnrollments.forEach((row) => {
+      map.set(row.courseId, (map.get(row.courseId) || 0) + 1);
+    });
+    return map;
+  }, [publicEnrollments]);
+
+  const courseAnalytics = useMemo(() => {
+    const map = new Map<string, {
+      enrollmentCount: number;
+      sessionCount: number;
+      completionRate: number;
+      averageProgressPercent: number;
+      averageElapsedSeconds: number;
+    }>();
+    courses.forEach((course) => {
+      const fallback = loadedSessionStatsByCourse.get(course.id);
+      map.set(course.id, {
+        enrollmentCount: Number(course.enrollmentCount ?? publicEnrollmentCountByCourse.get(course.id) ?? fallback?.enrollmentCount ?? 0),
+        sessionCount: Number(course.sessionCount ?? fallback?.sessionCount ?? 0),
+        completionRate: Number(course.completionRate ?? fallback?.completionRate ?? 0),
+        averageProgressPercent: Number(course.averageProgressPercent ?? fallback?.averageProgressPercent ?? 0),
+        averageElapsedSeconds: Number(course.averageElapsedSeconds ?? fallback?.averageElapsedSeconds ?? 0)
+      });
+    });
+    return map;
+  }, [courses, loadedSessionStatsByCourse, publicEnrollmentCountByCourse]);
+
+  const personalCourseHistory = useMemo(() => {
+    const map = new Map<string, {
+      attempts: number;
+      bestProgress: number;
+      lastProgress: number;
+      totalElapsedSeconds: number;
+      lastEndedAtMs: number;
+      completed: boolean;
+    }>();
+    personalSessions.forEach((session) => {
+      const current = map.get(session.courseId) || {
+        attempts: 0,
+        bestProgress: 0,
+        lastProgress: 0,
+        totalElapsedSeconds: 0,
+        lastEndedAtMs: 0,
+        completed: false
+      };
+      const endedAtMs = parseIsoDateMs(session.endedAt);
+      current.attempts += 1;
+      current.bestProgress = Math.max(current.bestProgress, Number(session.progressPercent) || 0);
+      current.totalElapsedSeconds += Math.max(0, Number(session.elapsedSeconds) || 0);
+      current.completed = current.completed || session.status === 'completed' || Number(session.progressPercent) >= 100;
+      if (endedAtMs >= current.lastEndedAtMs) {
+        current.lastEndedAtMs = endedAtMs;
+        current.lastProgress = Number(session.progressPercent) || 0;
+      }
+      map.set(session.courseId, current);
+    });
+    return map;
+  }, [personalSessions]);
+
+  const userTagAffinity = useMemo(() => {
+    const courseById = new Map(courses.map((course) => [course.id, course]));
+    const weights = new Map<string, number>();
+    personalSessions.forEach((session) => {
+      const course = courseById.get(session.courseId);
+      const tags = course?.tags || [];
+      if (tags.length === 0) return;
+      const progressWeight = Math.max(0.4, Math.min(1.8, (Number(session.progressPercent) || 0) / 100 + (session.status === 'completed' ? 0.5 : 0.2)));
+      tags.forEach((tagRaw) => {
+        const tag = tagRaw.trim().toLowerCase();
+        if (!tag) return;
+        weights.set(tag, (weights.get(tag) || 0) + progressWeight);
+      });
+    });
+    return weights;
+  }, [courses, personalSessions]);
+
+  const personalizedCards = useMemo(() => {
+    return filteredCourses
+      .map((course) => {
+        const history = personalCourseHistory.get(course.id);
+        const analytics = courseAnalytics.get(course.id) || {
+          enrollmentCount: 0,
+          sessionCount: 0,
+          completionRate: 0,
+          averageProgressPercent: 0,
+          averageElapsedSeconds: 0
+        };
+        const interestScore = (course.tags || [])
+          .reduce((sum, tag) => sum + (userTagAffinity.get(tag.trim().toLowerCase()) || 0), 0);
+        const continueBoost = history && !history.completed ? Math.max(0, (100 - history.lastProgress) / 35) : 0;
+        const noveltyBoost = history ? 0 : 1.6;
+        const momentumBoost = analytics.completionRate >= 65 ? 0.8 : 0;
+        const socialBoost = Math.min(1.4, analytics.enrollmentCount / 150);
+        const score = interestScore * 1.8 + continueBoost + noveltyBoost + momentumBoost + socialBoost;
+
+        let reason = 'Trending with learners';
+        if (history && !history.completed) reason = `Continue from ${Math.round(history.lastProgress)}%`;
+        else if (!history && interestScore > 0.9) reason = 'Matches your learning interests';
+        else if (analytics.completionRate >= 70) reason = 'High completion success rate';
+
+        return { course, history, analytics, score, reason };
+      })
+      .sort((a, b) => b.score - a.score);
+  }, [filteredCourses, personalCourseHistory, courseAnalytics, userTagAffinity]);
+
+  const recommendedCourses = useMemo(() => personalizedCards.slice(0, 4), [personalizedCards]);
+
+  const personalAnalytics = useMemo(() => {
+    const totalSessions = personalSessions.length;
+    const totalLearningSeconds = personalSessions.reduce((sum, session) => sum + Math.max(0, Number(session.elapsedSeconds) || 0), 0);
+    const avgProgress = totalSessions > 0
+      ? roundOne(personalSessions.reduce((sum, session) => sum + Math.max(0, Math.min(100, Number(session.progressPercent) || 0)), 0) / totalSessions)
+      : 0;
+    const completedCourses = new Set(
+      personalSessions
+        .filter((session) => session.status === 'completed' || Number(session.progressPercent) >= 100)
+        .map((session) => session.courseId)
+    );
+    const daySet = new Set(
+      personalSessions
+        .map((session) => toDayStamp(session.endedAt))
+        .filter(Boolean)
+    );
+    const sortedDays = Array.from(daySet).sort();
+    let streakDays = 0;
+    if (sortedDays.length > 0) {
+      let cursor = new Date(`${sortedDays[sortedDays.length - 1]}T00:00:00.000Z`);
+      while (true) {
+        const key = cursor.toISOString().slice(0, 10);
+        if (!daySet.has(key)) break;
+        streakDays += 1;
+        cursor = new Date(cursor.getTime() - 86400000);
+      }
+    }
+    return {
+      totalSessions,
+      totalLearningSeconds,
+      avgProgress,
+      completedCourses: completedCourses.size,
+      streakDays
+    };
+  }, [personalSessions]);
 
   const activeOutline = useMemo(() => (activeCourse ? parseOutline(activeCourse.contentHtml) : []), [activeCourse]);
   const completedSections = Object.values(checkedSections).filter(Boolean).length;
@@ -466,6 +691,22 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
   };
 
   const startCourse = (course: Course) => {
+    void (async () => {
+      try {
+        const enrollmentId = `${course.id}_${user.id}`;
+        const ref = doc(db, 'courseEnrollmentsPublic', enrollmentId);
+        const existing = await getDoc(ref);
+        if (!existing.exists()) {
+          await setDoc(ref, {
+            courseId: course.id,
+            userId: user.id,
+            createdAt: new Date().toISOString()
+          });
+        }
+      } catch {
+        // Non-blocking: course launch should still continue.
+      }
+    })();
     const mins = Math.max(1, Number(launchMinutes) || course.estimatedDurationMinutes || 30);
     setActiveCourse(course);
     setLaunchMinutes(mins);
@@ -481,6 +722,48 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
     endAtRef.current = null;
     setIsRunning(true);
   };
+
+  const shareCourse = async (course: Course) => {
+    const shareUrl = getCourseShareUrl(course.id);
+    const sharePayload = {
+      title: `Course: ${course.title}`,
+      text: `Join this course on Aureus Medicos CBT: ${course.title}`,
+      url: shareUrl
+    };
+    try {
+      if (navigator.share) {
+        await navigator.share(sharePayload);
+        return;
+      }
+      await navigator.clipboard.writeText(shareUrl);
+      toast.success('Link copied', 'Course share link copied to clipboard.');
+    } catch {
+      toast.warning('Share unavailable', 'Could not share this course right now.');
+    }
+  };
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (courses.length === 0 || activeCourse) return;
+    const params = new URLSearchParams(window.location.search);
+    const courseId = params.get(COURSE_SHARE_QUERY_KEY)?.trim();
+    if (!courseId) return;
+    const matched = courses.find((course) => course.id === courseId);
+    if (!matched) return;
+    const clearShareQuery = () => {
+      params.delete(COURSE_SHARE_QUERY_KEY);
+      const nextQuery = params.toString();
+      const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ''}${window.location.hash || ''}`;
+      window.history.replaceState({}, '', nextUrl);
+    };
+    if (isReadOnly) {
+      toast.warning('Activation needed', 'Activate your account to open this shared course.');
+      clearShareQuery();
+      return;
+    }
+    startCourse(matched);
+    clearShareQuery();
+  }, [courses, activeCourse, isReadOnly]);
 
   const stopActiveTimer = () => {
     if (timerRef.current) clearInterval(timerRef.current);
@@ -543,9 +826,9 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
       <div className="max-w-6xl mx-auto p-4 md:p-8 space-y-5">
         <section className="bg-white border border-slate-100 rounded-[2rem] p-5 md:p-7 shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
-            <p className="text-xs font-black uppercase tracking-widest text-slate-500">V3.15</p>
+            <p className="text-xs font-black uppercase tracking-widest text-slate-500">V3.16</p>
             <h1 className="text-2xl font-black text-slate-900 uppercase">Courses</h1>
-            <p className="text-xs text-slate-500 mt-1">HTML course reader with timer, progress checklist, and session history.</p>
+            <p className="text-xs text-slate-500 mt-1">Personalized course library with learner analytics, recommendations, and session history.</p>
           </div>
           <div className="flex items-center gap-2">
             <button onClick={onBack} className="px-5 py-3 rounded-xl border border-slate-200 text-xs font-black uppercase tracking-widest text-slate-700 bg-white">
@@ -571,6 +854,72 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
 
         {!activeCourse && tab === 'library' && (
           <section className="space-y-4">
+            <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+              <div className="bg-white border border-slate-100 rounded-2xl p-4">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Your Time</p>
+                <p className="text-lg font-black text-slate-900 mt-1">{formatClock(personalAnalytics.totalLearningSeconds)}</p>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mt-1">Total learning time</p>
+              </div>
+              <div className="bg-white border border-slate-100 rounded-2xl p-4">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Completed</p>
+                <p className="text-lg font-black text-slate-900 mt-1">{personalAnalytics.completedCourses}</p>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mt-1">Courses finished</p>
+              </div>
+              <div className="bg-white border border-slate-100 rounded-2xl p-4">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Avg Progress</p>
+                <p className="text-lg font-black text-slate-900 mt-1">{Math.round(personalAnalytics.avgProgress)}%</p>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mt-1">Per session</p>
+              </div>
+              <div className="bg-white border border-slate-100 rounded-2xl p-4">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Learning Streak</p>
+                <p className="text-lg font-black text-slate-900 mt-1">{personalAnalytics.streakDays} day{personalAnalytics.streakDays === 1 ? '' : 's'}</p>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mt-1">Consecutive active days</p>
+              </div>
+            </div>
+            {recommendedCourses.length > 0 && (
+              <div className="bg-white border border-slate-100 rounded-2xl p-4">
+                <div className="flex items-center justify-between gap-3 mb-3">
+                  <h3 className="text-sm font-black uppercase tracking-widest text-slate-900">Recommended For You</h3>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Personalized picks</p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+                  {recommendedCourses.map(({ course, reason, history, analytics }) => (
+                    <div
+                      key={`recommended-${course.id}`}
+                      className="text-left p-3 rounded-xl border border-slate-200 bg-slate-50"
+                    >
+                      <p className="text-xs font-black uppercase tracking-widest text-slate-900 line-clamp-1">{course.title}</p>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-amber-700 mt-1">{reason}</p>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mt-2">
+                        {formatCompactNumber(analytics.enrollmentCount)} learners - {Math.round(analytics.completionRate)}% complete
+                      </p>
+                      {history && (
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mt-1">
+                          Last session: {Math.round(history.lastProgress)}%
+                        </p>
+                      )}
+                      <div className="mt-3 grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => startCourse(course)}
+                          disabled={isReadOnly}
+                          className="px-3 py-2 rounded-lg bg-amber-500 text-slate-950 text-[10px] font-black uppercase tracking-widest disabled:opacity-40"
+                        >
+                          Start
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void shareCourse(course)}
+                          className="px-3 py-2 rounded-lg border border-slate-300 bg-white text-slate-700 text-[10px] font-black uppercase tracking-widest"
+                        >
+                          Share
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="bg-white border border-slate-100 rounded-2xl p-4">
               <input
                 value={search}
@@ -583,18 +932,43 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
               <div className="bg-white border border-slate-100 rounded-2xl p-8 text-xs font-black uppercase tracking-widest text-slate-500">Loading courses...</div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                {filteredCourses.map((course) => (
+                {personalizedCards.map(({ course, history, analytics, reason }) => (
                   <article key={course.id} className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm flex flex-col gap-3">
                     <div className="flex items-start justify-between gap-2">
                       <h3 className="text-base font-black text-slate-900 uppercase">{course.title}</h3>
-                      <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${course.isPublished ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
-                        {course.isPublished ? 'Published' : 'Draft'}
-                      </span>
+                      <div className="flex flex-col items-end gap-1">
+                        <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${course.isPublished ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                          {course.isPublished ? 'Published' : 'Draft'}
+                        </span>
+                        <span className="px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest bg-slate-100 text-slate-700">
+                          {formatCompactNumber(analytics.enrollmentCount)} learners
+                        </span>
+                      </div>
                     </div>
                     <p className="text-xs text-slate-500 line-clamp-3">{course.description || 'No description provided.'}</p>
                     <div className="text-[11px] font-bold uppercase tracking-widest text-slate-500">
                       {course.estimatedDurationMinutes} mins - {course.version}
                     </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Completion</p>
+                        <p className="text-xs font-black text-slate-900 mt-1">{Math.round(analytics.completionRate)}%</p>
+                      </div>
+                      <div className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Avg Progress</p>
+                        <p className="text-xs font-black text-slate-900 mt-1">{Math.round(analytics.averageProgressPercent)}%</p>
+                      </div>
+                      <div className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Avg Time</p>
+                        <p className="text-xs font-black text-slate-900 mt-1">{formatClock(analytics.averageElapsedSeconds)}</p>
+                      </div>
+                    </div>
+                    <div className="text-[10px] font-black uppercase tracking-widest text-amber-700">{reason}</div>
+                    {history && (
+                      <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                        Your best: {Math.round(history.bestProgress)}% - Attempts: {history.attempts}
+                      </div>
+                    )}
                     {(course.tags || []).length > 0 && (
                       <div className="flex flex-wrap gap-1">
                         {(course.tags || []).slice(0, 4).map((tag) => (
@@ -622,6 +996,13 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
                       >
                         {isReadOnly ? 'Activation Needed' : 'Start Course'}
                       </button>
+                      <button
+                        type="button"
+                        onClick={() => void shareCourse(course)}
+                        className="px-4 py-2 rounded-xl border border-slate-200 bg-white text-xs font-black uppercase tracking-widest text-slate-700"
+                      >
+                        Share
+                      </button>
                       {isAdmin && (
                         <button
                           type="button"
@@ -634,7 +1015,7 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
                     </div>
                   </article>
                 ))}
-                {filteredCourses.length === 0 && (
+                {personalizedCards.length === 0 && (
                   <div className="col-span-full bg-white border border-dashed border-slate-200 rounded-2xl p-10 text-center text-xs font-black uppercase tracking-widest text-slate-400">
                     No courses found.
                   </div>

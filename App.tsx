@@ -977,7 +977,8 @@ const App: React.FC = () => {
           } else if (requestedView === 'root-admin' && userData.role === 'root-admin') {
             setCurrentView('root-admin');
           } else if (requestedView === 'verify-email') {
-            setCurrentView('verify-email');
+            // If account is already verified, never route back to verify-email.
+            setCurrentView(getDefaultViewForRole(userData.role));
           } else {
             setCurrentView(getDefaultViewForRole(userData.role));
           }
@@ -1271,9 +1272,21 @@ const App: React.FC = () => {
   };
 
   const handleManualVerifyCheck = async () => {
-    if (auth.currentUser) {
-      setIsLoading(true);
-      await checkUserStatus(auth.currentUser);
+    if (!auth.currentUser) return;
+    setIsLoading(true);
+    try {
+      await withTimeout(auth.currentUser.reload(), 12000, 'Auth refresh');
+      const refreshed = auth.currentUser;
+      const isOfficialEmail = refreshed?.email?.toLowerCase().endsWith('@aureusmedicos.com');
+      if (!refreshed?.emailVerified && !isOfficialEmail) {
+        setIsLoading(false);
+        toast.warning('Not verified yet', 'Your email is still unverified. Open the verification link, then try again.');
+        return;
+      }
+      await checkUserStatus(refreshed);
+    } catch {
+      setIsLoading(false);
+      toast.error('Verification check failed', 'Could not refresh your account status right now.');
     }
   };
 

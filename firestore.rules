@@ -136,6 +136,20 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
+    match /courseEnrollmentsPublic/{enrollmentId} {
+      allow get, list: if signedIn();
+
+      allow create: if
+        signedIn() &&
+        request.resource.data.userId == request.auth.uid &&
+        request.resource.data.userId is string &&
+        request.resource.data.courseId is string &&
+        request.resource.data.createdAt is string &&
+        enrollmentId == (request.resource.data.courseId + '_' + request.auth.uid);
+
+      allow update, delete: if isAdmin();
+    }
+
     match /licenseKeys/{keyId} {
       allow get: if signedIn();
       allow list: if isRootAdmin();
