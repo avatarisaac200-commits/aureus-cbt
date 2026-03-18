@@ -61,6 +61,14 @@ const toDayStamp = (value?: string) => {
   return new Date(ms).toISOString().slice(0, 10);
 };
 
+const toDaysAgoLabel = (valueMs?: number) => {
+  if (!valueMs || !Number.isFinite(valueMs)) return 'recently';
+  const diffDays = Math.max(0, Math.floor((Date.now() - valueMs) / 86400000));
+  if (diffDays <= 0) return 'today';
+  if (diffDays === 1) return '1 day ago';
+  return `${diffDays} days ago`;
+};
+
 const getCourseShareUrl = (courseId: string) => {
   if (typeof window === 'undefined') return `/courses?${COURSE_SHARE_QUERY_KEY}=${encodeURIComponent(courseId)}`;
   const url = new URL(window.location.origin + '/courses');
@@ -231,6 +239,7 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
   const [loadingCourses, setLoadingCourses] = useState(true);
   const [loadingSessions, setLoadingSessions] = useState(true);
   const [search, setSearch] = useState('');
+  const [activeFilter, setActiveFilter] = useState('all');
   const [isUploading, setIsUploading] = useState(false);
   const [uploadTitle, setUploadTitle] = useState('');
   const [uploadDescription, setUploadDescription] = useState('');
@@ -250,10 +259,12 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
   const [lastSession, setLastSession] = useState<CourseSession | null>(null);
   const [frameLoaded, setFrameLoaded] = useState(false);
   const [activeCourseDoc, setActiveCourseDoc] = useState('');
+  const [frameReloadNonce, setFrameReloadNonce] = useState(0);
   const [showOutlineMobile, setShowOutlineMobile] = useState(false);
   const isAdmin = user.role === 'admin' || user.role === 'root-admin';
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const endAtRef = useRef<number | null>(null);
+  const frameRef = useRef<HTMLIFrameElement | null>(null);
 
   useEffect(() => {
     setLoadingCourses(true);
@@ -520,7 +531,34 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
       .sort((a, b) => b.score - a.score);
   }, [filteredCourses, personalCourseHistory, courseAnalytics, userTagAffinity]);
 
-  const recommendedCourses = useMemo(() => personalizedCards.slice(0, 4), [personalizedCards]);
+  const filterChips = useMemo(() => {
+    const tags = new Map<string, number>();
+    courses.forEach((course) => {
+      (course.tags || []).forEach((tag) => {
+        const key = tag.trim();
+        if (!key) return;
+        tags.set(key, (tags.get(key) || 0) + 1);
+      });
+    });
+    const topTags = Array.from(tags.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 4)
+      .map(([tag]) => tag);
+    return ['all', ...topTags, 'in-progress', 'not-started'];
+  }, [courses]);
+
+  const visibleCards = useMemo(() => {
+    if (activeFilter === 'all') return personalizedCards;
+    if (activeFilter === 'in-progress') {
+      return personalizedCards.filter((row) => (row.history?.lastProgress || 0) > 0 && (row.history?.completed !== true));
+    }
+    if (activeFilter === 'not-started') {
+      return personalizedCards.filter((row) => !row.history);
+    }
+    return personalizedCards.filter((row) => (row.course.tags || []).some((tag) => tag.toLowerCase() === activeFilter.toLowerCase()));
+  }, [personalizedCards, activeFilter]);
+
+  const recommendedCourses = useMemo(() => visibleCards.slice(0, 4), [visibleCards]);
 
   const personalAnalytics = useMemo(() => {
     const totalSessions = personalSessions.length;
@@ -772,6 +810,23 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
     setIsRunning(false);
   };
 
+  const handleCourseFrameLoad = () => {
+    setFrameLoaded(true);
+    const win = frameRef.current?.contentWindow;
+    if (!win) return;
+    try {
+      const href = String(win.location?.href || '');
+      const isCourseDoc = href.startsWith('about:srcdoc') || href === 'about:blank';
+      if (!isCourseDoc) {
+        setFrameLoaded(false);
+        setFrameReloadNonce((prev) => prev + 1);
+        toast.warning('Blocked navigation', 'This course tried to open another page. Staying inside the course reader.');
+      }
+    } catch {
+      // If access fails, keep current frame state.
+    }
+  };
+
   const finishSession = async (status: CourseSession['status']) => {
     if (!activeCourse || !startedAtIso) return;
     stopActiveTimer();
@@ -824,13 +879,14 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
   return (
     <div className="v2-page min-h-screen bg-slate-50 safe-top safe-bottom">
       <div className="max-w-6xl mx-auto p-4 md:p-8 space-y-5">
-        <section className="bg-white border border-slate-100 rounded-[2rem] p-5 md:p-7 shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <section className="bg-white border border-slate-200 rounded-2xl px-5 md:px-7 py-4 shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
-            <p className="text-xs font-black uppercase tracking-widest text-slate-500">V3.16</p>
-            <h1 className="text-2xl font-black text-slate-900 uppercase">Courses</h1>
-            <p className="text-xs text-slate-500 mt-1">Personalized course library with learner analytics, recommendations, and session history.</p>
+            <p className="text-[10px] font-black uppercase tracking-widest text-amber-600">Exam Practice Portal</p>
+            <h1 className="text-lg font-black text-slate-900">Courses Dashboard</h1>
+            <p className="text-xs text-slate-500 mt-1">Personalized course library with learner analytics.</p>
           </div>
           <div className="flex items-center gap-2">
+            <span className="text-[11px] text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full font-semibold">Connection Stable</span>
             <button onClick={onBack} className="px-5 py-3 rounded-xl border border-slate-200 text-xs font-black uppercase tracking-widest text-slate-700 bg-white">
               Back
             </button>
@@ -838,13 +894,13 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
         </section>
 
         {!activeCourse && (
-          <section className="bg-white border border-slate-100 rounded-2xl p-3 flex flex-wrap gap-2">
+          <section className="bg-white border border-slate-200 rounded-xl px-4 py-2 flex flex-wrap gap-2">
             {(['library', 'history', ...(isAdmin ? ['manage'] : [])] as CoursesTab[]).map((item) => (
               <button
                 key={item}
                 type="button"
                 onClick={() => setTab(item)}
-                className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest ${tab === item ? 'bg-slate-950 text-amber-500' : 'bg-slate-100 text-slate-700'}`}
+                className={`px-4 py-2 rounded-lg text-[11px] font-black uppercase tracking-widest border-b-2 ${tab === item ? 'text-amber-600 border-amber-500' : 'text-slate-500 border-transparent hover:text-amber-600'}`}
               >
                 {item}
               </button>
@@ -854,26 +910,52 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
 
         {!activeCourse && tab === 'library' && (
           <section className="space-y-4">
-            <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-              <div className="bg-white border border-slate-100 rounded-2xl p-4">
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Your Time</p>
-                <p className="text-lg font-black text-slate-900 mt-1">{formatClock(personalAnalytics.totalLearningSeconds)}</p>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mt-1">Total learning time</p>
+            <div className="rounded-2xl p-5 md:p-6 bg-gradient-to-r from-slate-900 to-indigo-950 text-white flex flex-col md:flex-row md:items-center md:justify-between gap-4 border border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-full bg-amber-500 text-slate-900 text-base font-black flex items-center justify-center">
+                  {(user.name || 'U').split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase()}
+                </div>
+                <div>
+                  <p className="text-lg font-black tracking-tight">Welcome back, {user.name.split(' ')[0] || 'Student'}</p>
+                  <p className="text-xs text-white/70">
+                    {recommendedCourses[0]?.history?.lastProgress
+                      ? `Pick up from ${Math.round(recommendedCourses[0].history.lastProgress)}% in ${recommendedCourses[0].course.title}`
+                      : 'Pick a course and keep your streak alive today'}
+                  </p>
+                </div>
               </div>
-              <div className="bg-white border border-slate-100 rounded-2xl p-4">
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Completed</p>
-                <p className="text-lg font-black text-slate-900 mt-1">{personalAnalytics.completedCourses}</p>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mt-1">Courses finished</p>
+              <div className="grid grid-cols-3 gap-4 text-right">
+                <div>
+                  <p className="text-xl font-black text-amber-400">{personalAnalytics.completedCourses}</p>
+                  <p className="text-[10px] uppercase tracking-widest text-white/60 font-bold">Courses</p>
+                </div>
+                <div>
+                  <p className="text-xl font-black text-amber-400">{Math.round(personalAnalytics.avgProgress)}%</p>
+                  <p className="text-[10px] uppercase tracking-widest text-white/60 font-bold">Avg Score</p>
+                </div>
+                <div>
+                  <p className="text-xl font-black text-amber-400">{personalAnalytics.streakDays}</p>
+                  <p className="text-[10px] uppercase tracking-widest text-white/60 font-bold">Day Streak</p>
+                </div>
               </div>
-              <div className="bg-white border border-slate-100 rounded-2xl p-4">
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Avg Progress</p>
-                <p className="text-lg font-black text-slate-900 mt-1">{Math.round(personalAnalytics.avgProgress)}%</p>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mt-1">Per session</p>
-              </div>
-              <div className="bg-white border border-slate-100 rounded-2xl p-4">
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Learning Streak</p>
-                <p className="text-lg font-black text-slate-900 mt-1">{personalAnalytics.streakDays} day{personalAnalytics.streakDays === 1 ? '' : 's'}</p>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mt-1">Consecutive active days</p>
+            </div>
+            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+              <p className="text-xs md:text-sm font-bold text-amber-900">
+                {personalAnalytics.streakDays}-day streak. Study one topic today to keep it going.
+              </p>
+              <div className="flex items-center gap-1">
+                {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((day, idx) => {
+                  const active = idx < Math.min(7, personalAnalytics.streakDays);
+                  const isToday = idx === Math.min(6, new Date().getDay() === 0 ? 6 : new Date().getDay() - 1);
+                  return (
+                    <span
+                      key={`${day}-${idx}`}
+                      className={`w-7 h-7 rounded-full text-[10px] font-black flex items-center justify-center border ${active ? 'bg-amber-500 border-amber-500 text-white' : isToday ? 'bg-amber-100 border-amber-500 text-amber-700' : 'bg-white border-amber-200 text-amber-400'}`}
+                    >
+                      {day}
+                    </span>
+                  );
+                })}
               </div>
             </div>
             {recommendedCourses.length > 0 && (
@@ -921,19 +1003,40 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
               </div>
             )}
             <div className="bg-white border border-slate-100 rounded-2xl p-4">
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search courses by title, description, or tag"
-                className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 text-sm font-semibold"
-              />
+              <div className="flex flex-col gap-3">
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search courses by title, description, or tag"
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 text-sm font-semibold"
+                />
+                <div className="flex flex-wrap gap-2">
+                  {filterChips.map((chip) => (
+                    <button
+                      key={chip}
+                      type="button"
+                      onClick={() => setActiveFilter(chip)}
+                      className={`px-3 py-1.5 rounded-full text-[11px] font-black uppercase tracking-widest border ${activeFilter === chip ? 'bg-amber-500 border-amber-500 text-white' : 'bg-white border-slate-200 text-slate-600'}`}
+                    >
+                      {chip.replace('-', ' ')}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
             {loadingCourses ? (
               <div className="bg-white border border-slate-100 rounded-2xl p-8 text-xs font-black uppercase tracking-widest text-slate-500">Loading courses...</div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                {personalizedCards.map(({ course, history, analytics, reason }) => (
-                  <article key={course.id} className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm flex flex-col gap-3">
+                {visibleCards.map(({ course, history, analytics, reason }) => (
+                  <article key={course.id} className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm flex flex-col">
+                    <div
+                      className="h-2"
+                      style={{
+                        background: `linear-gradient(90deg, ${history?.lastProgress ? '#f59e0b' : '#cbd5e1'} ${(history?.lastProgress || 0)}%, #e2e8f0 ${(history?.lastProgress || 0)}%)`
+                      }}
+                    />
+                    <div className="p-5 flex flex-col gap-3">
                     <div className="flex items-start justify-between gap-2">
                       <h3 className="text-base font-black text-slate-900 uppercase">{course.title}</h3>
                       <div className="flex flex-col items-end gap-1">
@@ -966,7 +1069,7 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
                     <div className="text-[10px] font-black uppercase tracking-widest text-amber-700">{reason}</div>
                     {history && (
                       <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
-                        Your best: {Math.round(history.bestProgress)}% - Attempts: {history.attempts}
+                        {Math.round(history.lastProgress)}% complete - last session {toDaysAgoLabel(history.lastEndedAtMs)}
                       </div>
                     )}
                     {(course.tags || []).length > 0 && (
@@ -1013,9 +1116,14 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
                         </button>
                       )}
                     </div>
+                    </div>
+                    <div className="px-5 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between gap-2">
+                      <p className="text-[11px] font-semibold text-slate-600">{formatCompactNumber(analytics.enrollmentCount)} people took this</p>
+                      <p className="text-[11px] font-semibold text-slate-600">Best: {Math.max(Math.round(history?.bestProgress || 0), Math.round(analytics.completionRate))}%</p>
+                    </div>
                   </article>
                 ))}
-                {personalizedCards.length === 0 && (
+                {visibleCards.length === 0 && (
                   <div className="col-span-full bg-white border border-dashed border-slate-200 rounded-2xl p-10 text-center text-xs font-black uppercase tracking-widest text-slate-400">
                     No courses found.
                   </div>
@@ -1027,26 +1135,38 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
 
         {!activeCourse && tab === 'history' && (
           <section className="bg-white border border-slate-100 rounded-2xl p-5">
-            <h2 className="text-lg font-black text-slate-900 uppercase mb-4">Course Sessions</h2>
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <h2 className="text-lg font-black text-slate-900 uppercase">Session History</h2>
+              <span className="text-xs font-semibold text-slate-400 uppercase tracking-widest">{sessions.length} sessions</span>
+            </div>
             {loadingSessions ? (
               <p className="text-xs font-black uppercase tracking-widest text-slate-500">Loading sessions...</p>
             ) : (
-              <div className="space-y-3 max-h-[70dvh] overflow-y-auto pr-1">
+              <div className="rounded-2xl border border-slate-200 overflow-hidden">
+                <div className="hidden md:grid grid-cols-[2fr_1fr_1fr_1fr] gap-3 px-4 py-3 bg-slate-50 border-b border-slate-200 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                  <p>Course</p>
+                  <p>Date</p>
+                  <p>Duration</p>
+                  <p>Status</p>
+                </div>
+                <div className="max-h-[70dvh] overflow-y-auto pr-1">
                 {sessions.map((session) => (
-                  <div key={session.id} className="p-4 rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-between gap-3">
+                  <div key={session.id} className="grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr_1fr] gap-2 md:gap-3 px-4 py-3 border-b last:border-b-0 border-slate-200 hover:bg-slate-50">
                     <div>
                       <p className="text-sm font-black uppercase text-slate-900">{session.courseTitle}</p>
-                      <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mt-1">
-                        {new Date(session.endedAt).toLocaleString()} - {session.status}
-                      </p>
+                      <p className="text-[11px] text-slate-400 font-semibold">Progress: {session.progressPercent}%</p>
                     </div>
-                    <div className="text-right">
-                      <p className="text-sm font-black text-slate-900">{session.progressPercent}%</p>
-                      <p className="text-xs font-bold uppercase tracking-widest text-slate-500">{formatClock(session.elapsedSeconds)}</p>
+                    <div className="text-xs font-semibold text-slate-600">{new Date(session.endedAt).toLocaleDateString()}</div>
+                    <div className="text-xs font-semibold text-slate-600">{formatClock(session.elapsedSeconds)}</div>
+                    <div>
+                      <span className={`text-[10px] px-2 py-1 rounded-full font-black uppercase tracking-widest ${session.status === 'completed' ? 'bg-emerald-100 text-emerald-700' : session.status === 'timed-out' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
+                        {session.status}
+                      </span>
                     </div>
                   </div>
                 ))}
-                {sessions.length === 0 && <p className="text-xs font-black uppercase tracking-widest text-slate-400">No course sessions yet.</p>}
+                </div>
+                {sessions.length === 0 && <p className="p-5 text-xs font-black uppercase tracking-widest text-slate-400">No course sessions yet.</p>}
               </div>
             )}
           </section>
@@ -1222,9 +1342,11 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
                   </div>
                 )}
                 <iframe
+                  key={frameReloadNonce}
+                  ref={frameRef}
                   title={activeCourse.title}
                   srcDoc={activeCourseDoc}
-                  onLoad={() => setFrameLoaded(true)}
+                  onLoad={handleCourseFrameLoad}
                   className="w-full h-full border-0 bg-white"
                   sandbox="allow-scripts allow-forms allow-modals allow-downloads allow-popups allow-same-origin"
                 />
