@@ -1,0 +1,3652 @@
+[
+  {
+    "id": "fact_001",
+    "text": "The cell is the basic structural and functional unit of all living organisms.",
+    "category": "biology",
+    "difficulty": "easy",
+    "tags": [
+      "cell",
+      "basics"
+    ]
+  },
+  {
+    "id": "fact_002",
+    "text": "Plants use photosynthesis to convert light energy, water, and carbon dioxide into glucose and oxygen.",
+    "category": "biology",
+    "difficulty": "easy",
+    "tags": [
+      "photosynthesis",
+      "plants"
+    ]
+  },
+  {
+    "id": "fact_003",
+    "text": "Mitosis produces two genetically identical daughter cells from one parent cell and is used for growth and repair.",
+    "category": "biology",
+    "difficulty": "easy",
+    "tags": [
+      "mitosis",
+      "cell-division"
+    ]
+  },
+  {
+    "id": "fact_004",
+    "text": "DNA is a double-helix molecule composed of nucleotide base pairs: adenine pairs with thymine, and guanine pairs with cytosine.",
+    "category": "biology",
+    "difficulty": "medium",
+    "tags": [
+      "dna",
+      "genetics"
+    ]
+  },
+  {
+    "id": "fact_005",
+    "text": "Meiosis produces four genetically unique haploid cells from one diploid parent cell through two rounds of division.",
+    "category": "biology",
+    "difficulty": "medium",
+    "tags": [
+      "meiosis",
+      "reproduction"
+    ]
+  },
+  {
+    "id": "fact_006",
+    "text": "Cellular respiration converts glucose and oxygen into ATP, carbon dioxide, and water to release usable energy for cells.",
+    "category": "biology",
+    "difficulty": "easy",
+    "tags": [
+      "respiration",
+      "energy"
+    ]
+  },
+  {
+    "id": "fact_007",
+    "text": "Enzymes are biological catalysts that speed up chemical reactions without being consumed in the process.",
+    "category": "biology",
+    "difficulty": "medium",
+    "tags": [
+      "enzyme",
+      "biochemistry"
+    ]
+  },
+  {
+    "id": "fact_008",
+    "text": "ATP (adenosine triphosphate) stores and transfers chemical energy within cells; energy is released by hydrolysis of its phosphate bonds.",
+    "category": "biology",
+    "difficulty": "hard",
+    "tags": [
+      "atp",
+      "biochemistry"
+    ]
+  },
+  {
+    "id": "fact_009",
+    "text": "Osmosis is the net movement of water across a selectively permeable membrane from lower to higher solute concentration.",
+    "category": "biology",
+    "difficulty": "easy",
+    "tags": [
+      "osmosis",
+      "transport"
+    ]
+  },
+  {
+    "id": "fact_010",
+    "text": "Diffusion is the net movement of molecules from an area of high concentration to an area of low concentration until equilibrium is reached.",
+    "category": "biology",
+    "difficulty": "medium",
+    "tags": [
+      "diffusion",
+      "transport"
+    ]
+  },
+  {
+    "id": "fact_011",
+    "text": "The Krebs cycle occurs in the mitochondrial matrix and generates NADH, FADH2, and CO2 from acetyl-CoA per turn.",
+    "category": "biology",
+    "difficulty": "hard",
+    "tags": [
+      "krebs-cycle",
+      "metabolism"
+    ]
+  },
+  {
+    "id": "fact_012",
+    "text": "Natural selection acts on phenotypic variation, favouring traits that improve survival and reproduction in a given environment.",
+    "category": "biology",
+    "difficulty": "medium",
+    "tags": [
+      "evolution",
+      "genetics"
+    ]
+  },
+  {
+    "id": "fact_013",
+    "text": "Energy flows through an ecosystem from producers to primary, secondary, and tertiary consumers along a food chain.",
+    "category": "biology",
+    "difficulty": "easy",
+    "tags": [
+      "food-chain",
+      "ecology"
+    ]
+  },
+  {
+    "id": "fact_014",
+    "text": "Mendel's law of segregation states that allele pairs separate during gamete formation and recombine randomly at fertilisation.",
+    "category": "biology",
+    "difficulty": "medium",
+    "tags": [
+      "genetics",
+      "heredity"
+    ]
+  },
+  {
+    "id": "fact_015",
+    "text": "During translation, ribosomes read mRNA codons and join amino acids in sequence to build a polypeptide chain.",
+    "category": "biology",
+    "difficulty": "hard",
+    "tags": [
+      "protein-synthesis",
+      "molecular"
+    ]
+  },
+  {
+    "id": "fact_016",
+    "text": "The nucleus contains the cell's DNA and controls gene expression and cell reproduction.",
+    "category": "biology",
+    "difficulty": "easy",
+    "tags": [
+      "nucleus",
+      "cell"
+    ]
+  },
+  {
+    "id": "fact_017",
+    "text": "Mitochondria produce most of the cell's ATP through oxidative phosphorylation and are bounded by a double membrane.",
+    "category": "biology",
+    "difficulty": "medium",
+    "tags": [
+      "mitochondria",
+      "organelle"
+    ]
+  },
+  {
+    "id": "fact_018",
+    "text": "Bacteria are prokaryotes: they lack a membrane-bound nucleus and replicate by binary fission.",
+    "category": "biology",
+    "difficulty": "easy",
+    "tags": [
+      "bacteria",
+      "microbiology"
+    ]
+  },
+  {
+    "id": "fact_019",
+    "text": "Viruses must hijack a host cell's machinery to replicate because they cannot reproduce independently.",
+    "category": "biology",
+    "difficulty": "medium",
+    "tags": [
+      "virus",
+      "microbiology"
+    ]
+  },
+  {
+    "id": "fact_020",
+    "text": "A point mutation changes a single nucleotide in the DNA sequence and may alter the resulting protein or have no effect.",
+    "category": "biology",
+    "difficulty": "hard",
+    "tags": [
+      "mutation",
+      "genetics"
+    ]
+  },
+  {
+    "id": "fact_021",
+    "text": "An ecosystem includes all living organisms in an area as well as the abiotic factors with which they interact.",
+    "category": "biology",
+    "difficulty": "easy",
+    "tags": [
+      "ecosystem",
+      "ecology"
+    ]
+  },
+  {
+    "id": "fact_022",
+    "text": "Homeostasis is the process by which an organism maintains stable internal conditions such as temperature, pH, and blood glucose levels.",
+    "category": "biology",
+    "difficulty": "medium",
+    "tags": [
+      "homeostasis",
+      "physiology"
+    ]
+  },
+  {
+    "id": "fact_023",
+    "text": "Plant cells differ from animal cells by possessing a rigid cell wall, a large central vacuole, and chloroplasts.",
+    "category": "biology",
+    "difficulty": "easy",
+    "tags": [
+      "plant-cell",
+      "cell"
+    ]
+  },
+  {
+    "id": "fact_024",
+    "text": "Gene expression involves transcription of DNA into mRNA in the nucleus, followed by translation of mRNA into protein in the cytoplasm.",
+    "category": "biology",
+    "difficulty": "hard",
+    "tags": [
+      "gene-expression",
+      "molecular"
+    ]
+  },
+  {
+    "id": "fact_025",
+    "text": "Biodiversity refers to the variety of species, genetic variation within species, and diversity of ecosystems in a given region.",
+    "category": "biology",
+    "difficulty": "medium",
+    "tags": [
+      "biodiversity",
+      "ecology"
+    ]
+  },
+  {
+    "id": "fact_026",
+    "text": "A dominant allele masks the effect of a recessive allele when both are present in a heterozygous genotype.",
+    "category": "biology",
+    "difficulty": "hard",
+    "tags": [
+      "allele",
+      "genetics"
+    ]
+  },
+  {
+    "id": "fact_027",
+    "text": "The lymphatic system transports lymph fluid, absorbs dietary fats from the gut, and supports immune defence throughout the body.",
+    "category": "biology",
+    "difficulty": "medium",
+    "tags": [
+      "lymph",
+      "immune"
+    ]
+  },
+  {
+    "id": "fact_028",
+    "text": "The rough endoplasmic reticulum is studded with ribosomes and is the primary site of protein synthesis for secretion.",
+    "category": "biology",
+    "difficulty": "easy",
+    "tags": [
+      "endoplasmic-reticulum",
+      "organelle"
+    ]
+  },
+  {
+    "id": "fact_029",
+    "text": "Humans have 46 chromosomes arranged in 23 homologous pairs; the X and Y chromosomes determine biological sex.",
+    "category": "biology",
+    "difficulty": "hard",
+    "tags": [
+      "chromosome",
+      "genetics"
+    ]
+  },
+  {
+    "id": "fact_030",
+    "text": "Transpiration is the evaporation of water from plant leaves, creating a pressure gradient that draws water up from roots.",
+    "category": "biology",
+    "difficulty": "medium",
+    "tags": [
+      "transpiration",
+      "plants"
+    ]
+  },
+  {
+    "id": "fact_031",
+    "text": "The scientific classification hierarchy from broadest to most specific is: Domain, Kingdom, Phylum, Class, Order, Family, Genus, Species.",
+    "category": "biology",
+    "difficulty": "easy",
+    "tags": [
+      "taxonomy",
+      "classification"
+    ]
+  },
+  {
+    "id": "fact_032",
+    "text": "Active transport moves molecules against their concentration gradient and requires energy in the form of ATP.",
+    "category": "biology",
+    "difficulty": "medium",
+    "tags": [
+      "active-transport",
+      "cell"
+    ]
+  },
+  {
+    "id": "fact_033",
+    "text": "Epigenetics studies heritable changes in gene expression that do not involve alterations to the underlying DNA sequence.",
+    "category": "biology",
+    "difficulty": "hard",
+    "tags": [
+      "epigenetics",
+      "genetics"
+    ]
+  },
+  {
+    "id": "fact_034",
+    "text": "Chloroplasts contain the green pigment chlorophyll, which absorbs light energy used to drive photosynthesis in plant cells.",
+    "category": "biology",
+    "difficulty": "easy",
+    "tags": [
+      "chloroplast",
+      "photosynthesis"
+    ]
+  },
+  {
+    "id": "fact_035",
+    "text": "Mutualism is a symbiotic relationship in which both species benefit, such as the relationship between bees and flowering plants.",
+    "category": "biology",
+    "difficulty": "medium",
+    "tags": [
+      "symbiosis",
+      "ecology"
+    ]
+  },
+  {
+    "id": "fact_036",
+    "text": "In codominance, both alleles are fully expressed in the heterozygote, as seen in the AB blood group where both A and B antigens are present.",
+    "category": "biology",
+    "difficulty": "medium",
+    "tags": [
+      "genetics",
+      "codominance"
+    ]
+  },
+  {
+    "id": "fact_037",
+    "text": "Population ecology studies the size, density, distribution, and dynamics of groups of individuals of the same species in an area.",
+    "category": "biology",
+    "difficulty": "easy",
+    "tags": [
+      "ecology",
+      "population"
+    ]
+  },
+  {
+    "id": "fact_038",
+    "text": "Competitive inhibitors bind the active site of an enzyme and reduce reaction rate; their effect can be reversed by adding more substrate.",
+    "category": "biology",
+    "difficulty": "hard",
+    "tags": [
+      "biochemistry",
+      "enzyme-inhibition"
+    ]
+  },
+  {
+    "id": "fact_039",
+    "text": "Apoptosis is programmed cell death, a tightly regulated process that removes damaged or unnecessary cells without causing inflammation.",
+    "category": "biology",
+    "difficulty": "medium",
+    "tags": [
+      "cell",
+      "apoptosis"
+    ]
+  },
+  {
+    "id": "fact_040",
+    "text": "The nervous system comprises the central nervous system (brain and spinal cord) and the peripheral nervous system (all other nerves).",
+    "category": "biology",
+    "difficulty": "easy",
+    "tags": [
+      "biology",
+      "nervous-system"
+    ]
+  },
+  {
+    "id": "fact_041",
+    "text": "The periodic table organises elements by increasing atomic number and groups elements with similar chemical properties together.",
+    "category": "chemistry",
+    "difficulty": "easy",
+    "tags": [
+      "elements",
+      "periodic-table"
+    ]
+  },
+  {
+    "id": "fact_042",
+    "text": "An atom consists of a positively charged nucleus containing protons and neutrons, surrounded by negatively charged electrons.",
+    "category": "chemistry",
+    "difficulty": "easy",
+    "tags": [
+      "atom",
+      "structure"
+    ]
+  },
+  {
+    "id": "fact_043",
+    "text": "Ionic bonds form when one atom transfers electrons to another, creating oppositely charged ions that attract each other electrostatically.",
+    "category": "chemistry",
+    "difficulty": "medium",
+    "tags": [
+      "bonding",
+      "ionic"
+    ]
+  },
+  {
+    "id": "fact_044",
+    "text": "Covalent bonds form when two atoms share one or more pairs of electrons to achieve a stable full outer electron shell.",
+    "category": "chemistry",
+    "difficulty": "medium",
+    "tags": [
+      "bonding",
+      "covalent"
+    ]
+  },
+  {
+    "id": "fact_045",
+    "text": "Matter exists as solid, liquid, gas, or plasma; the state depends on temperature and pressure relative to a substance's physical constants.",
+    "category": "chemistry",
+    "difficulty": "easy",
+    "tags": [
+      "states-of-matter",
+      "chemistry"
+    ]
+  },
+  {
+    "id": "fact_046",
+    "text": "In an exothermic reaction, energy is released to the surroundings; in an endothermic reaction, energy is absorbed from the surroundings.",
+    "category": "chemistry",
+    "difficulty": "medium",
+    "tags": [
+      "reaction",
+      "energy"
+    ]
+  },
+  {
+    "id": "fact_047",
+    "text": "Le Chatelier's principle states that a system at equilibrium will shift to minimise the effect of any imposed change in conditions.",
+    "category": "chemistry",
+    "difficulty": "hard",
+    "tags": [
+      "equilibrium",
+      "reactions"
+    ]
+  },
+  {
+    "id": "fact_048",
+    "text": "An acid donates protons (H⁺) to a solution and has pH below 7; a base accepts protons and has pH above 7; pH 7 is neutral.",
+    "category": "chemistry",
+    "difficulty": "easy",
+    "tags": [
+      "acid-base",
+      "pH"
+    ]
+  },
+  {
+    "id": "fact_049",
+    "text": "Oxidation involves the loss of electrons; reduction involves the gain of electrons; both always occur together in a redox reaction.",
+    "category": "chemistry",
+    "difficulty": "medium",
+    "tags": [
+      "redox",
+      "electrochemistry"
+    ]
+  },
+  {
+    "id": "fact_050",
+    "text": "Hess's law states that the total enthalpy change of a reaction is the same regardless of the pathway taken from reactants to products.",
+    "category": "chemistry",
+    "difficulty": "hard",
+    "tags": [
+      "enthalpy",
+      "thermochemistry"
+    ]
+  },
+  {
+    "id": "fact_051",
+    "text": "A solution is a homogeneous mixture in which a solute is uniformly dissolved throughout a solvent.",
+    "category": "chemistry",
+    "difficulty": "easy",
+    "tags": [
+      "solutions",
+      "mixture"
+    ]
+  },
+  {
+    "id": "fact_052",
+    "text": "Boyle's law states that at constant temperature, the pressure and volume of a fixed amount of gas are inversely proportional.",
+    "category": "chemistry",
+    "difficulty": "medium",
+    "tags": [
+      "gas-laws",
+      "pressure"
+    ]
+  },
+  {
+    "id": "fact_053",
+    "text": "One mole of any substance contains approximately 6.022 × 10²³ particles, a value known as Avogadro's number.",
+    "category": "chemistry",
+    "difficulty": "hard",
+    "tags": [
+      "mole",
+      "stoichiometry"
+    ]
+  },
+  {
+    "id": "fact_054",
+    "text": "Molarity expresses solution concentration as the number of moles of solute dissolved per litre of solution.",
+    "category": "chemistry",
+    "difficulty": "medium",
+    "tags": [
+      "concentration",
+      "solutions"
+    ]
+  },
+  {
+    "id": "fact_055",
+    "text": "Metals are generally good conductors of heat and electricity, malleable, ductile, and have a shiny lustre.",
+    "category": "chemistry",
+    "difficulty": "easy",
+    "tags": [
+      "metals",
+      "properties"
+    ]
+  },
+  {
+    "id": "fact_056",
+    "text": "Organic chemistry studies carbon-containing compounds; carbon's four covalent bonds enable enormous structural and molecular diversity.",
+    "category": "chemistry",
+    "difficulty": "medium",
+    "tags": [
+      "organic",
+      "carbon"
+    ]
+  },
+  {
+    "id": "fact_057",
+    "text": "Increasing temperature raises reaction rate because a greater proportion of molecules exceed the activation energy per unit time.",
+    "category": "chemistry",
+    "difficulty": "hard",
+    "tags": [
+      "kinetics",
+      "rate"
+    ]
+  },
+  {
+    "id": "fact_058",
+    "text": "Electrolysis uses electrical energy to drive non-spontaneous chemical reactions, commonly used to extract or purify metals.",
+    "category": "chemistry",
+    "difficulty": "easy",
+    "tags": [
+      "electrolysis",
+      "chemistry"
+    ]
+  },
+  {
+    "id": "fact_059",
+    "text": "Group 1 elements (alkali metals) react vigorously with water to produce a metal hydroxide and hydrogen gas.",
+    "category": "chemistry",
+    "difficulty": "medium",
+    "tags": [
+      "periodic-table",
+      "groups"
+    ]
+  },
+  {
+    "id": "fact_060",
+    "text": "Electrons occupy atomic orbitals described by four quantum numbers: principal (n), angular momentum (l), magnetic (mₗ), and spin (mₛ).",
+    "category": "chemistry",
+    "difficulty": "hard",
+    "tags": [
+      "orbital",
+      "quantum"
+    ]
+  },
+  {
+    "id": "fact_061",
+    "text": "A catalyst increases reaction rate by providing an alternative pathway with lower activation energy and is not consumed in the reaction.",
+    "category": "chemistry",
+    "difficulty": "easy",
+    "tags": [
+      "catalyst",
+      "reaction"
+    ]
+  },
+  {
+    "id": "fact_062",
+    "text": "Isomers are compounds sharing the same molecular formula but differing in the structural arrangement of their atoms.",
+    "category": "chemistry",
+    "difficulty": "medium",
+    "tags": [
+      "isomers",
+      "organic"
+    ]
+  },
+  {
+    "id": "fact_063",
+    "text": "A buffer resists pH changes when small amounts of acid or base are added, owing to its weak acid and conjugate base content.",
+    "category": "chemistry",
+    "difficulty": "hard",
+    "tags": [
+      "buffer",
+      "acid-base"
+    ]
+  },
+  {
+    "id": "fact_064",
+    "text": "Complete combustion of a hydrocarbon in excess oxygen produces only carbon dioxide and water as products.",
+    "category": "chemistry",
+    "difficulty": "easy",
+    "tags": [
+      "combustion",
+      "reaction"
+    ]
+  },
+  {
+    "id": "fact_065",
+    "text": "Polymers are large molecules formed by covalently linking many repeating monomer units, as seen in plastics, rubber, and proteins.",
+    "category": "chemistry",
+    "difficulty": "medium",
+    "tags": [
+      "polymer",
+      "organic"
+    ]
+  },
+  {
+    "id": "fact_066",
+    "text": "Electronegativity is an atom's tendency to attract shared electrons; large differences between bonded atoms produce polar or ionic bonds.",
+    "category": "chemistry",
+    "difficulty": "hard",
+    "tags": [
+      "electronegativity",
+      "bonding"
+    ]
+  },
+  {
+    "id": "fact_067",
+    "text": "Across a period in the periodic table, atomic radius generally decreases as nuclear charge increases while electrons fill the same shell.",
+    "category": "chemistry",
+    "difficulty": "easy",
+    "tags": [
+      "periodic-table",
+      "periods"
+    ]
+  },
+  {
+    "id": "fact_068",
+    "text": "Titration determines the concentration of an unknown solution by reacting it with a standard solution of known concentration to a visible endpoint.",
+    "category": "chemistry",
+    "difficulty": "medium",
+    "tags": [
+      "titration",
+      "analytical"
+    ]
+  },
+  {
+    "id": "fact_069",
+    "text": "Nucleophilic substitution occurs when a nucleophile replaces a leaving group on a carbon atom, as commonly seen in halogenoalkane reactions.",
+    "category": "chemistry",
+    "difficulty": "hard",
+    "tags": [
+      "reaction-types",
+      "organic"
+    ]
+  },
+  {
+    "id": "fact_070",
+    "text": "A reaction is thermodynamically spontaneous when the Gibbs free energy change (ΔG) is negative under the given conditions.",
+    "category": "chemistry",
+    "difficulty": "medium",
+    "tags": [
+      "thermodynamics",
+      "spontaneity"
+    ]
+  },
+  {
+    "id": "fact_071",
+    "text": "Functional groups such as hydroxyl (–OH), carbonyl (C=O), and carboxyl (–COOH) determine the chemical properties of organic molecules.",
+    "category": "chemistry",
+    "difficulty": "medium",
+    "tags": [
+      "organic",
+      "functional-groups"
+    ]
+  },
+  {
+    "id": "fact_072",
+    "text": "A mixture can be separated by physical methods such as filtration, distillation, chromatography, or evaporation.",
+    "category": "chemistry",
+    "difficulty": "easy",
+    "tags": [
+      "chemistry",
+      "mixtures"
+    ]
+  },
+  {
+    "id": "fact_073",
+    "text": "A reaction is spontaneous when Gibbs free energy change (ΔG = ΔH − TΔS) is negative; at equilibrium ΔG equals zero.",
+    "category": "chemistry",
+    "difficulty": "hard",
+    "tags": [
+      "thermodynamics",
+      "gibbs"
+    ]
+  },
+  {
+    "id": "fact_074",
+    "text": "The empirical formula gives the simplest whole-number ratio of atoms in a compound, while the molecular formula gives actual atom counts.",
+    "category": "chemistry",
+    "difficulty": "medium",
+    "tags": [
+      "chemistry",
+      "empirical"
+    ]
+  },
+  {
+    "id": "fact_075",
+    "text": "Solubility is the maximum mass of solute that dissolves in a fixed volume of solvent at a given temperature; it varies with temperature.",
+    "category": "chemistry",
+    "difficulty": "easy",
+    "tags": [
+      "chemistry",
+      "solubility"
+    ]
+  },
+  {
+    "id": "fact_076",
+    "text": "Newton's first law states that an object remains at rest or moves at constant velocity unless acted upon by a net external force.",
+    "category": "physics",
+    "difficulty": "easy",
+    "tags": [
+      "forces",
+      "mechanics"
+    ]
+  },
+  {
+    "id": "fact_077",
+    "text": "The law of conservation of energy states that energy cannot be created or destroyed, only converted from one form to another.",
+    "category": "physics",
+    "difficulty": "easy",
+    "tags": [
+      "energy",
+      "conservation"
+    ]
+  },
+  {
+    "id": "fact_078",
+    "text": "A wave transfers energy without transferring matter and is characterised by its amplitude, wavelength, frequency, and speed.",
+    "category": "physics",
+    "difficulty": "medium",
+    "tags": [
+      "waves",
+      "properties"
+    ]
+  },
+  {
+    "id": "fact_079",
+    "text": "Gravity is an attractive force between any two masses; its strength decreases with the square of the distance between the objects.",
+    "category": "physics",
+    "difficulty": "easy",
+    "tags": [
+      "gravity",
+      "forces"
+    ]
+  },
+  {
+    "id": "fact_080",
+    "text": "Ohm's law states that the current through a conductor is directly proportional to the voltage and inversely proportional to the resistance.",
+    "category": "physics",
+    "difficulty": "medium",
+    "tags": [
+      "electricity",
+      "circuits"
+    ]
+  },
+  {
+    "id": "fact_081",
+    "text": "Einstein's special theory of relativity holds that the speed of light in a vacuum is constant for all inertial observers.",
+    "category": "physics",
+    "difficulty": "hard",
+    "tags": [
+      "relativity",
+      "modern"
+    ]
+  },
+  {
+    "id": "fact_082",
+    "text": "The second law of thermodynamics states that the total entropy of an isolated system always increases over time.",
+    "category": "physics",
+    "difficulty": "medium",
+    "tags": [
+      "thermodynamics",
+      "entropy"
+    ]
+  },
+  {
+    "id": "fact_083",
+    "text": "Sound is a longitudinal mechanical wave requiring a medium to propagate; it cannot travel through a vacuum.",
+    "category": "physics",
+    "difficulty": "easy",
+    "tags": [
+      "sound",
+      "waves"
+    ]
+  },
+  {
+    "id": "fact_084",
+    "text": "The Heisenberg uncertainty principle states that the more precisely a particle's position is known, the less precisely its momentum can be determined.",
+    "category": "physics",
+    "difficulty": "hard",
+    "tags": [
+      "quantum",
+      "uncertainty"
+    ]
+  },
+  {
+    "id": "fact_085",
+    "text": "When light passes from one medium to another it changes speed and bends; this bending is called refraction and is described by Snell's law.",
+    "category": "physics",
+    "difficulty": "medium",
+    "tags": [
+      "optics",
+      "refraction"
+    ]
+  },
+  {
+    "id": "fact_086",
+    "text": "Speed is the scalar measure of how fast an object moves, calculated as distance divided by time.",
+    "category": "physics",
+    "difficulty": "easy",
+    "tags": [
+      "speed",
+      "motion"
+    ]
+  },
+  {
+    "id": "fact_087",
+    "text": "The law of conservation of momentum states that the total momentum of a closed system is constant when no net external force acts on it.",
+    "category": "physics",
+    "difficulty": "medium",
+    "tags": [
+      "momentum",
+      "mechanics"
+    ]
+  },
+  {
+    "id": "fact_088",
+    "text": "Nuclear fission splits a heavy nucleus into smaller nuclei, releasing energy due to the conversion of a small amount of mass.",
+    "category": "physics",
+    "difficulty": "hard",
+    "tags": [
+      "nuclear",
+      "fission"
+    ]
+  },
+  {
+    "id": "fact_089",
+    "text": "A magnetic field is produced by moving electric charges and by the intrinsic magnetic moments of certain elementary particles.",
+    "category": "physics",
+    "difficulty": "easy",
+    "tags": [
+      "magnetism",
+      "fields"
+    ]
+  },
+  {
+    "id": "fact_090",
+    "text": "The electromagnetic spectrum ranges from low-energy radio waves to high-energy gamma rays; all travel at the speed of light in a vacuum.",
+    "category": "physics",
+    "difficulty": "medium",
+    "tags": [
+      "electromagnetic",
+      "spectrum"
+    ]
+  },
+  {
+    "id": "fact_091",
+    "text": "Half-life is the time required for half the radioactive nuclei in a sample to decay; it is constant and characteristic of each isotope.",
+    "category": "physics",
+    "difficulty": "hard",
+    "tags": [
+      "radioactivity",
+      "half-life"
+    ]
+  },
+  {
+    "id": "fact_092",
+    "text": "Pascal's principle states that pressure applied to an enclosed incompressible fluid is transmitted undiminished to all parts of the fluid.",
+    "category": "physics",
+    "difficulty": "medium",
+    "tags": [
+      "pressure",
+      "fluids"
+    ]
+  },
+  {
+    "id": "fact_093",
+    "text": "Acceleration is the rate of change of velocity with time and is a vector quantity with both magnitude and direction.",
+    "category": "physics",
+    "difficulty": "easy",
+    "tags": [
+      "acceleration",
+      "motion"
+    ]
+  },
+  {
+    "id": "fact_094",
+    "text": "The photoelectric effect shows that light ejects electrons from a metal only if each photon has sufficient energy, confirming light's particle nature.",
+    "category": "physics",
+    "difficulty": "hard",
+    "tags": [
+      "photoelectric",
+      "quantum"
+    ]
+  },
+  {
+    "id": "fact_095",
+    "text": "Work is done when a force causes displacement along the direction of the force; power is the rate at which work is done over time.",
+    "category": "physics",
+    "difficulty": "medium",
+    "tags": [
+      "work",
+      "power"
+    ]
+  },
+  {
+    "id": "fact_096",
+    "text": "In a series circuit, the same current flows through all components; in a parallel circuit, the voltage is equal across each branch.",
+    "category": "physics",
+    "difficulty": "easy",
+    "tags": [
+      "circuit",
+      "electricity"
+    ]
+  },
+  {
+    "id": "fact_097",
+    "text": "Nuclear fusion joins light nuclei into a heavier nucleus, releasing energy; it is the process that powers the Sun and other stars.",
+    "category": "physics",
+    "difficulty": "medium",
+    "tags": [
+      "nuclear",
+      "fusion"
+    ]
+  },
+  {
+    "id": "fact_098",
+    "text": "Archimedes' principle states that the buoyant force on an object equals the weight of the fluid displaced by that object.",
+    "category": "physics",
+    "difficulty": "hard",
+    "tags": [
+      "archimedes",
+      "buoyancy"
+    ]
+  },
+  {
+    "id": "fact_099",
+    "text": "A convex (converging) lens bends parallel light rays to a focal point; a concave (diverging) lens spreads them apart.",
+    "category": "physics",
+    "difficulty": "easy",
+    "tags": [
+      "lenses",
+      "optics"
+    ]
+  },
+  {
+    "id": "fact_100",
+    "text": "Specific heat capacity is the energy needed to raise 1 kg of a substance by 1°C and determines how quickly it heats or cools.",
+    "category": "physics",
+    "difficulty": "medium",
+    "tags": [
+      "specific-heat",
+      "thermodynamics"
+    ]
+  },
+  {
+    "id": "fact_101",
+    "text": "Coulomb's law states that the electrostatic force between two charges is proportional to their product and inversely proportional to the square of their separation.",
+    "category": "physics",
+    "difficulty": "hard",
+    "tags": [
+      "electric-field",
+      "electrostatics"
+    ]
+  },
+  {
+    "id": "fact_102",
+    "text": "Newton's third law states that for every action there is an equal and opposite reaction; forces always occur in pairs.",
+    "category": "physics",
+    "difficulty": "easy",
+    "tags": [
+      "newton",
+      "third-law"
+    ]
+  },
+  {
+    "id": "fact_103",
+    "text": "In simple harmonic motion, the restoring force is proportional to displacement from equilibrium, producing sinusoidal oscillation.",
+    "category": "physics",
+    "difficulty": "medium",
+    "tags": [
+      "simple-harmonic",
+      "oscillation"
+    ]
+  },
+  {
+    "id": "fact_104",
+    "text": "The Doppler effect is the observed change in wave frequency when the source and observer move relative to each other.",
+    "category": "physics",
+    "difficulty": "hard",
+    "tags": [
+      "doppler",
+      "waves"
+    ]
+  },
+  {
+    "id": "fact_105",
+    "text": "Gravitational potential energy equals mass × gravitational field strength × height above a reference point (E = mgh).",
+    "category": "physics",
+    "difficulty": "medium",
+    "tags": [
+      "potential-energy",
+      "mechanics"
+    ]
+  },
+  {
+    "id": "fact_106",
+    "text": "Total internal reflection occurs when light in a denser medium strikes the boundary at an angle exceeding the critical angle and reflects entirely back.",
+    "category": "physics",
+    "difficulty": "medium",
+    "tags": [
+      "optics",
+      "total-internal"
+    ]
+  },
+  {
+    "id": "fact_107",
+    "text": "Scalars have magnitude only (e.g. speed, temperature); vectors have both magnitude and direction (e.g. velocity, force).",
+    "category": "physics",
+    "difficulty": "easy",
+    "tags": [
+      "physics",
+      "scalars-vectors"
+    ]
+  },
+  {
+    "id": "fact_108",
+    "text": "Wave-particle duality states that all matter and energy exhibit properties of both waves and particles depending on how they are measured.",
+    "category": "physics",
+    "difficulty": "hard",
+    "tags": [
+      "quantum",
+      "wave-particle"
+    ]
+  },
+  {
+    "id": "fact_109",
+    "text": "A capacitor stores electrical energy in an electric field between two conductive plates separated by an insulating material.",
+    "category": "physics",
+    "difficulty": "medium",
+    "tags": [
+      "electricity",
+      "capacitor"
+    ]
+  },
+  {
+    "id": "fact_110",
+    "text": "Electrical power is the rate of energy transfer in a circuit, calculated as voltage multiplied by current (P = VI), measured in watts.",
+    "category": "physics",
+    "difficulty": "easy",
+    "tags": [
+      "physics",
+      "electrical-power"
+    ]
+  },
+  {
+    "id": "fact_111",
+    "text": "The order of operations (BODMAS/PEMDAS) specifies that brackets are evaluated first, then exponents, then multiplication and division, then addition and subtraction.",
+    "category": "mathematics",
+    "difficulty": "easy",
+    "tags": [
+      "algebra",
+      "operations"
+    ]
+  },
+  {
+    "id": "fact_112",
+    "text": "The sum of the interior angles of any triangle is always 180 degrees.",
+    "category": "mathematics",
+    "difficulty": "easy",
+    "tags": [
+      "geometry",
+      "triangles"
+    ]
+  },
+  {
+    "id": "fact_113",
+    "text": "The quadratic formula x = (−b ± √(b²−4ac)) / 2a solves any quadratic equation of the form ax² + bx + c = 0.",
+    "category": "mathematics",
+    "difficulty": "medium",
+    "tags": [
+      "algebra",
+      "quadratic"
+    ]
+  },
+  {
+    "id": "fact_114",
+    "text": "To add fractions with unlike denominators, first find the lowest common denominator and adjust each numerator accordingly.",
+    "category": "mathematics",
+    "difficulty": "easy",
+    "tags": [
+      "fractions",
+      "arithmetic"
+    ]
+  },
+  {
+    "id": "fact_115",
+    "text": "In a right-angled triangle: sine = opposite/hypotenuse, cosine = adjacent/hypotenuse, and tangent = opposite/adjacent.",
+    "category": "mathematics",
+    "difficulty": "medium",
+    "tags": [
+      "trigonometry",
+      "ratios"
+    ]
+  },
+  {
+    "id": "fact_116",
+    "text": "The derivative of a function represents the instantaneous rate of change of that function at any given point.",
+    "category": "mathematics",
+    "difficulty": "hard",
+    "tags": [
+      "calculus",
+      "derivatives"
+    ]
+  },
+  {
+    "id": "fact_117",
+    "text": "The mean of a data set is the sum of all values divided by the number of values; it is sensitive to extreme outliers.",
+    "category": "mathematics",
+    "difficulty": "easy",
+    "tags": [
+      "statistics",
+      "mean"
+    ]
+  },
+  {
+    "id": "fact_118",
+    "text": "The probability of two independent events both occurring equals the product of their individual probabilities.",
+    "category": "mathematics",
+    "difficulty": "medium",
+    "tags": [
+      "probability",
+      "independence"
+    ]
+  },
+  {
+    "id": "fact_119",
+    "text": "Integration is the inverse of differentiation and is used to calculate areas under curves and total accumulated quantities.",
+    "category": "mathematics",
+    "difficulty": "hard",
+    "tags": [
+      "integration",
+      "calculus"
+    ]
+  },
+  {
+    "id": "fact_120",
+    "text": "The area of a circle is πr² and its circumference is 2πr, where r is the radius.",
+    "category": "mathematics",
+    "difficulty": "easy",
+    "tags": [
+      "geometry",
+      "circles"
+    ]
+  },
+  {
+    "id": "fact_121",
+    "text": "The union of sets A and B (A ∪ B) contains all elements in A or B or both; the intersection (A ∩ B) contains only shared elements.",
+    "category": "mathematics",
+    "difficulty": "medium",
+    "tags": [
+      "sets",
+      "notation"
+    ]
+  },
+  {
+    "id": "fact_122",
+    "text": "Multiplying an m×n matrix by an n×p matrix yields an m×p result matrix; matrix multiplication is generally not commutative.",
+    "category": "mathematics",
+    "difficulty": "hard",
+    "tags": [
+      "matrices",
+      "multiplication"
+    ]
+  },
+  {
+    "id": "fact_123",
+    "text": "A prime number is a natural number greater than 1 with exactly two distinct factors: 1 and itself.",
+    "category": "mathematics",
+    "difficulty": "easy",
+    "tags": [
+      "number-theory",
+      "primes"
+    ]
+  },
+  {
+    "id": "fact_124",
+    "text": "The Pythagorean theorem states that in a right-angled triangle, c² = a² + b², where c is the hypotenuse.",
+    "category": "mathematics",
+    "difficulty": "medium",
+    "tags": [
+      "geometry",
+      "pythagoras"
+    ]
+  },
+  {
+    "id": "fact_125",
+    "text": "Modular arithmetic considers integers cyclically; a ≡ b (mod n) means a and b leave the same remainder when divided by n.",
+    "category": "mathematics",
+    "difficulty": "hard",
+    "tags": [
+      "modular",
+      "number-theory"
+    ]
+  },
+  {
+    "id": "fact_126",
+    "text": "To convert a percentage to a decimal, divide by 100; to convert a decimal to a percentage, multiply by 100.",
+    "category": "mathematics",
+    "difficulty": "easy",
+    "tags": [
+      "percentage",
+      "arithmetic"
+    ]
+  },
+  {
+    "id": "fact_127",
+    "text": "In an arithmetic sequence each term differs by a constant amount; in a geometric sequence each term is multiplied by a constant ratio.",
+    "category": "mathematics",
+    "difficulty": "medium",
+    "tags": [
+      "sequences",
+      "series"
+    ]
+  },
+  {
+    "id": "fact_128",
+    "text": "The logarithm logₐ(b) is the power to which a must be raised to produce b; natural log (ln) uses base e ≈ 2.718.",
+    "category": "mathematics",
+    "difficulty": "hard",
+    "tags": [
+      "logarithms",
+      "algebra"
+    ]
+  },
+  {
+    "id": "fact_129",
+    "text": "A ratio compares two quantities of the same unit; equivalent ratios represent the same proportional relationship scaled differently.",
+    "category": "mathematics",
+    "difficulty": "easy",
+    "tags": [
+      "ratios",
+      "proportions"
+    ]
+  },
+  {
+    "id": "fact_130",
+    "text": "A function maps each element of its domain to exactly one element of its range and is commonly expressed as f(x).",
+    "category": "mathematics",
+    "difficulty": "medium",
+    "tags": [
+      "functions",
+      "domain"
+    ]
+  },
+  {
+    "id": "fact_131",
+    "text": "The binomial theorem gives the expanded form of (a + b)ⁿ using coefficients from Pascal's triangle: C(n,k) = n! / (k!(n−k)!).",
+    "category": "mathematics",
+    "difficulty": "hard",
+    "tags": [
+      "binomial-theorem",
+      "expansion"
+    ]
+  },
+  {
+    "id": "fact_132",
+    "text": "Complementary angles sum to 90° and supplementary angles sum to 180°.",
+    "category": "mathematics",
+    "difficulty": "easy",
+    "tags": [
+      "angles",
+      "supplementary"
+    ]
+  },
+  {
+    "id": "fact_133",
+    "text": "When multiplying or dividing both sides of an inequality by a negative number, the direction of the inequality sign must be reversed.",
+    "category": "mathematics",
+    "difficulty": "medium",
+    "tags": [
+      "inequalities",
+      "algebra"
+    ]
+  },
+  {
+    "id": "fact_134",
+    "text": "The dot product of two vectors equals the product of their magnitudes and the cosine of the angle between them.",
+    "category": "mathematics",
+    "difficulty": "hard",
+    "tags": [
+      "vectors",
+      "dot-product"
+    ]
+  },
+  {
+    "id": "fact_135",
+    "text": "Recurring decimals can be expressed as exact fractions using algebraic methods that eliminate the repeating part.",
+    "category": "mathematics",
+    "difficulty": "easy",
+    "tags": [
+      "decimals",
+      "conversion"
+    ]
+  },
+  {
+    "id": "fact_136",
+    "text": "Permutations count ordered arrangements (nPr = n!/(n−r)!); combinations count unordered selections (nCr = n!/(r!(n−r)!)).",
+    "category": "mathematics",
+    "difficulty": "medium",
+    "tags": [
+      "permutations",
+      "combinations"
+    ]
+  },
+  {
+    "id": "fact_137",
+    "text": "The chain rule states that the derivative of a composite function f(g(x)) equals f'(g(x)) multiplied by g'(x).",
+    "category": "mathematics",
+    "difficulty": "hard",
+    "tags": [
+      "calculus",
+      "chain-rule"
+    ]
+  },
+  {
+    "id": "fact_138",
+    "text": "The sum of interior angles of a polygon with n sides equals (n − 2) × 180 degrees.",
+    "category": "mathematics",
+    "difficulty": "easy",
+    "tags": [
+      "geometry",
+      "polygons"
+    ]
+  },
+  {
+    "id": "fact_139",
+    "text": "The graph of y = ax² + bx + c is a parabola; it opens upward when a > 0 and downward when a < 0.",
+    "category": "mathematics",
+    "difficulty": "medium",
+    "tags": [
+      "graph",
+      "parabola"
+    ]
+  },
+  {
+    "id": "fact_140",
+    "text": "A complex number has the form a + bi where i = √(−1); complex conjugate pairs share the same real part but have opposite imaginary parts.",
+    "category": "mathematics",
+    "difficulty": "hard",
+    "tags": [
+      "complex-numbers",
+      "algebra"
+    ]
+  },
+  {
+    "id": "fact_141",
+    "text": "Standard deviation measures the spread of data around the mean; a larger value indicates greater variability in the data set.",
+    "category": "mathematics",
+    "difficulty": "medium",
+    "tags": [
+      "statistics",
+      "standard-deviation"
+    ]
+  },
+  {
+    "id": "fact_142",
+    "text": "The Euclidean algorithm finds the greatest common divisor of two integers by repeated application of division and taking the remainder.",
+    "category": "mathematics",
+    "difficulty": "hard",
+    "tags": [
+      "number-theory",
+      "euclid"
+    ]
+  },
+  {
+    "id": "fact_143",
+    "text": "An improper fraction has a numerator greater than its denominator and can be converted to a mixed number showing whole parts and a remainder.",
+    "category": "mathematics",
+    "difficulty": "easy",
+    "tags": [
+      "mathematics",
+      "mixed-fractions"
+    ]
+  },
+  {
+    "id": "fact_144",
+    "text": "Simultaneous equations can be solved by substitution (expressing one variable in terms of another) or by elimination (adding or subtracting equations).",
+    "category": "mathematics",
+    "difficulty": "medium",
+    "tags": [
+      "algebra",
+      "simultaneous"
+    ]
+  },
+  {
+    "id": "fact_145",
+    "text": "The fundamental theorem of calculus establishes that differentiation and integration are inverse operations, directly linking the two branches of calculus.",
+    "category": "mathematics",
+    "difficulty": "hard",
+    "tags": [
+      "calculus",
+      "fundamental-theorem"
+    ]
+  },
+  {
+    "id": "fact_146",
+    "text": "Antibiotics treat bacterial infections by killing bacteria or inhibiting their growth; they are ineffective against viral infections.",
+    "category": "medicine",
+    "difficulty": "easy",
+    "tags": [
+      "pharmacology",
+      "antibiotics"
+    ]
+  },
+  {
+    "id": "fact_147",
+    "text": "Beta-blockers reduce heart rate and blood pressure by blocking adrenaline's action on beta-adrenergic receptors in the heart.",
+    "category": "medicine",
+    "difficulty": "medium",
+    "tags": [
+      "pharmacology",
+      "beta-blockers"
+    ]
+  },
+  {
+    "id": "fact_148",
+    "text": "A clinical sign is an objective finding observed by a clinician; a symptom is a subjective experience reported by the patient.",
+    "category": "medicine",
+    "difficulty": "easy",
+    "tags": [
+      "clinical",
+      "signs-symptoms"
+    ]
+  },
+  {
+    "id": "fact_149",
+    "text": "Distributive shock, seen in sepsis, results from massive vasodilation and relative hypovolemia despite normal or elevated cardiac output.",
+    "category": "medicine",
+    "difficulty": "hard",
+    "tags": [
+      "pathophysiology",
+      "shock"
+    ]
+  },
+  {
+    "id": "fact_150",
+    "text": "Active immunity develops when the body produces its own antibodies after antigen exposure from infection or vaccination.",
+    "category": "medicine",
+    "difficulty": "medium",
+    "tags": [
+      "immunology",
+      "immunity"
+    ]
+  },
+  {
+    "id": "fact_151",
+    "text": "Nosocomial infections are acquired in a healthcare setting and were not present at the time of the patient's admission.",
+    "category": "medicine",
+    "difficulty": "easy",
+    "tags": [
+      "infection",
+      "nosocomial"
+    ]
+  },
+  {
+    "id": "fact_152",
+    "text": "First-pass metabolism occurs when orally administered drugs are partially broken down by the liver before reaching systemic circulation.",
+    "category": "medicine",
+    "difficulty": "hard",
+    "tags": [
+      "pharmacokinetics",
+      "first-pass"
+    ]
+  },
+  {
+    "id": "fact_153",
+    "text": "Myocardial infarction occurs when blood supply to part of the heart muscle is blocked, causing ischaemic cell death.",
+    "category": "medicine",
+    "difficulty": "medium",
+    "tags": [
+      "cardiology",
+      "MI"
+    ]
+  },
+  {
+    "id": "fact_154",
+    "text": "Vaccines stimulate the immune system to produce memory cells so that a faster, stronger response occurs upon future antigen exposure.",
+    "category": "medicine",
+    "difficulty": "easy",
+    "tags": [
+      "immunology",
+      "vaccines"
+    ]
+  },
+  {
+    "id": "fact_155",
+    "text": "In type 1 diabetes, autoimmune destruction of pancreatic beta cells eliminates endogenous insulin production entirely.",
+    "category": "medicine",
+    "difficulty": "hard",
+    "tags": [
+      "endocrinology",
+      "diabetes"
+    ]
+  },
+  {
+    "id": "fact_156",
+    "text": "An action potential is an all-or-nothing electrical signal along a neuron triggered when the membrane potential exceeds the threshold.",
+    "category": "medicine",
+    "difficulty": "medium",
+    "tags": [
+      "neurology",
+      "action-potential"
+    ]
+  },
+  {
+    "id": "fact_157",
+    "text": "Intravenous drug administration achieves 100% bioavailability because the drug enters systemic circulation directly without first-pass metabolism.",
+    "category": "medicine",
+    "difficulty": "easy",
+    "tags": [
+      "pharmacology",
+      "bioavailability"
+    ]
+  },
+  {
+    "id": "fact_158",
+    "text": "Haemoglobin in red blood cells binds oxygen in the lungs and releases it in tissues where oxygen tension is low.",
+    "category": "medicine",
+    "difficulty": "medium",
+    "tags": [
+      "haematology",
+      "haemoglobin"
+    ]
+  },
+  {
+    "id": "fact_159",
+    "text": "A type I hypersensitivity reaction is mediated by IgE antibodies and can cause immediate allergic responses including anaphylaxis.",
+    "category": "medicine",
+    "difficulty": "hard",
+    "tags": [
+      "immunology",
+      "hypersensitivity"
+    ]
+  },
+  {
+    "id": "fact_160",
+    "text": "Differential diagnosis is the systematic process of distinguishing between conditions that share similar clinical presentations.",
+    "category": "medicine",
+    "difficulty": "easy",
+    "tags": [
+      "diagnosis",
+      "differential"
+    ]
+  },
+  {
+    "id": "fact_161",
+    "text": "Type A drug reactions are dose-dependent and predictable; type B reactions are idiosyncratic and independent of dose.",
+    "category": "medicine",
+    "difficulty": "medium",
+    "tags": [
+      "pharmacology",
+      "adverse"
+    ]
+  },
+  {
+    "id": "fact_162",
+    "text": "The kidneys regulate blood pH by excreting hydrogen ions and reabsorbing bicarbonate ions in the renal tubules.",
+    "category": "medicine",
+    "difficulty": "hard",
+    "tags": [
+      "renal",
+      "acid-base"
+    ]
+  },
+  {
+    "id": "fact_163",
+    "text": "Sensitivity measures a test's ability to correctly identify those with a disease; specificity measures correct identification of disease-free individuals.",
+    "category": "medicine",
+    "difficulty": "easy",
+    "tags": [
+      "epidemiology",
+      "screening"
+    ]
+  },
+  {
+    "id": "fact_164",
+    "text": "Herd immunity reduces disease transmission when a sufficient proportion of a population has become immune through infection or vaccination.",
+    "category": "medicine",
+    "difficulty": "medium",
+    "tags": [
+      "public-health",
+      "herd-immunity"
+    ]
+  },
+  {
+    "id": "fact_165",
+    "text": "A competitive antagonist reversibly blocks a receptor's active site; its effect can be overcome by increasing agonist concentration.",
+    "category": "medicine",
+    "difficulty": "hard",
+    "tags": [
+      "pharmacology",
+      "antagonist"
+    ]
+  },
+  {
+    "id": "fact_166",
+    "text": "Gram-positive bacteria retain crystal violet dye and appear purple; gram-negative bacteria take the counterstain and appear pink.",
+    "category": "medicine",
+    "difficulty": "easy",
+    "tags": [
+      "microbiology",
+      "gram-stain"
+    ]
+  },
+  {
+    "id": "fact_167",
+    "text": "An ECG records the heart's electrical activity; the P wave represents atrial depolarisation and the QRS complex represents ventricular depolarisation.",
+    "category": "medicine",
+    "difficulty": "medium",
+    "tags": [
+      "cardiology",
+      "ecg"
+    ]
+  },
+  {
+    "id": "fact_168",
+    "text": "Volume of distribution (Vd) indicates how widely a drug distributes into body tissues; a high Vd suggests extensive tissue binding.",
+    "category": "medicine",
+    "difficulty": "hard",
+    "tags": [
+      "pharmacology",
+      "volume-distribution"
+    ]
+  },
+  {
+    "id": "fact_169",
+    "text": "Blood pressure is recorded as systolic over diastolic pressure; a normal adult reading is approximately 120/80 mmHg.",
+    "category": "medicine",
+    "difficulty": "easy",
+    "tags": [
+      "physiology",
+      "blood-pressure"
+    ]
+  },
+  {
+    "id": "fact_170",
+    "text": "Tidal volume is the volume of air inhaled or exhaled in a single normal breath, approximately 500 mL at rest in adults.",
+    "category": "medicine",
+    "difficulty": "medium",
+    "tags": [
+      "respiratory",
+      "tidal-volume"
+    ]
+  },
+  {
+    "id": "fact_171",
+    "text": "The coagulation cascade has intrinsic and extrinsic pathways that converge at factor X, ultimately producing a fibrin clot.",
+    "category": "medicine",
+    "difficulty": "hard",
+    "tags": [
+      "coagulation",
+      "cascade"
+    ]
+  },
+  {
+    "id": "fact_172",
+    "text": "Sepsis is a life-threatening organ dysfunction caused by a dysregulated host immune response to infection.",
+    "category": "medicine",
+    "difficulty": "easy",
+    "tags": [
+      "infection",
+      "sepsis"
+    ]
+  },
+  {
+    "id": "fact_173",
+    "text": "Cortisol is released by the adrenal cortex in response to stress and ACTH; it raises blood glucose and suppresses immune responses.",
+    "category": "medicine",
+    "difficulty": "medium",
+    "tags": [
+      "endocrinology",
+      "cortisol"
+    ]
+  },
+  {
+    "id": "fact_174",
+    "text": "The TNM staging system classifies cancer by tumour size (T), regional lymph node involvement (N), and presence of distant metastasis (M).",
+    "category": "medicine",
+    "difficulty": "hard",
+    "tags": [
+      "oncology",
+      "TNM"
+    ]
+  },
+  {
+    "id": "fact_175",
+    "text": "A drug's plasma half-life is the time taken for its concentration to fall by half and determines the appropriate dosing interval.",
+    "category": "medicine",
+    "difficulty": "easy",
+    "tags": [
+      "pharmacology",
+      "half-life-drug"
+    ]
+  },
+  {
+    "id": "fact_176",
+    "text": "Cytochrome P450 enzymes metabolise many drugs; enzyme inducers accelerate clearance while inhibitors raise plasma drug concentrations.",
+    "category": "medicine",
+    "difficulty": "medium",
+    "tags": [
+      "pharmacology",
+      "CYP450"
+    ]
+  },
+  {
+    "id": "fact_177",
+    "text": "The oxygen-haemoglobin dissociation curve shows how haemoglobin's affinity for oxygen varies with the partial pressure of oxygen in tissues.",
+    "category": "medicine",
+    "difficulty": "easy",
+    "tags": [
+      "physiology",
+      "o2-curve"
+    ]
+  },
+  {
+    "id": "fact_178",
+    "text": "Antimicrobial resistance develops when antibiotic use selectively favours survival of bacteria that carry resistance genes.",
+    "category": "medicine",
+    "difficulty": "hard",
+    "tags": [
+      "microbiology",
+      "amr"
+    ]
+  },
+  {
+    "id": "fact_179",
+    "text": "Heart failure occurs when the heart cannot pump enough blood to meet the body's demands and is classified as systolic or diastolic.",
+    "category": "medicine",
+    "difficulty": "medium",
+    "tags": [
+      "cardiology",
+      "heart-failure"
+    ]
+  },
+  {
+    "id": "fact_180",
+    "text": "Modifiable cardiovascular risk factors include hypertension, smoking, dyslipidaemia, diabetes, obesity, and physical inactivity.",
+    "category": "medicine",
+    "difficulty": "easy",
+    "tags": [
+      "preventive",
+      "cardiovascular-risk"
+    ]
+  },
+  {
+    "id": "fact_181",
+    "text": "The heart has four chambers: the right and left atria (upper) and the right and left ventricles (lower).",
+    "category": "anatomy",
+    "difficulty": "easy",
+    "tags": [
+      "cardiovascular",
+      "heart-chambers"
+    ]
+  },
+  {
+    "id": "fact_182",
+    "text": "The diaphragm is the primary muscle of respiration; its contraction flattens and increases thoracic volume, driving inhalation.",
+    "category": "anatomy",
+    "difficulty": "medium",
+    "tags": [
+      "respiratory",
+      "diaphragm"
+    ]
+  },
+  {
+    "id": "fact_183",
+    "text": "The adult human skeleton has 206 bones, providing structural support, protecting organs, and enabling movement.",
+    "category": "anatomy",
+    "difficulty": "easy",
+    "tags": [
+      "skeletal",
+      "bones"
+    ]
+  },
+  {
+    "id": "fact_184",
+    "text": "The autonomic nervous system controls involuntary functions through its sympathetic (fight-or-flight) and parasympathetic (rest-and-digest) divisions.",
+    "category": "anatomy",
+    "difficulty": "medium",
+    "tags": [
+      "nervous",
+      "autonomic"
+    ]
+  },
+  {
+    "id": "fact_185",
+    "text": "The cardiac conduction system initiates impulses at the sinoatrial node, passes through the atrioventricular node, then spreads via the bundle of His and Purkinje fibres.",
+    "category": "anatomy",
+    "difficulty": "hard",
+    "tags": [
+      "cardiovascular",
+      "conduction"
+    ]
+  },
+  {
+    "id": "fact_186",
+    "text": "The small intestine is the primary site of nutrient absorption; villi and microvilli greatly increase its absorptive surface area.",
+    "category": "anatomy",
+    "difficulty": "easy",
+    "tags": [
+      "digestive",
+      "small-intestine"
+    ]
+  },
+  {
+    "id": "fact_187",
+    "text": "Each kidney contains about one million nephrons that filter blood and produce urine through filtration, reabsorption, and secretion.",
+    "category": "anatomy",
+    "difficulty": "medium",
+    "tags": [
+      "renal",
+      "nephron"
+    ]
+  },
+  {
+    "id": "fact_188",
+    "text": "Lower motor neurons carry signals from the spinal cord to skeletal muscle; their damage causes flaccid paralysis and muscle wasting.",
+    "category": "anatomy",
+    "difficulty": "hard",
+    "tags": [
+      "nervous",
+      "motor-neuron"
+    ]
+  },
+  {
+    "id": "fact_189",
+    "text": "The trachea divides at the carina into left and right bronchi, which branch into bronchioles and terminate in alveoli.",
+    "category": "anatomy",
+    "difficulty": "easy",
+    "tags": [
+      "respiratory",
+      "bronchi"
+    ]
+  },
+  {
+    "id": "fact_190",
+    "text": "The spleen filters blood, removes aged red blood cells, and stores immune cells including lymphocytes and macrophages.",
+    "category": "anatomy",
+    "difficulty": "medium",
+    "tags": [
+      "lymphatic",
+      "spleen"
+    ]
+  },
+  {
+    "id": "fact_191",
+    "text": "The cerebellum coordinates voluntary movement and balance by comparing motor commands with sensory feedback and adjusting output.",
+    "category": "anatomy",
+    "difficulty": "hard",
+    "tags": [
+      "neuroanatomy",
+      "cerebellum"
+    ]
+  },
+  {
+    "id": "fact_192",
+    "text": "Synovial joints, such as the knee and shoulder, are freely moveable and have a fluid-filled cavity that lubricates movement.",
+    "category": "anatomy",
+    "difficulty": "easy",
+    "tags": [
+      "musculoskeletal",
+      "synovial"
+    ]
+  },
+  {
+    "id": "fact_193",
+    "text": "Arteries carry blood away from the heart at high pressure; veins return blood to the heart and contain one-way valves to prevent backflow.",
+    "category": "anatomy",
+    "difficulty": "medium",
+    "tags": [
+      "cardiovascular",
+      "vessels"
+    ]
+  },
+  {
+    "id": "fact_194",
+    "text": "The hypothalamus controls the pituitary gland via releasing and inhibiting hormones, linking the nervous and endocrine systems.",
+    "category": "anatomy",
+    "difficulty": "hard",
+    "tags": [
+      "endocrine",
+      "hypothalamus"
+    ]
+  },
+  {
+    "id": "fact_195",
+    "text": "The skin is the body's largest organ, providing a barrier against pathogens, UV radiation, dehydration, and physical trauma.",
+    "category": "anatomy",
+    "difficulty": "easy",
+    "tags": [
+      "integumentary",
+      "skin"
+    ]
+  },
+  {
+    "id": "fact_196",
+    "text": "Sperm are produced in the seminiferous tubules of the testes and mature as they travel through the epididymis.",
+    "category": "anatomy",
+    "difficulty": "medium",
+    "tags": [
+      "reproductive",
+      "testes"
+    ]
+  },
+  {
+    "id": "fact_197",
+    "text": "At a chemical synapse, neurotransmitters released from the presynaptic terminal diffuse across the cleft and bind postsynaptic receptors.",
+    "category": "anatomy",
+    "difficulty": "hard",
+    "tags": [
+      "neuroscience",
+      "synapse"
+    ]
+  },
+  {
+    "id": "fact_198",
+    "text": "The liver produces bile for fat emulsification, metabolises nutrients, detoxifies substances, and synthesises plasma proteins.",
+    "category": "anatomy",
+    "difficulty": "easy",
+    "tags": [
+      "digestive",
+      "liver"
+    ]
+  },
+  {
+    "id": "fact_199",
+    "text": "Skeletal muscle contraction occurs when calcium ions bind troponin, shifting tropomyosin to expose actin binding sites for myosin cross-bridges.",
+    "category": "anatomy",
+    "difficulty": "medium",
+    "tags": [
+      "muscular",
+      "contraction"
+    ]
+  },
+  {
+    "id": "fact_200",
+    "text": "Pulse pressure is the difference between systolic and diastolic blood pressure and reflects stroke volume and arterial compliance.",
+    "category": "anatomy",
+    "difficulty": "hard",
+    "tags": [
+      "cardiovascular",
+      "pulse-pressure"
+    ]
+  },
+  {
+    "id": "fact_201",
+    "text": "The central nervous system (CNS) consists of the brain and spinal cord; the peripheral nervous system connects the CNS to the body.",
+    "category": "anatomy",
+    "difficulty": "easy",
+    "tags": [
+      "nervous",
+      "CNS"
+    ]
+  },
+  {
+    "id": "fact_202",
+    "text": "The islets of Langerhans in the pancreas contain alpha cells (glucagon) and beta cells (insulin), regulating blood glucose levels.",
+    "category": "anatomy",
+    "difficulty": "medium",
+    "tags": [
+      "endocrine",
+      "pancreas"
+    ]
+  },
+  {
+    "id": "fact_203",
+    "text": "The loop of Henle creates a medullary concentration gradient via countercurrent multiplication, enabling the kidney to produce concentrated urine.",
+    "category": "anatomy",
+    "difficulty": "hard",
+    "tags": [
+      "renal",
+      "countercurrent"
+    ]
+  },
+  {
+    "id": "fact_204",
+    "text": "The thymus is a lymphatic organ where T-lymphocytes mature; it is most active during childhood and involutes in adulthood.",
+    "category": "anatomy",
+    "difficulty": "easy",
+    "tags": [
+      "lymphatic",
+      "thymus"
+    ]
+  },
+  {
+    "id": "fact_205",
+    "text": "Tendons are dense connective tissue that attach skeletal muscle to bone; ligaments connect bone to bone at joints.",
+    "category": "anatomy",
+    "difficulty": "medium",
+    "tags": [
+      "musculoskeletal",
+      "tendons"
+    ]
+  },
+  {
+    "id": "fact_206",
+    "text": "A dermatome is the skin region supplied by sensory fibres from a single spinal nerve root; dermatomal maps aid neurological examination.",
+    "category": "anatomy",
+    "difficulty": "hard",
+    "tags": [
+      "nervous",
+      "dermatome"
+    ]
+  },
+  {
+    "id": "fact_207",
+    "text": "The ABO blood group system classifies blood into types A, B, AB, and O based on the antigens present on red blood cell surfaces.",
+    "category": "anatomy",
+    "difficulty": "easy",
+    "tags": [
+      "cardiovascular",
+      "blood-types"
+    ]
+  },
+  {
+    "id": "fact_208",
+    "text": "The menstrual cycle averages 28 days; ovulation typically occurs around day 14, triggered by a surge in luteinising hormone (LH).",
+    "category": "anatomy",
+    "difficulty": "medium",
+    "tags": [
+      "reproductive",
+      "menstrual-cycle"
+    ]
+  },
+  {
+    "id": "fact_209",
+    "text": "The limbic system, including the hippocampus and amygdala, is involved in memory formation, emotional processing, and motivation.",
+    "category": "anatomy",
+    "difficulty": "hard",
+    "tags": [
+      "neuroanatomy",
+      "limbic"
+    ]
+  },
+  {
+    "id": "fact_210",
+    "text": "The stomach secretes hydrochloric acid and pepsinogen to initiate protein digestion and to destroy most ingested microorganisms.",
+    "category": "anatomy",
+    "difficulty": "easy",
+    "tags": [
+      "digestive",
+      "stomach"
+    ]
+  },
+  {
+    "id": "fact_211",
+    "text": "The coronary arteries supply oxygenated blood to the heart muscle; the left and right coronary arteries arise from the root of the aorta.",
+    "category": "anatomy",
+    "difficulty": "medium",
+    "tags": [
+      "cardiovascular",
+      "coronary"
+    ]
+  },
+  {
+    "id": "fact_212",
+    "text": "Anatomical planes include the sagittal (left/right), coronal (front/back), and transverse (upper/lower) planes used to describe body orientation.",
+    "category": "anatomy",
+    "difficulty": "easy",
+    "tags": [
+      "anatomy",
+      "planes"
+    ]
+  },
+  {
+    "id": "fact_213",
+    "text": "The dorsal column-medial lemniscal pathway carries fine touch and proprioception; the spinothalamic tract carries pain and temperature signals.",
+    "category": "anatomy",
+    "difficulty": "hard",
+    "tags": [
+      "neuroanatomy",
+      "spinal-tracts"
+    ]
+  },
+  {
+    "id": "fact_214",
+    "text": "The large intestine absorbs water and electrolytes from indigestible matter and compacts the remaining material into faeces.",
+    "category": "anatomy",
+    "difficulty": "medium",
+    "tags": [
+      "gastrointestinal",
+      "colon"
+    ]
+  },
+  {
+    "id": "fact_215",
+    "text": "Fibrous joints (such as skull sutures) allow no movement; cartilaginous joints allow slight movement; synovial joints are freely moveable.",
+    "category": "anatomy",
+    "difficulty": "easy",
+    "tags": [
+      "anatomy",
+      "joint-types"
+    ]
+  },
+  {
+    "id": "fact_216",
+    "text": "Rocks are classified as igneous (cooled magma), sedimentary (compressed sediments), or metamorphic (altered by heat and pressure).",
+    "category": "earth-science",
+    "difficulty": "easy",
+    "tags": [
+      "geology",
+      "rocks"
+    ]
+  },
+  {
+    "id": "fact_217",
+    "text": "Plate tectonics explains that Earth's lithosphere is divided into moving plates whose interactions produce earthquakes, volcanoes, and mountain ranges.",
+    "category": "earth-science",
+    "difficulty": "medium",
+    "tags": [
+      "plate-tectonics",
+      "geology"
+    ]
+  },
+  {
+    "id": "fact_218",
+    "text": "Earth's atmosphere has five main layers: troposphere, stratosphere, mesosphere, thermosphere, and exosphere, each with distinct properties.",
+    "category": "earth-science",
+    "difficulty": "easy",
+    "tags": [
+      "atmosphere",
+      "layers"
+    ]
+  },
+  {
+    "id": "fact_219",
+    "text": "The greenhouse effect occurs when atmospheric gases absorb and re-emit infrared radiation, raising Earth's surface temperature.",
+    "category": "earth-science",
+    "difficulty": "medium",
+    "tags": [
+      "climate",
+      "greenhouse"
+    ]
+  },
+  {
+    "id": "fact_220",
+    "text": "The carbon cycle moves carbon through the atmosphere, oceans, soils, and organisms via photosynthesis, respiration, and geological processes.",
+    "category": "earth-science",
+    "difficulty": "hard",
+    "tags": [
+      "geochemistry",
+      "carbon-cycle"
+    ]
+  },
+  {
+    "id": "fact_221",
+    "text": "The water cycle involves continuous movement of water through evaporation, condensation, precipitation, infiltration, and surface runoff.",
+    "category": "earth-science",
+    "difficulty": "easy",
+    "tags": [
+      "water-cycle",
+      "hydrology"
+    ]
+  },
+  {
+    "id": "fact_222",
+    "text": "Earthquakes release P-waves (compressional) and S-waves (shear); P-waves travel through both solids and liquids, while S-waves travel only through solids.",
+    "category": "earth-science",
+    "difficulty": "medium",
+    "tags": [
+      "seismology",
+      "waves"
+    ]
+  },
+  {
+    "id": "fact_223",
+    "text": "The Mohs scale ranks mineral hardness from 1 (talc) to 10 (diamond), based on the ability of one mineral to scratch another.",
+    "category": "earth-science",
+    "difficulty": "hard",
+    "tags": [
+      "mineralogy",
+      "mohs"
+    ]
+  },
+  {
+    "id": "fact_224",
+    "text": "Weathering breaks rocks down through physical, chemical, and biological processes at or near Earth's surface without transporting the material.",
+    "category": "earth-science",
+    "difficulty": "easy",
+    "tags": [
+      "erosion",
+      "weathering"
+    ]
+  },
+  {
+    "id": "fact_225",
+    "text": "Thermohaline circulation drives deep ocean currents by differences in water temperature and salinity that create density gradients.",
+    "category": "earth-science",
+    "difficulty": "medium",
+    "tags": [
+      "oceanography",
+      "thermohaline"
+    ]
+  },
+  {
+    "id": "fact_226",
+    "text": "Fossils form when the hard remains or traces of organisms are buried and preserved within sedimentary rock over geological time.",
+    "category": "earth-science",
+    "difficulty": "easy",
+    "tags": [
+      "fossils",
+      "formation"
+    ]
+  },
+  {
+    "id": "fact_227",
+    "text": "Volcanic eruptions occur when magma rises through crustal vents, releasing lava, volcanic ash, and gases at the surface.",
+    "category": "earth-science",
+    "difficulty": "medium",
+    "tags": [
+      "volcanoes",
+      "magma"
+    ]
+  },
+  {
+    "id": "fact_228",
+    "text": "The principle of superposition states that in undisturbed sedimentary rock sequences, younger layers are always found above older ones.",
+    "category": "earth-science",
+    "difficulty": "hard",
+    "tags": [
+      "stratigraphy",
+      "superposition"
+    ]
+  },
+  {
+    "id": "fact_229",
+    "text": "Soil consists of mineral particles, organic matter (humus), water, air, and a vast community of microorganisms essential for plant growth.",
+    "category": "earth-science",
+    "difficulty": "easy",
+    "tags": [
+      "soil",
+      "composition"
+    ]
+  },
+  {
+    "id": "fact_230",
+    "text": "Glaciers form from compacted and recrystallised snow and sculpt landscapes through erosion, sediment transport, and deposition.",
+    "category": "earth-science",
+    "difficulty": "medium",
+    "tags": [
+      "glaciology",
+      "glaciers"
+    ]
+  },
+  {
+    "id": "fact_231",
+    "text": "Radiometric dating uses the known decay rates of radioactive isotopes to determine the age of rocks and fossils with high precision.",
+    "category": "earth-science",
+    "difficulty": "hard",
+    "tags": [
+      "geochronology",
+      "radiometric"
+    ]
+  },
+  {
+    "id": "fact_232",
+    "text": "The stratospheric ozone layer absorbs most of the Sun's harmful ultraviolet radiation, protecting surface life from damage.",
+    "category": "earth-science",
+    "difficulty": "easy",
+    "tags": [
+      "atmosphere",
+      "ozone"
+    ]
+  },
+  {
+    "id": "fact_233",
+    "text": "Rivers erode channels through hydraulic action, abrasion, and solution, transporting and depositing sediment in floodplains and deltas.",
+    "category": "earth-science",
+    "difficulty": "medium",
+    "tags": [
+      "geomorphology",
+      "rivers"
+    ]
+  },
+  {
+    "id": "fact_234",
+    "text": "Convection currents in Earth's asthenosphere, driven by radioactive heat, are the underlying mechanism that drives tectonic plate movement.",
+    "category": "earth-science",
+    "difficulty": "hard",
+    "tags": [
+      "mantle",
+      "convection"
+    ]
+  },
+  {
+    "id": "fact_235",
+    "text": "The Richter scale measures earthquake magnitude logarithmically; each whole-number step represents approximately 32 times more energy released.",
+    "category": "earth-science",
+    "difficulty": "easy",
+    "tags": [
+      "natural-disasters",
+      "richter"
+    ]
+  },
+  {
+    "id": "fact_236",
+    "text": "The rock cycle describes how igneous, sedimentary, and metamorphic rocks are continuously transformed into one another over geological time.",
+    "category": "earth-science",
+    "difficulty": "medium",
+    "tags": [
+      "earth-science",
+      "rock-cycle"
+    ]
+  },
+  {
+    "id": "fact_237",
+    "text": "Earth's atmosphere is approximately 78% nitrogen, 21% oxygen, 0.9% argon, and small amounts of carbon dioxide and other gases.",
+    "category": "earth-science",
+    "difficulty": "easy",
+    "tags": [
+      "atmosphere",
+      "composition"
+    ]
+  },
+  {
+    "id": "fact_238",
+    "text": "Isostasy describes the gravitational equilibrium between Earth's crust and underlying mantle; thicker crust stands higher, like a floating iceberg.",
+    "category": "earth-science",
+    "difficulty": "hard",
+    "tags": [
+      "earth-science",
+      "isostasy"
+    ]
+  },
+  {
+    "id": "fact_239",
+    "text": "Biomes are large ecological zones characterised by climate and dominant vegetation type, including rainforest, desert, tundra, and grassland.",
+    "category": "earth-science",
+    "difficulty": "medium",
+    "tags": [
+      "earth-science",
+      "biomes"
+    ]
+  },
+  {
+    "id": "fact_240",
+    "text": "Earth's seasons result from its 23.5° axial tilt relative to its orbital plane, not from its varying distance from the Sun.",
+    "category": "earth-science",
+    "difficulty": "easy",
+    "tags": [
+      "earth-science",
+      "seasons"
+    ]
+  },
+  {
+    "id": "fact_241",
+    "text": "The eight planets of the solar system, in order from the Sun, are Mercury, Venus, Earth, Mars, Jupiter, Saturn, Uranus, and Neptune.",
+    "category": "astronomy",
+    "difficulty": "easy",
+    "tags": [
+      "solar-system",
+      "planets"
+    ]
+  },
+  {
+    "id": "fact_242",
+    "text": "Stars form when clouds of gas and dust (nebulae) collapse under gravity, heating the core until nuclear fusion begins.",
+    "category": "astronomy",
+    "difficulty": "easy",
+    "tags": [
+      "stars",
+      "formation"
+    ]
+  },
+  {
+    "id": "fact_243",
+    "text": "The big bang model holds that the universe began about 13.8 billion years ago from an extremely hot, dense state and has expanded ever since.",
+    "category": "astronomy",
+    "difficulty": "medium",
+    "tags": [
+      "cosmology",
+      "big-bang"
+    ]
+  },
+  {
+    "id": "fact_244",
+    "text": "The Moon's gravitational pull is the primary driver of Earth's ocean tides; the Sun also contributes to tidal effects.",
+    "category": "astronomy",
+    "difficulty": "easy",
+    "tags": [
+      "moon",
+      "tides"
+    ]
+  },
+  {
+    "id": "fact_245",
+    "text": "Stars are classified by spectral type (O, B, A, F, G, K, M) in decreasing order of surface temperature; the Sun is a G-type yellow dwarf star.",
+    "category": "astronomy",
+    "difficulty": "medium",
+    "tags": [
+      "stellar",
+      "spectral-class"
+    ]
+  },
+  {
+    "id": "fact_246",
+    "text": "A black hole is a region where gravity is so intense that not even light can escape beyond its event horizon.",
+    "category": "astronomy",
+    "difficulty": "hard",
+    "tags": [
+      "black-holes",
+      "event-horizon"
+    ]
+  },
+  {
+    "id": "fact_247",
+    "text": "Jupiter is the largest planet in the solar system, with a mass greater than all other planets combined.",
+    "category": "astronomy",
+    "difficulty": "easy",
+    "tags": [
+      "solar-system",
+      "Jupiter"
+    ]
+  },
+  {
+    "id": "fact_248",
+    "text": "The Milky Way is a barred spiral galaxy containing hundreds of billions of stars; the Sun is about 26,000 light-years from the galactic centre.",
+    "category": "astronomy",
+    "difficulty": "medium",
+    "tags": [
+      "galaxy",
+      "milky-way"
+    ]
+  },
+  {
+    "id": "fact_249",
+    "text": "Dark matter does not emit or absorb light but is inferred from its gravitational effects on visible matter and large-scale cosmic structure.",
+    "category": "astronomy",
+    "difficulty": "hard",
+    "tags": [
+      "cosmology",
+      "dark-matter"
+    ]
+  },
+  {
+    "id": "fact_250",
+    "text": "A light-year is the distance light travels in one year through a vacuum, approximately 9.46 × 10¹² km.",
+    "category": "astronomy",
+    "difficulty": "easy",
+    "tags": [
+      "light-year",
+      "distance"
+    ]
+  },
+  {
+    "id": "fact_251",
+    "text": "A supernova marks the explosive death of a massive star and disperses heavy elements into space, seeding future star and planet formation.",
+    "category": "astronomy",
+    "difficulty": "medium",
+    "tags": [
+      "supernovae",
+      "elements"
+    ]
+  },
+  {
+    "id": "fact_252",
+    "text": "The Hertzsprung-Russell diagram plots stellar luminosity versus surface temperature, revealing life stages from main sequence to giant and white dwarf.",
+    "category": "astronomy",
+    "difficulty": "hard",
+    "tags": [
+      "hertzsprung-russell",
+      "diagram"
+    ]
+  },
+  {
+    "id": "fact_253",
+    "text": "A solar eclipse occurs when the Moon passes between Earth and the Sun; a lunar eclipse occurs when Earth's shadow falls on the Moon.",
+    "category": "astronomy",
+    "difficulty": "easy",
+    "tags": [
+      "eclipse",
+      "types"
+    ]
+  },
+  {
+    "id": "fact_254",
+    "text": "Kepler's first law states that planets orbit the Sun in ellipses with the Sun at one focus, not in perfect circles.",
+    "category": "astronomy",
+    "difficulty": "medium",
+    "tags": [
+      "kepler",
+      "orbits"
+    ]
+  },
+  {
+    "id": "fact_255",
+    "text": "Cosmological redshift occurs because the universe's expansion stretches the wavelength of light travelling from distant galaxies toward Earth.",
+    "category": "astronomy",
+    "difficulty": "hard",
+    "tags": [
+      "redshift",
+      "expansion"
+    ]
+  },
+  {
+    "id": "fact_256",
+    "text": "The Moon's phases (new, crescent, quarter, gibbous, full) result from the changing angles between the Earth, Moon, and Sun.",
+    "category": "astronomy",
+    "difficulty": "easy",
+    "tags": [
+      "moon",
+      "phases"
+    ]
+  },
+  {
+    "id": "fact_257",
+    "text": "The Sun's corona is its outermost atmospheric layer, reaching temperatures exceeding 1 million °C, far hotter than the visible solar surface.",
+    "category": "astronomy",
+    "difficulty": "medium",
+    "tags": [
+      "solar",
+      "corona"
+    ]
+  },
+  {
+    "id": "fact_258",
+    "text": "Stellar parallax measures a nearby star's apparent shift against background stars as Earth orbits the Sun, used to calculate stellar distances.",
+    "category": "astronomy",
+    "difficulty": "hard",
+    "tags": [
+      "parallax",
+      "distance"
+    ]
+  },
+  {
+    "id": "fact_259",
+    "text": "A meteoroid that enters Earth's atmosphere and burns up is a meteor; if it reaches the surface, it is called a meteorite.",
+    "category": "astronomy",
+    "difficulty": "easy",
+    "tags": [
+      "meteor",
+      "meteorite"
+    ]
+  },
+  {
+    "id": "fact_260",
+    "text": "The transit method detects exoplanets by measuring the slight dimming of a star's light as a planet passes in front of it from our perspective.",
+    "category": "astronomy",
+    "difficulty": "medium",
+    "tags": [
+      "exoplanets",
+      "transit"
+    ]
+  },
+  {
+    "id": "fact_261",
+    "text": "Dark energy is a hypothetical form of energy driving the accelerating expansion of the universe; it may account for about 68% of total energy content.",
+    "category": "astronomy",
+    "difficulty": "medium",
+    "tags": [
+      "astronomy",
+      "dark-energy"
+    ]
+  },
+  {
+    "id": "fact_262",
+    "text": "Comets are icy bodies from the outer solar system that develop bright tails of gas and dust when they travel close to the Sun.",
+    "category": "astronomy",
+    "difficulty": "easy",
+    "tags": [
+      "astronomy",
+      "comets"
+    ]
+  },
+  {
+    "id": "fact_263",
+    "text": "Neutron stars are incredibly dense stellar remnants; a teaspoon of neutron star material would contain a mass of billions of tonnes.",
+    "category": "astronomy",
+    "difficulty": "hard",
+    "tags": [
+      "astronomy",
+      "neutron-star"
+    ]
+  },
+  {
+    "id": "fact_264",
+    "text": "The habitable zone around a star is the orbital range where liquid water could exist on a planet's surface, considered key for life.",
+    "category": "astronomy",
+    "difficulty": "medium",
+    "tags": [
+      "astronomy",
+      "habitable-zone"
+    ]
+  },
+  {
+    "id": "fact_265",
+    "text": "The asteroid belt lies between Mars and Jupiter and contains millions of rocky and metallic bodies of varying sizes.",
+    "category": "astronomy",
+    "difficulty": "easy",
+    "tags": [
+      "astronomy",
+      "asteroid-belt"
+    ]
+  },
+  {
+    "id": "fact_266",
+    "text": "The binary number system uses only 0 and 1 to represent all data processed by digital computers; each digit is called a bit.",
+    "category": "technology",
+    "difficulty": "easy",
+    "tags": [
+      "computing",
+      "binary"
+    ]
+  },
+  {
+    "id": "fact_267",
+    "text": "The Internet Protocol (IP) assigns unique addresses to devices on a network, enabling data packets to be routed between them globally.",
+    "category": "technology",
+    "difficulty": "medium",
+    "tags": [
+      "networking",
+      "IP"
+    ]
+  },
+  {
+    "id": "fact_268",
+    "text": "An algorithm is a finite, ordered set of instructions designed to solve a problem or perform a defined computational task.",
+    "category": "technology",
+    "difficulty": "easy",
+    "tags": [
+      "programming",
+      "algorithms"
+    ]
+  },
+  {
+    "id": "fact_269",
+    "text": "Encryption transforms readable plaintext into unreadable ciphertext using a key; the correct key is required to decrypt the data.",
+    "category": "technology",
+    "difficulty": "medium",
+    "tags": [
+      "cybersecurity",
+      "encryption"
+    ]
+  },
+  {
+    "id": "fact_270",
+    "text": "In supervised machine learning, a model trains on labelled input-output pairs, minimising prediction error to learn a mapping function.",
+    "category": "technology",
+    "difficulty": "hard",
+    "tags": [
+      "machine-learning",
+      "supervised"
+    ]
+  },
+  {
+    "id": "fact_271",
+    "text": "RAM (random access memory) is volatile storage used for active processes; its contents are lost when the computer is powered off.",
+    "category": "technology",
+    "difficulty": "easy",
+    "tags": [
+      "hardware",
+      "RAM"
+    ]
+  },
+  {
+    "id": "fact_272",
+    "text": "SQL (Structured Query Language) is used to create, query, update, and delete data in relational database management systems.",
+    "category": "technology",
+    "difficulty": "medium",
+    "tags": [
+      "database",
+      "SQL"
+    ]
+  },
+  {
+    "id": "fact_273",
+    "text": "HTTP defines the rules for transmitting hypertext data on the web; HTTPS adds TLS encryption to protect the connection.",
+    "category": "technology",
+    "difficulty": "easy",
+    "tags": [
+      "internet",
+      "HTTP"
+    ]
+  },
+  {
+    "id": "fact_274",
+    "text": "Object-oriented programming organises software into objects that encapsulate data and behaviour, promoting modularity and code reuse.",
+    "category": "technology",
+    "difficulty": "medium",
+    "tags": [
+      "programming",
+      "oop"
+    ]
+  },
+  {
+    "id": "fact_275",
+    "text": "Big O notation describes the worst-case growth rate of an algorithm's time or memory usage relative to input size.",
+    "category": "technology",
+    "difficulty": "hard",
+    "tags": [
+      "complexity",
+      "big-o"
+    ]
+  },
+  {
+    "id": "fact_276",
+    "text": "The CPU fetches, decodes, and executes program instructions; its speed is measured in gigahertz (GHz) and drives overall system performance.",
+    "category": "technology",
+    "difficulty": "easy",
+    "tags": [
+      "hardware",
+      "CPU"
+    ]
+  },
+  {
+    "id": "fact_277",
+    "text": "TCP (Transmission Control Protocol) ensures reliable, ordered data delivery over a network using acknowledgements and retransmission.",
+    "category": "technology",
+    "difficulty": "medium",
+    "tags": [
+      "networking",
+      "TCP"
+    ]
+  },
+  {
+    "id": "fact_278",
+    "text": "Public-key cryptography uses a mathematically linked key pair: data encrypted with the public key can only be decrypted with the private key.",
+    "category": "technology",
+    "difficulty": "hard",
+    "tags": [
+      "cryptography",
+      "public-key"
+    ]
+  },
+  {
+    "id": "fact_279",
+    "text": "A bit is the smallest unit of digital information (0 or 1); eight bits form one byte, which can represent 256 distinct values.",
+    "category": "technology",
+    "difficulty": "easy",
+    "tags": [
+      "data",
+      "bits-bytes"
+    ]
+  },
+  {
+    "id": "fact_280",
+    "text": "An artificial neural network consists of interconnected layers of nodes that learn patterns in data by iteratively adjusting connection weights.",
+    "category": "technology",
+    "difficulty": "medium",
+    "tags": [
+      "AI",
+      "neural-networks"
+    ]
+  },
+  {
+    "id": "fact_281",
+    "text": "Deadlock occurs when two or more processes each hold a resource and wait indefinitely for a resource held by another, halting progress.",
+    "category": "technology",
+    "difficulty": "hard",
+    "tags": [
+      "operating-systems",
+      "deadlock"
+    ]
+  },
+  {
+    "id": "fact_282",
+    "text": "Debugging is the process of identifying and fixing errors (bugs) in code; systematic testing and error messages help locate faults.",
+    "category": "technology",
+    "difficulty": "easy",
+    "tags": [
+      "programming",
+      "debugging"
+    ]
+  },
+  {
+    "id": "fact_283",
+    "text": "Cloud computing delivers computing resources over the internet in three main models: IaaS, PaaS, and SaaS.",
+    "category": "technology",
+    "difficulty": "medium",
+    "tags": [
+      "cloud-computing",
+      "models"
+    ]
+  },
+  {
+    "id": "fact_284",
+    "text": "A hash table achieves O(1) average-case time for insertion and lookup by mapping keys to array indices via a hash function.",
+    "category": "technology",
+    "difficulty": "hard",
+    "tags": [
+      "data-structures",
+      "hash-table"
+    ]
+  },
+  {
+    "id": "fact_285",
+    "text": "Wi-Fi uses radio waves to transmit data wirelessly between devices and a router, following the IEEE 802.11 family of standards.",
+    "category": "technology",
+    "difficulty": "easy",
+    "tags": [
+      "networking",
+      "wifi"
+    ]
+  },
+  {
+    "id": "fact_286",
+    "text": "Version control systems like Git track changes to code over time, enabling collaboration, parallel development, and rollback to previous states.",
+    "category": "technology",
+    "difficulty": "medium",
+    "tags": [
+      "technology",
+      "version-control"
+    ]
+  },
+  {
+    "id": "fact_287",
+    "text": "An operating system manages hardware resources and provides services for applications; examples include Windows, macOS, and Linux.",
+    "category": "technology",
+    "difficulty": "easy",
+    "tags": [
+      "technology",
+      "operating-system"
+    ]
+  },
+  {
+    "id": "fact_288",
+    "text": "A blockchain is a distributed ledger recording transactions in linked, cryptographically secured blocks, making it resistant to tampering.",
+    "category": "technology",
+    "difficulty": "hard",
+    "tags": [
+      "technology",
+      "blockchain"
+    ]
+  },
+  {
+    "id": "fact_289",
+    "text": "An API (Application Programming Interface) defines rules for how software components communicate, enabling integration between different services.",
+    "category": "technology",
+    "difficulty": "medium",
+    "tags": [
+      "technology",
+      "API"
+    ]
+  },
+  {
+    "id": "fact_290",
+    "text": "Screen resolution describes the number of pixels displayed horizontally and vertically; higher resolution produces a sharper, more detailed image.",
+    "category": "technology",
+    "difficulty": "easy",
+    "tags": [
+      "technology",
+      "resolution"
+    ]
+  },
+  {
+    "id": "fact_291",
+    "text": "A noun names a person, place, thing, or idea; a verb expresses an action, state, or occurrence.",
+    "category": "language",
+    "difficulty": "easy",
+    "tags": [
+      "grammar",
+      "parts-of-speech"
+    ]
+  },
+  {
+    "id": "fact_292",
+    "text": "Etymology is the study of the origins and historical development of words and how their forms and meanings have changed over time.",
+    "category": "language",
+    "difficulty": "medium",
+    "tags": [
+      "linguistics",
+      "etymology"
+    ]
+  },
+  {
+    "id": "fact_293",
+    "text": "A semicolon joins two related independent clauses without a coordinating conjunction, providing a stronger pause than a comma.",
+    "category": "language",
+    "difficulty": "easy",
+    "tags": [
+      "grammar",
+      "punctuation"
+    ]
+  },
+  {
+    "id": "fact_294",
+    "text": "A metaphor directly identifies one thing with another to highlight a shared quality; a simile makes the comparison using 'like' or 'as'.",
+    "category": "language",
+    "difficulty": "medium",
+    "tags": [
+      "rhetoric",
+      "figurative-language"
+    ]
+  },
+  {
+    "id": "fact_295",
+    "text": "Syntax is the set of rules governing the structure and ordering of words and phrases to form grammatically correct sentences.",
+    "category": "language",
+    "difficulty": "hard",
+    "tags": [
+      "linguistics",
+      "syntax"
+    ]
+  },
+  {
+    "id": "fact_296",
+    "text": "Active reading involves questioning, annotating, and summarising text, improving comprehension and retention compared to passive reading.",
+    "category": "language",
+    "difficulty": "easy",
+    "tags": [
+      "reading",
+      "strategies"
+    ]
+  },
+  {
+    "id": "fact_297",
+    "text": "A thesis statement presents the central argument of an essay and guides the content and direction of all supporting paragraphs.",
+    "category": "language",
+    "difficulty": "medium",
+    "tags": [
+      "writing",
+      "thesis"
+    ]
+  },
+  {
+    "id": "fact_298",
+    "text": "Morphology studies the internal structure of words; morphemes are the smallest meaningful units, including roots, prefixes, and suffixes.",
+    "category": "language",
+    "difficulty": "hard",
+    "tags": [
+      "linguistics",
+      "morphology"
+    ]
+  },
+  {
+    "id": "fact_299",
+    "text": "Many English academic words derive from Latin and Greek roots; recognising these roots aids comprehension of unfamiliar technical vocabulary.",
+    "category": "language",
+    "difficulty": "easy",
+    "tags": [
+      "vocabulary",
+      "word-roots"
+    ]
+  },
+  {
+    "id": "fact_300",
+    "text": "Passive voice places the object of an action as the grammatical subject ('The report was written'), reducing clarity when overused.",
+    "category": "language",
+    "difficulty": "medium",
+    "tags": [
+      "writing",
+      "voice"
+    ]
+  },
+  {
+    "id": "fact_301",
+    "text": "The present perfect tense (have/has + past participle) connects a past action to the present, as in 'She has completed the module.'",
+    "category": "language",
+    "difficulty": "easy",
+    "tags": [
+      "grammar",
+      "tenses"
+    ]
+  },
+  {
+    "id": "fact_302",
+    "text": "Pragmatics studies how context, tone, and social conventions shape the interpretation of meaning beyond the literal content of words.",
+    "category": "language",
+    "difficulty": "hard",
+    "tags": [
+      "linguistics",
+      "pragmatics"
+    ]
+  },
+  {
+    "id": "fact_303",
+    "text": "Skimming involves reading rapidly for the overall main idea; scanning involves searching systematically for specific facts or keywords.",
+    "category": "language",
+    "difficulty": "medium",
+    "tags": [
+      "reading",
+      "skills"
+    ]
+  },
+  {
+    "id": "fact_304",
+    "text": "A well-structured paragraph contains a topic sentence, supporting evidence or details, and a concluding sentence that links back to the main point.",
+    "category": "language",
+    "difficulty": "easy",
+    "tags": [
+      "writing",
+      "paragraphs"
+    ]
+  },
+  {
+    "id": "fact_305",
+    "text": "Context clues — surrounding words, phrases, or sentences — can reveal the meaning of unfamiliar terms without consulting a dictionary.",
+    "category": "language",
+    "difficulty": "medium",
+    "tags": [
+      "vocabulary",
+      "context-clues"
+    ]
+  },
+  {
+    "id": "fact_306",
+    "text": "Phonology studies the sound systems of languages, including how phonemes are organised and how their context affects pronunciation.",
+    "category": "language",
+    "difficulty": "hard",
+    "tags": [
+      "linguistics",
+      "phonology"
+    ]
+  },
+  {
+    "id": "fact_307",
+    "text": "Citing sources in academic writing credits original authors, supports your argument, and allows readers to trace and verify information.",
+    "category": "language",
+    "difficulty": "easy",
+    "tags": [
+      "academic-writing",
+      "citations"
+    ]
+  },
+  {
+    "id": "fact_308",
+    "text": "A subordinate (dependent) clause cannot stand alone as a sentence; it relies on a main clause to convey complete meaning.",
+    "category": "language",
+    "difficulty": "medium",
+    "tags": [
+      "grammar",
+      "clauses"
+    ]
+  },
+  {
+    "id": "fact_309",
+    "text": "Cohesion in writing is achieved through pronoun reference, lexical chains, and connective adverbs that link ideas across sentences.",
+    "category": "language",
+    "difficulty": "hard",
+    "tags": [
+      "discourse",
+      "cohesion"
+    ]
+  },
+  {
+    "id": "fact_310",
+    "text": "Common prefixes such as 'pre-' (before), 'post-' (after), 'anti-' (against), and 'semi-' (half) modify root word meanings predictably.",
+    "category": "language",
+    "difficulty": "easy",
+    "tags": [
+      "vocabulary",
+      "prefixes"
+    ]
+  },
+  {
+    "id": "fact_311",
+    "text": "Register refers to the level of formality in language use; academic, professional, and colloquial registers differ in vocabulary and tone.",
+    "category": "language",
+    "difficulty": "medium",
+    "tags": [
+      "language",
+      "register"
+    ]
+  },
+  {
+    "id": "fact_312",
+    "text": "Homophones are words that sound alike but differ in meaning and often spelling, such as 'their', 'there', and 'they're'.",
+    "category": "language",
+    "difficulty": "easy",
+    "tags": [
+      "language",
+      "homophones"
+    ]
+  },
+  {
+    "id": "fact_313",
+    "text": "Discourse markers (e.g. 'furthermore', 'however', 'consequently') signal logical relationships between ideas and improve textual coherence.",
+    "category": "language",
+    "difficulty": "hard",
+    "tags": [
+      "language",
+      "discourse-markers"
+    ]
+  },
+  {
+    "id": "fact_314",
+    "text": "Connotation is the emotional or cultural association a word carries beyond its literal (denotative) definition.",
+    "category": "language",
+    "difficulty": "medium",
+    "tags": [
+      "language",
+      "connotation"
+    ]
+  },
+  {
+    "id": "fact_315",
+    "text": "The PEEL structure (Point, Evidence, Explanation, Link) provides a framework for building coherent analytical paragraphs in academic writing.",
+    "category": "language",
+    "difficulty": "easy",
+    "tags": [
+      "language",
+      "paragraph-structure"
+    ]
+  },
+  {
+    "id": "fact_316",
+    "text": "Gregor Mendel's pea plant experiments in the 1860s established the foundational laws of heredity underpinning modern genetics.",
+    "category": "history",
+    "difficulty": "easy",
+    "tags": [
+      "science-history",
+      "genetics"
+    ]
+  },
+  {
+    "id": "fact_317",
+    "text": "Alexander Fleming discovered penicillin in 1928 by observing that Penicillium mould inhibited bacterial growth on a contaminated culture plate.",
+    "category": "history",
+    "difficulty": "medium",
+    "tags": [
+      "medicine-history",
+      "penicillin"
+    ]
+  },
+  {
+    "id": "fact_318",
+    "text": "Charles Darwin published 'On the Origin of Species' in 1859, presenting evidence for evolution through natural selection.",
+    "category": "history",
+    "difficulty": "easy",
+    "tags": [
+      "science-history",
+      "evolution"
+    ]
+  },
+  {
+    "id": "fact_319",
+    "text": "Edward Jenner developed the first successful vaccine in 1796 by demonstrating that cowpox infection conferred protection against smallpox.",
+    "category": "history",
+    "difficulty": "medium",
+    "tags": [
+      "medicine-history",
+      "vaccination"
+    ]
+  },
+  {
+    "id": "fact_320",
+    "text": "The first controlled nuclear chain reaction was achieved at the University of Chicago in December 1942, led by Enrico Fermi.",
+    "category": "history",
+    "difficulty": "hard",
+    "tags": [
+      "science-history",
+      "nuclear"
+    ]
+  },
+  {
+    "id": "fact_321",
+    "text": "Nicolaus Copernicus proposed the heliocentric model in 1543, placing the Sun rather than Earth at the centre of the solar system.",
+    "category": "history",
+    "difficulty": "easy",
+    "tags": [
+      "science-history",
+      "heliocentric"
+    ]
+  },
+  {
+    "id": "fact_322",
+    "text": "Louis Pasteur's germ theory, established in the 1860s, demonstrated that specific microorganisms cause specific infectious diseases.",
+    "category": "history",
+    "difficulty": "medium",
+    "tags": [
+      "medicine-history",
+      "germ-theory"
+    ]
+  },
+  {
+    "id": "fact_323",
+    "text": "Marie Curie was the first person to win two Nobel Prizes, earning them in Physics (1903) and Chemistry (1911) for her work on radioactivity.",
+    "category": "history",
+    "difficulty": "easy",
+    "tags": [
+      "science-history",
+      "radioactivity"
+    ]
+  },
+  {
+    "id": "fact_324",
+    "text": "The double-helix structure of DNA was proposed by Watson and Crick in 1953, building on X-ray diffraction data produced by Rosalind Franklin.",
+    "category": "history",
+    "difficulty": "hard",
+    "tags": [
+      "science-history",
+      "dna-structure"
+    ]
+  },
+  {
+    "id": "fact_325",
+    "text": "Joseph Lister introduced antiseptic surgical technique in the 1860s using carbolic acid, dramatically reducing post-surgical infection rates.",
+    "category": "history",
+    "difficulty": "medium",
+    "tags": [
+      "medicine-history",
+      "antisepsis"
+    ]
+  },
+  {
+    "id": "fact_326",
+    "text": "Isaac Newton formulated the laws of motion and universal gravitation in his 1687 work 'Principia Mathematica', transforming classical physics.",
+    "category": "history",
+    "difficulty": "easy",
+    "tags": [
+      "science-history",
+      "newton"
+    ]
+  },
+  {
+    "id": "fact_327",
+    "text": "Dmitri Mendeleev published the first widely accepted periodic table in 1869, correctly predicting properties of then-unknown elements.",
+    "category": "history",
+    "difficulty": "medium",
+    "tags": [
+      "science-history",
+      "periodic-table"
+    ]
+  },
+  {
+    "id": "fact_328",
+    "text": "General anaesthesia using inhaled ether was first publicly demonstrated in 1846 at Massachusetts General Hospital, making painless surgery possible.",
+    "category": "history",
+    "difficulty": "hard",
+    "tags": [
+      "medicine-history",
+      "anaesthesia"
+    ]
+  },
+  {
+    "id": "fact_329",
+    "text": "Michael Faraday demonstrated electromagnetic induction in 1831, establishing the principle that underlies electric generators and transformers.",
+    "category": "history",
+    "difficulty": "easy",
+    "tags": [
+      "science-history",
+      "faraday"
+    ]
+  },
+  {
+    "id": "fact_330",
+    "text": "On 12 April 1961, Yuri Gagarin became the first human in space, completing one orbit of Earth aboard the Vostok 1 spacecraft.",
+    "category": "history",
+    "difficulty": "medium",
+    "tags": [
+      "science-history",
+      "space"
+    ]
+  },
+  {
+    "id": "fact_331",
+    "text": "Karl Landsteiner discovered the ABO blood group system in 1901, making safe blood transfusions possible by identifying compatibility.",
+    "category": "history",
+    "difficulty": "hard",
+    "tags": [
+      "medicine-history",
+      "blood-groups"
+    ]
+  },
+  {
+    "id": "fact_332",
+    "text": "Cell theory, formulated in the 1830s–1850s by Schleiden, Schwann, and Virchow, states that all living organisms are composed of cells.",
+    "category": "history",
+    "difficulty": "easy",
+    "tags": [
+      "science-history",
+      "cell-theory"
+    ]
+  },
+  {
+    "id": "fact_333",
+    "text": "Albert Einstein published his special theory of relativity in 1905, fundamentally changing the understanding of space, time, mass, and energy.",
+    "category": "history",
+    "difficulty": "medium",
+    "tags": [
+      "science-history",
+      "relativity"
+    ]
+  },
+  {
+    "id": "fact_334",
+    "text": "Wilhelm Röntgen discovered X-rays in 1895; within months they were being used medically to image bones without surgery.",
+    "category": "history",
+    "difficulty": "hard",
+    "tags": [
+      "medicine-history",
+      "X-ray"
+    ]
+  },
+  {
+    "id": "fact_335",
+    "text": "Carl Linnaeus developed binomial nomenclature in the 18th century, giving each species a two-part Latin name used universally in biology.",
+    "category": "history",
+    "difficulty": "easy",
+    "tags": [
+      "science-history",
+      "linnaeus"
+    ]
+  },
+  {
+    "id": "fact_336",
+    "text": "Galen of Pergamon, a 2nd-century Greek physician, dominated anatomical and physiological thinking for over 1,000 years through his extensive writings.",
+    "category": "history",
+    "difficulty": "medium",
+    "tags": [
+      "history",
+      "galen"
+    ]
+  },
+  {
+    "id": "fact_337",
+    "text": "Johannes Gutenberg's movable type printing press, developed around 1440, rapidly spread scientific and medical knowledge across Europe.",
+    "category": "history",
+    "difficulty": "easy",
+    "tags": [
+      "history",
+      "printing-press"
+    ]
+  },
+  {
+    "id": "fact_338",
+    "text": "The 16th–17th century Scientific Revolution replaced ancient authority with empirical observation and mathematical description of natural phenomena.",
+    "category": "history",
+    "difficulty": "hard",
+    "tags": [
+      "history",
+      "scientific-revolution"
+    ]
+  },
+  {
+    "id": "fact_339",
+    "text": "Insulin was first isolated by Banting and Best in 1921, transforming type 1 diabetes from a fatal diagnosis into a manageable condition.",
+    "category": "history",
+    "difficulty": "medium",
+    "tags": [
+      "history",
+      "insulin"
+    ]
+  },
+  {
+    "id": "fact_340",
+    "text": "Antonie van Leeuwenhoek's microscope improvements in the 1670s enabled the first observations of bacteria, protozoa, and red blood cells.",
+    "category": "history",
+    "difficulty": "easy",
+    "tags": [
+      "history",
+      "microscope"
+    ]
+  },
+  {
+    "id": "fact_341",
+    "text": "Spaced repetition schedules review of material at increasing intervals, exploiting the spacing effect to maximise long-term retention.",
+    "category": "study-skills",
+    "difficulty": "easy",
+    "tags": [
+      "memory",
+      "spaced-repetition"
+    ]
+  },
+  {
+    "id": "fact_342",
+    "text": "Focused study sessions of 25–50 minutes followed by short breaks maintain concentration and prevent the buildup of mental fatigue.",
+    "category": "study-skills",
+    "difficulty": "easy",
+    "tags": [
+      "revision",
+      "time-management"
+    ]
+  },
+  {
+    "id": "fact_343",
+    "text": "Elaborative interrogation improves learning by prompting students to explain why and how facts are true, deepening cognitive processing.",
+    "category": "study-skills",
+    "difficulty": "medium",
+    "tags": [
+      "memory",
+      "elaboration"
+    ]
+  },
+  {
+    "id": "fact_344",
+    "text": "Active recall — retrieving information from memory instead of re-reading — is one of the most effective strategies for long-term retention.",
+    "category": "study-skills",
+    "difficulty": "easy",
+    "tags": [
+      "testing",
+      "active-recall"
+    ]
+  },
+  {
+    "id": "fact_345",
+    "text": "The Cornell method divides notes into a main area, a cue column, and a summary box, encouraging active review and self-testing during revision.",
+    "category": "study-skills",
+    "difficulty": "medium",
+    "tags": [
+      "note-taking",
+      "cornell"
+    ]
+  },
+  {
+    "id": "fact_346",
+    "text": "Metacognition — monitoring one's own understanding and adjusting strategies accordingly — is a key predictor of academic achievement.",
+    "category": "study-skills",
+    "difficulty": "hard",
+    "tags": [
+      "metacognition",
+      "self-regulation"
+    ]
+  },
+  {
+    "id": "fact_347",
+    "text": "Sleep consolidates memory by transferring information from short-term to long-term storage; inadequate sleep before exams impairs recall.",
+    "category": "study-skills",
+    "difficulty": "easy",
+    "tags": [
+      "sleep",
+      "consolidation"
+    ]
+  },
+  {
+    "id": "fact_348",
+    "text": "Backward planning from the exam date ensures all content is covered; revision blocks are scheduled in reverse from the final deadline.",
+    "category": "study-skills",
+    "difficulty": "medium",
+    "tags": [
+      "planning",
+      "backward-design"
+    ]
+  },
+  {
+    "id": "fact_349",
+    "text": "Minimising digital distractions during study — silencing notifications and using focus apps — significantly increases the quality of learning.",
+    "category": "study-skills",
+    "difficulty": "easy",
+    "tags": [
+      "focus",
+      "distractions"
+    ]
+  },
+  {
+    "id": "fact_350",
+    "text": "Mnemonics use acronyms, chunking, imagery, or rhymes to link new information to existing memories, aiding recall under exam pressure.",
+    "category": "study-skills",
+    "difficulty": "medium",
+    "tags": [
+      "mnemonics",
+      "memory-aids"
+    ]
+  },
+  {
+    "id": "fact_351",
+    "text": "Interleaved practice — alternating between different topics within a session — produces stronger long-term retention than blocked single-topic practice.",
+    "category": "study-skills",
+    "difficulty": "hard",
+    "tags": [
+      "interleaving",
+      "practice"
+    ]
+  },
+  {
+    "id": "fact_352",
+    "text": "Regular aerobic exercise enhances cognitive function, memory consolidation, and stress management, all of which support effective studying.",
+    "category": "study-skills",
+    "difficulty": "easy",
+    "tags": [
+      "exercise",
+      "brain"
+    ]
+  },
+  {
+    "id": "fact_353",
+    "text": "Practising past exam papers under timed conditions improves time management, reduces test anxiety, and highlights knowledge gaps.",
+    "category": "study-skills",
+    "difficulty": "medium",
+    "tags": [
+      "past-papers",
+      "exam-prep"
+    ]
+  },
+  {
+    "id": "fact_354",
+    "text": "Studying in a consistent, quiet, well-lit space at regular times helps the brain associate that environment with focused, productive learning.",
+    "category": "study-skills",
+    "difficulty": "easy",
+    "tags": [
+      "study-environment",
+      "routine"
+    ]
+  },
+  {
+    "id": "fact_355",
+    "text": "The testing effect shows that retrieving information from memory strengthens neural encoding far more than passively re-reading the same material.",
+    "category": "study-skills",
+    "difficulty": "medium",
+    "tags": [
+      "retrieval-practice",
+      "testing-effect"
+    ]
+  },
+  {
+    "id": "fact_356",
+    "text": "Desirable difficulties — strategies that slow initial learning, such as interleaving and self-testing — produce significantly better long-term retention.",
+    "category": "study-skills",
+    "difficulty": "hard",
+    "tags": [
+      "desirable-difficulties",
+      "learning"
+    ]
+  },
+  {
+    "id": "fact_357",
+    "text": "Balanced meals and adequate hydration maintain stable blood glucose, sustaining concentration and cognitive performance throughout a study session.",
+    "category": "study-skills",
+    "difficulty": "easy",
+    "tags": [
+      "nutrition",
+      "cognition"
+    ]
+  },
+  {
+    "id": "fact_358",
+    "text": "Dual coding combines verbal explanations with visuals such as diagrams and charts, creating stronger and more accessible memories.",
+    "category": "study-skills",
+    "difficulty": "medium",
+    "tags": [
+      "dual-coding",
+      "learning"
+    ]
+  },
+  {
+    "id": "fact_359",
+    "text": "A growth mindset — the belief that abilities improve with effort — correlates with greater academic persistence and resilience when facing challenges.",
+    "category": "study-skills",
+    "difficulty": "hard",
+    "tags": [
+      "growth-mindset",
+      "motivation"
+    ]
+  },
+  {
+    "id": "fact_360",
+    "text": "Writing concise summaries in your own words after studying a topic forces active processing and reveals gaps in understanding.",
+    "category": "study-skills",
+    "difficulty": "easy",
+    "tags": [
+      "summarisation",
+      "notes"
+    ]
+  },
+  {
+    "id": "fact_361",
+    "text": "Concept maps visually organise and connect ideas using nodes and labelled links, helping learners identify relationships between related topics.",
+    "category": "study-skills",
+    "difficulty": "medium",
+    "tags": [
+      "concept-mapping",
+      "visualisation"
+    ]
+  },
+  {
+    "id": "fact_362",
+    "text": "Setting specific, measurable study goals (e.g. 'complete 20 practice questions in 30 minutes') improves focus and provides a clear progress measure.",
+    "category": "study-skills",
+    "difficulty": "easy",
+    "tags": [
+      "goal-setting",
+      "planning"
+    ]
+  },
+  {
+    "id": "fact_363",
+    "text": "Far transfer — applying knowledge to new, dissimilar problems — requires deep conceptual understanding rather than surface-level memorisation of facts.",
+    "category": "study-skills",
+    "difficulty": "hard",
+    "tags": [
+      "transfer-learning",
+      "deep-learning"
+    ]
+  },
+  {
+    "id": "fact_364",
+    "text": "Explaining a concept to a peer deepens your own understanding by forcing clear articulation and revealing gaps in your knowledge.",
+    "category": "study-skills",
+    "difficulty": "medium",
+    "tags": [
+      "peer-teaching",
+      "protege-effect"
+    ]
+  },
+  {
+    "id": "fact_365",
+    "text": "Reviewing notes within 24 hours of a lecture dramatically reduces forgetting by reinforcing memory before significant decay can occur.",
+    "category": "study-skills",
+    "difficulty": "easy",
+    "tags": [
+      "review-cycle",
+      "forgetting-curve"
+    ]
+  }
+]

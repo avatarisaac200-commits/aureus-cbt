@@ -1,8 +1,9 @@
 ﻿import React, { useState, useEffect } from 'react';
 import { User, MockTest, ExamResult, QuizQuestion, SharedQuiz, CsvQuestionBundle, CustomThemeConfig } from '../types';
 import { db } from '../firebase';
-import { collection, query, where, onSnapshot, getDocs, getDocsFromServer, limit, addDoc, updateDoc, deleteDoc, doc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+import { collection, query, where, onSnapshot, getDocs, getDocsFromServer, limit, addDoc, updateDoc, deleteDoc, doc, orderBy } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import logo from '../assets/logo.png';
+import factsJson from '../data/facts.json';
 import { AppTheme, THEMES } from '../theme';
 import { toast } from './ui/Toast';
 import { confirmDialog } from './ui/ConfirmDialog';
@@ -40,14 +41,27 @@ interface TestFolder {
 }
 
 interface RankRow {
+  rank: number;
   userId: string;
   userName: string;
   attempts: number;
   averagePercent: number;
   bestPercent: number;
+  lastCompletedAt?: string;
+}
+
+interface DailyFactEntry {
+  id: string;
+  text: string;
+  category: string;
+  difficulty: 'easy' | 'medium' | 'hard';
+  tags: string[];
 }
 
 const MAX_TEST_FOLDERS = 10;
+const DAILY_FACT_DISMISSED_PREFIX = 'dailyFactDismissed';
+const DAILY_FACT_NOTIFIED_PREFIX = 'dailyFactNotified';
+const DAILY_FACTS = Array.isArray(factsJson) ? factsJson as DailyFactEntry[] : [];
 const THEME_COLOR_FIELDS: Array<{ key: keyof CustomThemeConfig; label: string }> = [
   { key: 'bgStart', label: 'Background Start' },
   { key: 'bgEnd', label: 'Background End' },
@@ -60,6 +74,27 @@ const THEME_COLOR_FIELDS: Array<{ key: keyof CustomThemeConfig; label: string }>
   { key: 'card', label: 'Card' },
   { key: 'border', label: 'Border' }
 ];
+
+const getUtcDateKey = (date = new Date()) => {
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const getUtcDayNumber = (date = new Date()) => {
+  const utcMidnightMs = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+  return Math.floor(utcMidnightMs / 86400000);
+};
+
+const getDailyFact = (date = new Date()): DailyFactEntry | null => {
+  if (DAILY_FACTS.length === 0) return null;
+  const index = ((getUtcDayNumber(date) % DAILY_FACTS.length) + DAILY_FACTS.length) % DAILY_FACTS.length;
+  return DAILY_FACTS[index] || null;
+};
+
+const getDailyFactDismissedKey = (userId: string, dateKey: string) => `${DAILY_FACT_DISMISSED_PREFIX}:${userId}:${dateKey}`;
+const getDailyFactNotifiedKey = (userId: string, dateKey: string) => `${DAILY_FACT_NOTIFIED_PREFIX}:${userId}:${dateKey}`;
 
 const LeaderboardModal: React.FC<{ test: MockTest, onClose: () => void }> = ({ test, onClose }) => {
   const [topScores, setTopScores] = useState<ExamResult[]>([]);
@@ -199,6 +234,7 @@ const Dashboard: React.FC<DashboardProps> = ({
   const [sortMode, setSortMode] = useState<TestSortMode>('updated');
   const [activationInput, setActivationInput] = useState('');
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [preferencesHydrated, setPreferencesHydrated] = useState(false);
   const [lowDataMode, setLowDataMode] = useState(false);
   const [quizName, setQuizName] = useState('');
   const [quizDescription, setQuizDescription] = useState('');
@@ -218,6 +254,7 @@ const Dashboard: React.FC<DashboardProps> = ({
   const [profileTitle, setProfileTitle] = useState(user.title || '');
   const [profileAvatarUrl, setProfileAvatarUrl] = useState(user.avatarUrl || '');
   const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [showDailyFact, setShowDailyFact] = useState(false);
   const isStudent = user.role === 'student';
   const licenseEndsMs = Date.parse(user.subscriptionEndsAt || '');
   const licenseEndsLabel = Number.isFinite(licenseEndsMs)
@@ -226,6 +263,9 @@ const Dashboard: React.FC<DashboardProps> = ({
   const licenseStatusLabel = user.subscriptionStatus === 'active'
     ? `Active${licenseEndsLabel ? ` (until: ${licenseEndsLabel})` : ''}`
     : (user.subscriptionStatus || 'inactive');
+  const dailyFactDateKey = getUtcDateKey();
+  const dailyFact = getDailyFact();
+  const dailyFactBadge = dailyFact?.category?.replace(/-/g, ' ') || 'daily fact';
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -258,7 +298,49 @@ const Dashboard: React.FC<DashboardProps> = ({
     if (storedSelectedFolder) {
       setSelectedFolderId(storedSelectedFolder as 'all' | 'unfiled' | string);
     }
+    setPreferencesHydrated(true);
   }, [user.id]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !dailyFact) {
+      setShowDailyFact(false);
+      return;
+    }
+    const dismissed = window.localStorage.getItem(getDailyFactDismissedKey(user.id, dailyFactDateKey)) === '1';
+    setShowDailyFact(!dismissed);
+  }, [dailyFact, dailyFactDateKey, user.id]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !preferencesHydrated || !dailyFact || !notificationsEnabled) return;
+    const notifyKey = getDailyFactNotifiedKey(user.id, dailyFactDateKey);
+    if (window.localStorage.getItem(notifyKey) === '1') return;
+
+    toast.info('Fact of the Day', dailyFact.text);
+    window.localStorage.setItem(notifyKey, '1');
+
+    if (!('Notification' in window)) return;
+    const sendBrowserNotification = () => {
+      try {
+        new Notification('Fact of the Day', { body: dailyFact.text });
+      } catch {
+        // Ignore browser notification failures.
+      }
+    };
+
+    if (Notification.permission === 'granted') {
+      sendBrowserNotification();
+      return;
+    }
+    if (Notification.permission !== 'default') return;
+
+    Notification.requestPermission()
+      .then((permission) => {
+        if (permission === 'granted') sendBrowserNotification();
+      })
+      .catch(() => {
+        // Ignore browser notification failures.
+      });
+  }, [dailyFact, dailyFactDateKey, notificationsEnabled, preferencesHydrated, user.id]);
 
   useEffect(() => {
     setProfileName(user.name || '');
@@ -311,6 +393,13 @@ const Dashboard: React.FC<DashboardProps> = ({
     setNotificationsEnabled(next);
     if (typeof window !== 'undefined') {
       window.localStorage.setItem(`notifications:${user.id}`, next ? 'on' : 'off');
+    }
+  };
+
+  const dismissDailyFact = () => {
+    setShowDailyFact(false);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(getDailyFactDismissedKey(user.id, dailyFactDateKey), '1');
     }
   };
 
@@ -538,24 +627,21 @@ const Dashboard: React.FC<DashboardProps> = ({
     setRankLoading(true);
     setRankError(null);
     const unsub = onSnapshot(
-      query(collection(db, 'leaderboardPublic'), limit(200)),
+      query(collection(db, 'leaderboardPublic'), orderBy('sortKey', 'desc'), limit(100)),
       (snap) => {
         const rows: RankRow[] = snap.docs
-          .map((d) => {
+          .map((d, index) => {
             const data = d.data() as any;
             return {
+              rank: index + 1,
               userId: String(data.userId || d.id),
               userName: String(data.userName || 'Unknown User'),
               attempts: Math.max(0, Number(data.attempts || 0)),
               averagePercent: Math.max(0, Math.min(100, Number(data.averagePercent || 0))),
-              bestPercent: Math.max(0, Math.min(100, Number(data.bestPercent || 0)))
+              bestPercent: Math.max(0, Math.min(100, Number(data.bestPercent || 0))),
+              lastCompletedAt: typeof data.lastCompletedAt === 'string' ? data.lastCompletedAt : ''
             } as RankRow;
-          })
-          .sort((a, b) => {
-            if (b.averagePercent !== a.averagePercent) return b.averagePercent - a.averagePercent;
-            return b.bestPercent - a.bestPercent;
-          })
-          .slice(0, 100);
+          });
 
         setRankRows(rows);
         setRankLoading(false);
@@ -880,6 +966,43 @@ const Dashboard: React.FC<DashboardProps> = ({
            </button>
          </div>
       </div>
+
+      {showDailyFact && dailyFact && (
+        <div className="sticky top-[72px] z-40 px-4 md:px-6 pt-3">
+          <div className="mx-auto max-w-6xl rounded-[1.75rem] border border-amber-200 bg-gradient-to-r from-amber-50 via-white to-sky-50 shadow-sm">
+            <div className="flex items-start gap-3 px-4 py-4 md:px-6 md:py-5">
+              <div className="shrink-0 w-11 h-11 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center font-black shadow-sm">F</div>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2 mb-1">
+                  <p className="text-xs font-black uppercase tracking-[0.24em] text-amber-700">Fact of the Day</p>
+                  <span className="px-2 py-1 rounded-full bg-slate-950 text-[10px] font-black uppercase tracking-widest text-amber-400">{dailyFactBadge}</span>
+                  <span className="px-2 py-1 rounded-full bg-white border border-slate-200 text-[10px] font-black uppercase tracking-widest text-slate-500">{dailyFact.difficulty}</span>
+                </div>
+                <p className="text-sm md:text-[15px] leading-relaxed text-slate-700">{dailyFact.text}</p>
+                {dailyFact.tags?.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    {dailyFact.tags.slice(0, 4).map((tag) => (
+                      <span key={tag} className="px-2 py-1 rounded-full bg-white border border-slate-200 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={dismissDailyFact}
+                aria-label="Dismiss fact of the day"
+                className="shrink-0 w-10 h-10 rounded-xl border border-slate-200 bg-white text-slate-400 hover:text-slate-700 hover:border-slate-300"
+              >
+                <svg className="w-5 h-5 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {errors && (
         <div className="mx-6 mt-6 p-4 bg-red-50 border border-red-100 rounded-2xl text-red-600 font-bold text-xs uppercase tracking-widest">
@@ -1388,10 +1511,10 @@ const Dashboard: React.FC<DashboardProps> = ({
                 ) : (
                   <div className="space-y-2 max-h-[60dvh] v2-scroll pr-1">
                     {rankRows.map((row, idx) => (
-                      <div key={row.userId} className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 flex items-center gap-3">
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black ${idx < 3 ? 'bg-amber-500 text-slate-950' : 'bg-white text-slate-500 border border-slate-200'}`}>{idx + 1}</div>
+                      <div key={row.userId} className={`rounded-2xl border px-4 py-3 flex items-center gap-3 ${row.userId === user.id ? 'border-amber-300 bg-amber-50' : 'border-slate-100 bg-slate-50'}`}>
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black ${idx < 3 ? 'bg-amber-500 text-slate-950' : 'bg-white text-slate-500 border border-slate-200'}`}>{row.rank}</div>
                         <div className="min-w-0 flex-1">
-                          <p className="text-sm font-black uppercase text-slate-900 truncate">{row.userName}</p>
+                          <p className="text-sm font-black uppercase text-slate-900 truncate">{row.userName}{row.userId === user.id ? ' (You)' : ''}</p>
                           <p className="text-xs font-bold uppercase tracking-widest text-slate-500">{row.attempts} attempts</p>
                         </div>
                         <div className="text-right">

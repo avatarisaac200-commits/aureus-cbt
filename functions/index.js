@@ -19,6 +19,24 @@ const toPercent = (score, maxScore) => {
 };
 
 const toFixedOne = (value) => Number(Number(value || 0).toFixed(1));
+const toFixedTwo = (value) => Number(Number(value || 0).toFixed(2));
+const toSortableTime = (value) => {
+  const ms = Date.parse(String(value || ''));
+  return Number.isFinite(ms) ? ms : 0;
+};
+const padNumber = (value, width) => String(Math.max(0, Math.trunc(value))).padStart(width, '0');
+const toLeaderboardSortKey = ({ averagePercent, bestPercent, attempts, lastCompletedAt }) => {
+  const avgBasisPoints = Math.round(clampPercent(averagePercent) * 100);
+  const bestBasisPoints = Math.round(clampPercent(bestPercent) * 100);
+  const lastCompletedMs = toSortableTime(lastCompletedAt);
+
+  return [
+    padNumber(avgBasisPoints, 5),
+    padNumber(bestBasisPoints, 5),
+    padNumber(Math.min(Math.max(0, Number(attempts) || 0), 99999), 5),
+    padNumber(Math.min(lastCompletedMs, 9999999999999), 13)
+  ].join(':');
+};
 
 const recomputeCourseAnalytics = async (courseId) => {
   if (!courseId || typeof courseId !== 'string') return;
@@ -72,6 +90,7 @@ const recomputeUserLeaderboard = async (userId) => {
   let totalPercent = 0;
   let bestPercent = 0;
   let latestName = 'Unknown User';
+  let lastCompletedAt = '';
 
   resultsSnap.docs.forEach((docSnap) => {
     const row = docSnap.data() || {};
@@ -83,6 +102,10 @@ const recomputeUserLeaderboard = async (userId) => {
     if (typeof row.userName === 'string' && row.userName.trim()) {
       latestName = row.userName.trim();
     }
+    const completedAt = typeof row.completedAt === 'string' ? row.completedAt : '';
+    if (toSortableTime(completedAt) >= toSortableTime(lastCompletedAt)) {
+      lastCompletedAt = completedAt;
+    }
   });
 
   const ref = db.collection('leaderboardPublic').doc(userId);
@@ -92,13 +115,24 @@ const recomputeUserLeaderboard = async (userId) => {
   }
 
   const averagePercent = attempts > 0 ? totalPercent / attempts : 0;
-  await ref.set({
+  const leaderboardRow = {
     userId,
     userName: latestName,
     attempts,
-    averagePercent: Number(averagePercent.toFixed(2)),
-    bestPercent: Number(bestPercent.toFixed(2)),
+    averagePercent: toFixedTwo(averagePercent),
+    bestPercent: toFixedTwo(bestPercent),
+    lastCompletedAt,
+    sortKey: toLeaderboardSortKey({
+      averagePercent,
+      bestPercent,
+      attempts,
+      lastCompletedAt
+    }),
     updatedAt: new Date().toISOString()
+  };
+
+  await ref.set({
+    ...leaderboardRow
   }, { merge: true });
 };
 

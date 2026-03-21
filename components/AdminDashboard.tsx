@@ -24,6 +24,22 @@ type EditableCsvQuestion = StagedQuestion & { id: string };
 
 const normalizeText = (text: string) => text.toLowerCase().trim().replace(/\s+/g, ' ');
 const normalizeOptions = (options: string[]) => options.map(opt => opt.trim());
+const clampPercent = (value: number) => Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0));
+const toSortableTime = (value?: string) => {
+  const ms = Date.parse(String(value || ''));
+  return Number.isFinite(ms) ? ms : 0;
+};
+const padNumber = (value: number, width: number) => String(Math.max(0, Math.trunc(value))).padStart(width, '0');
+const toLeaderboardSortKey = (averagePercent: number, bestPercent: number, attempts: number, lastCompletedAt?: string) => {
+  const avgBasisPoints = Math.round(clampPercent(averagePercent) * 100);
+  const bestBasisPoints = Math.round(clampPercent(bestPercent) * 100);
+  return [
+    padNumber(avgBasisPoints, 5),
+    padNumber(bestBasisPoints, 5),
+    padNumber(Math.min(Math.max(0, attempts), 99999), 5),
+    padNumber(Math.min(toSortableTime(lastCompletedAt), 9999999999999), 13)
+  ].join(':');
+};
 const areOptionsChanged = (prev: string[], next: string[]) => {
   if (prev.length !== next.length) return true;
   for (let i = 0; i < prev.length; i++) {
@@ -822,7 +838,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
     setLoading(true);
     try {
       const resultsSnap = await getDocs(query(collection(db, 'results'), limit(3000)));
-      const buckets: Record<string, { userName: string; attempts: number; totalPercent: number; bestPercent: number }> = {};
+      const buckets: Record<string, {
+        userName: string;
+        attempts: number;
+        totalPercent: number;
+        bestPercent: number;
+        lastCompletedAt: string;
+      }> = {};
 
       resultsSnap.docs.forEach((d) => {
         const row = d.data() as ExamResult;
@@ -830,18 +852,25 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
         if (!userId) return;
         const maxScore = Number(row.maxScore || 0);
         if (maxScore <= 0) return;
-        const percent = Math.max(0, Math.min(100, (Number(row.score || 0) / maxScore) * 100));
+        const percent = clampPercent((Number(row.score || 0) / maxScore) * 100);
         if (!buckets[userId]) {
           buckets[userId] = {
             userName: row.userName || 'Unknown User',
             attempts: 0,
             totalPercent: 0,
-            bestPercent: 0
+            bestPercent: 0,
+            lastCompletedAt: ''
           };
         }
         buckets[userId].attempts += 1;
         buckets[userId].totalPercent += percent;
         buckets[userId].bestPercent = Math.max(buckets[userId].bestPercent, percent);
+        if (row.userName?.trim()) {
+          buckets[userId].userName = row.userName.trim();
+        }
+        if (toSortableTime(row.completedAt) >= toSortableTime(buckets[userId].lastCompletedAt)) {
+          buckets[userId].lastCompletedAt = row.completedAt;
+        }
       });
 
       const existingSnap = await getDocs(query(collection(db, 'leaderboardPublic'), limit(3000)));
@@ -872,6 +901,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
           attempts,
           averagePercent: Number(avg.toFixed(2)),
           bestPercent: Number(bucket.bestPercent.toFixed(2)),
+          lastCompletedAt: bucket.lastCompletedAt,
+          sortKey: toLeaderboardSortKey(avg, bucket.bestPercent, attempts, bucket.lastCompletedAt),
           updatedAt: new Date().toISOString()
         });
         writes++;
