@@ -8,11 +8,14 @@ import logo from './assets/logo.png';
 import { AppTheme } from './theme';
 import { clearGlassAccent, syncGlassAccent } from './glassAccent';
 import { toast } from './components/ui/Toast';
+import { ATTENDANCE_ROUTE, BLACKLIST_ROUTE } from './brainstorm';
 
 const Auth = lazy(() => import('./components/Auth'));
 const Dashboard = lazy(() => import('./components/Dashboard'));
 const AdminDashboard = lazy(() => import('./components/AdminDashboard'));
 const RootAdminDashboard = lazy(() => import('./components/RootAdminDashboard'));
+const AttendancePortal = lazy(() => import('./components/AttendancePortal'));
+const BlacklistPage = lazy(() => import('./components/BlacklistPage'));
 const ExamInterface = lazy(() => import('./components/ExamInterface'));
 const ResultScreen = lazy(() => import('./components/ResultScreen'));
 const ReviewInterface = lazy(() => import('./components/ReviewInterface'));
@@ -99,6 +102,8 @@ const viewToPath = (view: ViewState) => {
   if (view === 'verify-email') return '/verify-email';
   if (view === 'dashboard') return '/dashboard';
   if (view === 'courses') return '/courses';
+  if (view === 'attendance') return ATTENDANCE_ROUTE;
+  if (view === 'blacklist') return BLACKLIST_ROUTE;
   if (view === 'admin') return '/admin';
   if (view === 'root-admin') return '/root-admin';
   if (view === 'update-manual') return '/whats-new';
@@ -111,6 +116,8 @@ const pathToView = (path: string): ViewState | null => {
   if (normalized === '/verify-email') return 'verify-email';
   if (normalized === '/dashboard' || normalized === '/') return 'dashboard';
   if (normalized === '/courses') return 'courses';
+  if (normalized === ATTENDANCE_ROUTE) return 'attendance';
+  if (normalized === BLACKLIST_ROUTE) return 'blacklist';
   if (normalized === '/admin') return 'admin';
   if (normalized === '/root-admin') return 'root-admin';
   if (normalized === '/whats-new') return 'update-manual';
@@ -968,7 +975,11 @@ const App: React.FC = () => {
           }
         } else {
           const requestedView = typeof window !== 'undefined' ? pathToView(window.location.pathname) : null;
-          if (requestedView === 'courses') {
+          if (requestedView === 'attendance') {
+            setCurrentView('attendance');
+          } else if (requestedView === 'blacklist') {
+            setCurrentView('blacklist');
+          } else if (requestedView === 'courses') {
             setCurrentView('courses');
           } else if (requestedView === 'update-manual') {
             setCurrentView('update-manual');
@@ -985,11 +996,25 @@ const App: React.FC = () => {
         }
       } else {
         setCurrentUser(null);
-        setCurrentView('auth');
+        const requestedView = typeof window !== 'undefined' ? pathToView(window.location.pathname) : null;
+        setCurrentView(
+          requestedView === 'blacklist'
+            ? 'blacklist'
+            : requestedView === 'attendance'
+              ? 'attendance'
+              : 'auth'
+        );
       }
     } catch (error) {
       console.error("Account check error:", error);
-      setCurrentView('auth');
+      const requestedView = typeof window !== 'undefined' ? pathToView(window.location.pathname) : null;
+      setCurrentView(
+        requestedView === 'blacklist'
+          ? 'blacklist'
+          : requestedView === 'attendance'
+            ? 'attendance'
+            : 'auth'
+      );
     } finally {
       setIsLoading(false);
     }
@@ -1012,7 +1037,14 @@ const App: React.FC = () => {
         }
       } else {
         setCurrentUser(null);
-        setCurrentView('auth');
+        const requestedView = typeof window !== 'undefined' ? pathToView(window.location.pathname) : null;
+        setCurrentView(
+          requestedView === 'blacklist'
+            ? 'blacklist'
+            : requestedView === 'attendance'
+              ? 'attendance'
+              : 'auth'
+        );
         setIsLoading(false);
         setFreeAccessEndsAtIso(DEFAULT_FREE_ACCESS_ENDS_AT_ISO);
       }
@@ -1027,7 +1059,13 @@ const App: React.FC = () => {
     }
     const timer = window.setTimeout(() => {
       if (!isLoading) return;
-      setCurrentView((prev) => (prev === 'verify-email' ? prev : 'auth'));
+      const requestedView = typeof window !== 'undefined' ? pathToView(window.location.pathname) : null;
+      setCurrentView((prev) => {
+        if (prev === 'verify-email') return prev;
+        if (requestedView === 'blacklist') return 'blacklist';
+        if (requestedView === 'attendance') return 'attendance';
+        return 'auth';
+      });
       setIsLoading(false);
       if (!bootFallbackNotifiedRef.current) {
         toast.warning('Recovered from slow startup', 'Continuing to sign-in screen. You can retry login immediately.');
@@ -1359,7 +1397,13 @@ const App: React.FC = () => {
           </div>
         }
       >
-      {currentView === 'auth' && <Auth onLogin={checkUserStatus} />}
+      {(currentView === 'auth' || (currentView === 'attendance' && !currentUser)) && <Auth onLogin={checkUserStatus} />}
+      {currentView === 'blacklist' && (
+        <BlacklistPage
+          onOpenAttendance={() => setCurrentView('attendance')}
+          onOpenDashboard={currentUser ? () => setCurrentView('dashboard') : undefined}
+        />
+      )}
       {currentView === 'dashboard' && currentUser && (
         <Dashboard 
           user={currentUser} 
@@ -1409,6 +1453,14 @@ const App: React.FC = () => {
           currentUiMode={uiMode}
           onUiModeChange={setUiMode}
           onUserProfileUpdate={(patch) => setCurrentUser((prev) => (prev ? { ...prev, ...patch } : prev))}
+        />
+      )}
+      {currentView === 'attendance' && currentUser && (
+        <AttendancePortal
+          user={currentUser}
+          onLogout={() => auth.signOut()}
+          onOpenBlacklist={() => setCurrentView('blacklist')}
+          onOpenDashboard={() => setCurrentView('dashboard')}
         />
       )}
       {currentView === 'courses' && currentUser && (

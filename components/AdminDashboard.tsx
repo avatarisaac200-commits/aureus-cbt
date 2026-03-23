@@ -9,6 +9,7 @@ import AdminAnalytics from './AdminAnalytics';
 import logo from '../assets/logo.png';
 import { toast } from './ui/Toast';
 import { confirmDialog } from './ui/ConfirmDialog';
+import { DEFAULT_BRAINSTORM_WINDOWS, minutesToLabel, minutesToTimeInputValue, sanitizeBrainstormWindows, timeInputValueToMinutes } from '../brainstorm';
 
 interface AdminDashboardProps {
   user: User;
@@ -18,9 +19,10 @@ interface AdminDashboardProps {
   onOpenCourses?: () => void;
 }
 
-type AdminTab = 'questions' | 'create-test' | 'tests' | 'import' | 'analytics' | 'license-keys';
+type AdminTab = 'questions' | 'create-test' | 'tests' | 'import' | 'analytics' | 'attendance' | 'license-keys';
 type StagedQuestion = Omit<Question, 'id' | 'createdAt' | 'createdBy'> & { selected?: boolean };
 type EditableCsvQuestion = StagedQuestion & { id: string };
+type EditableBrainstormWindow = { id: string; label: string; openTime: string; closeTime: string };
 
 const normalizeText = (text: string) => text.toLowerCase().trim().replace(/\s+/g, ' ');
 const normalizeOptions = (options: string[]) => options.map(opt => opt.trim());
@@ -52,6 +54,13 @@ const chunkArray = <T,>(arr: T[], size: number) => {
   for (let i = 0; i < arr.length; i += size) chunks.push(arr.slice(i, i + size));
   return chunks;
 };
+const toEditableBrainstormWindows = (windows: ReturnType<typeof sanitizeBrainstormWindows>): EditableBrainstormWindow[] =>
+  windows.map((window) => ({
+    id: window.id,
+    label: window.label,
+    openTime: minutesToTimeInputValue(window.openMinute),
+    closeTime: minutesToTimeInputValue(window.closeMinute)
+  }));
 const DEADLINE_CONFIG_DOC_ID = 'deadline_config';
 const DEFAULT_FREE_ACCESS_ENDS_AT_ISO = '2026-04-01T23:00:00.000Z'; // April 2, 2026 00:00 WAT
 
@@ -580,6 +589,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
   const [keyToolLoading, setKeyToolLoading] = useState(false);
   const [deadlineInput, setDeadlineInput] = useState(toWatInputValue(DEFAULT_FREE_ACCESS_ENDS_AT_ISO));
   const [deadlineSaving, setDeadlineSaving] = useState(false);
+  const [attendanceWindows, setAttendanceWindows] = useState<EditableBrainstormWindow[]>(toEditableBrainstormWindows(DEFAULT_BRAINSTORM_WINDOWS));
+  const [attendanceSaving, setAttendanceSaving] = useState(false);
 
   const groupedQuestions = useMemo(() => {
     const groups: Record<string, Question[]> = {};
@@ -663,6 +674,20 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
     };
     loadDeadline();
   }, [activeTab, canManageKeys]);
+
+  useEffect(() => {
+    const loadAttendanceConfig = async () => {
+      if (activeTab !== 'attendance') return;
+      try {
+        const snap = await getDoc(doc(db, 'brainstormConfig', 'global'));
+        const windows = sanitizeBrainstormWindows(snap.exists() ? (snap.data() as any)?.windows : null);
+        setAttendanceWindows(toEditableBrainstormWindows(windows));
+      } catch {
+        setAttendanceWindows(toEditableBrainstormWindows(DEFAULT_BRAINSTORM_WINDOWS));
+      }
+    };
+    loadAttendanceConfig();
+  }, [activeTab]);
 
   const runQuestionSearch = async (rawQuery: string) => {
     const q = rawQuery.trim();
@@ -2004,6 +2029,43 @@ Rules:
     }
   };
 
+  const handleAttendanceWindowChange = (id: string, field: 'openTime' | 'closeTime', value: string) => {
+    setAttendanceWindows((prev) => prev.map((window) => window.id === id ? { ...window, [field]: value } : window));
+  };
+
+  const handleSaveAttendanceWindows = async () => {
+    setAttendanceSaving(true);
+    try {
+      const windows = attendanceWindows.map((window, index) => {
+        const openMinute = timeInputValueToMinutes(window.openTime);
+        const closeMinute = timeInputValueToMinutes(window.closeTime);
+        if (openMinute === null || closeMinute === null || closeMinute <= openMinute) {
+          throw new Error(`Invalid time range for ${window.label || `Window ${index + 1}`}.`);
+        }
+        return {
+          id: window.id,
+          label: window.label || `Window ${index + 1}`,
+          openMinute,
+          closeMinute,
+          opensAtLabel: minutesToLabel(openMinute),
+          closesAtLabel: minutesToLabel(closeMinute)
+        };
+      });
+
+      await setDoc(doc(db, 'brainstormConfig', 'global'), {
+        windows,
+        updatedAt: new Date().toISOString(),
+        updatedBy: user.id,
+        updatedByName: user.name
+      }, { merge: true });
+      notify('Attendance windows updated successfully.');
+    } catch (err: any) {
+      notify('Failed to update attendance windows. ' + (err?.message || ''));
+    } finally {
+      setAttendanceSaving(false);
+    }
+  };
+
   return (
     <div className="v2-page flex-1 w-full bg-slate-50 flex flex-col overflow-hidden min-h-0">
       <div className="v2-shell bg-white border-b border-slate-100 p-6 flex justify-between items-center shrink-0 safe-top shadow-sm z-10">
@@ -2032,6 +2094,7 @@ Rules:
         <button onClick={() => setActiveTab('create-test')} className={`px-8 py-4 text-xs font-bold uppercase tracking-widest transition-all ${activeTab === 'create-test' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50' : 'text-slate-400'}`}>Create Test</button>
         <button onClick={() => setActiveTab('tests')} className={`px-8 py-4 text-xs font-bold uppercase tracking-widest transition-all ${activeTab === 'tests' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50' : 'text-slate-400'}`}>Tests</button>
         <button onClick={() => setActiveTab('import')} className={`px-8 py-4 text-xs font-bold uppercase tracking-widest transition-all ${activeTab === 'import' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50' : 'text-slate-400'}`}>Import</button>
+        <button onClick={() => setActiveTab('attendance')} className={`px-8 py-4 text-xs font-bold uppercase tracking-widest transition-all ${activeTab === 'attendance' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50' : 'text-slate-400'}`}>Attendance</button>
         {canManageKeys && (
           <button onClick={() => setActiveTab('license-keys')} className={`px-8 py-4 text-xs font-bold uppercase tracking-widest transition-all ${activeTab === 'license-keys' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50' : 'text-slate-400'}`}>License Keys</button>
         )}
@@ -2989,6 +3052,59 @@ Rules:
                 </div>
               )}
            </div>
+        )}
+
+        {activeTab === 'attendance' && (
+          <div className="max-w-5xl mx-auto space-y-6">
+            <div className="bg-white border border-slate-100 rounded-[2rem] p-8 shadow-sm">
+              <h3 className="text-lg font-bold text-slate-900 mb-2">Attendance Windows</h3>
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-400">
+                These Lagos-time windows control the centralized attendance portal and strike checks.
+              </p>
+            </div>
+
+            <div className="bg-white border border-slate-100 rounded-[2rem] p-8 shadow-sm space-y-5">
+              {attendanceWindows.map((window, index) => (
+                <div key={window.id} className="rounded-[1.5rem] border border-slate-100 bg-slate-50 p-5">
+                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
+                    <div>
+                      <h4 className="text-sm font-bold uppercase tracking-widest text-slate-900">{window.label}</h4>
+                      <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Window {index + 1}</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <label className="text-xs font-bold uppercase tracking-widest text-slate-500">
+                      Open Time
+                      <input
+                        type="time"
+                        value={window.openTime}
+                        onChange={(e) => handleAttendanceWindowChange(window.id, 'openTime', e.target.value)}
+                        className="mt-2 w-full p-4 bg-white border border-slate-200 rounded-2xl text-xs font-bold outline-none"
+                      />
+                    </label>
+                    <label className="text-xs font-bold uppercase tracking-widest text-slate-500">
+                      Close Time
+                      <input
+                        type="time"
+                        value={window.closeTime}
+                        onChange={(e) => handleAttendanceWindowChange(window.id, 'closeTime', e.target.value)}
+                        className="mt-2 w-full p-4 bg-white border border-slate-200 rounded-2xl text-xs font-bold outline-none"
+                      />
+                    </label>
+                  </div>
+                </div>
+              ))}
+              <div className="flex justify-end">
+                <button
+                  onClick={handleSaveAttendanceWindows}
+                  disabled={attendanceSaving}
+                  className="px-6 py-4 bg-slate-950 text-amber-500 rounded-2xl text-xs font-bold uppercase tracking-widest disabled:opacity-40"
+                >
+                  {attendanceSaving ? 'Saving...' : 'Save Attendance Windows'}
+                </button>
+              </div>
+            </div>
+          </div>
         )}
 
         {activeTab === 'license-keys' && canManageKeys && (

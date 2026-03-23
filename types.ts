@@ -229,4 +229,4 @@ export interface CustomThemeConfig {
   border: string;
 }
 
-export type ViewState = 'auth' | 'verify-email' | 'dashboard' | 'courses' | 'exam' | 'admin' | 'root-admin' | 'results' | 'review' | 'update-manual';
+export type ViewState = 'auth' | 'verify-email' | 'dashboard' | 'courses' | 'attendance' | 'blacklist' | 'exam' | 'admin' | 'root-admin' | 'results' | 'review' | 'update-manual';

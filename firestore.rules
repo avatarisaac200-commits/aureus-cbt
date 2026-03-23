@@ -176,6 +176,62 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
+    match /brainstormMembers/{userId} {
+      allow get: if isOwner(userId) || isAdmin();
+      allow list: if isAdmin();
+
+      allow create: if
+        isOwner(userId) &&
+        request.resource.data.userId == request.auth.uid;
+
+      allow update: if
+        isOwner(userId) &&
+        request.resource.data.userId == resource.data.userId &&
+        request.resource.data.strikeCount >= resource.data.strikeCount &&
+        (
+          resource.data.blacklisted == true
+          ? request.resource.data.blacklisted == true
+          : true
+        );
+
+      allow delete: if isAdmin();
+    }
+
+    match /brainstormCheckins/{checkinId} {
+      allow get: if
+        signedIn() &&
+        (resource.data.userId == request.auth.uid || isAdmin());
+
+      allow list: if isAdmin();
+
+      allow create, update: if
+        signedIn() &&
+        request.resource.data.userId == request.auth.uid;
+
+      allow delete: if isAdmin();
+    }
+
+    match /brainstormBlacklist/{userId} {
+      allow get, list: if true;
+
+      allow create: if
+        isOwner(userId) &&
+        request.resource.data.userId == request.auth.uid;
+
+      allow update: if
+        isOwner(userId) &&
+        resource.data.userId == request.auth.uid &&
+        request.resource.data.userId == resource.data.userId &&
+        request.resource.data.strikeCount >= resource.data.strikeCount;
+
+      allow delete: if isAdmin();
+    }
+
+    match /brainstormConfig/{configId} {
+      allow get, list: if signedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
     match /aiQuestionExplanations/{cacheId} {
       allow read: if signedIn();
 
