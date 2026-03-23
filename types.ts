@@ -175,6 +175,35 @@ export interface BroadcastNotification {
   createdByName: string;
 }
 
+export type ForumChannel = 'general' | 'questions' | 'resources' | 'wins';
+
+export interface ForumThread {
+  id: string;
+  channel: ForumChannel;
+  title: string;
+  body: string;
+  authorId: string;
+  authorName: string;
+  authorTitle?: string;
+  authorAvatarUrl?: string;
+  createdAt: string;
+  latestActivityAt: string;
+  replyCount: number;
+  lastReplyByName?: string;
+  lastReplyPreview?: string;
+}
+
+export interface ForumReply {
+  id: string;
+  threadId: string;
+  body: string;
+  authorId: string;
+  authorName: string;
+  authorTitle?: string;
+  authorAvatarUrl?: string;
+  createdAt: string;
+}
+
 export type CourseFileVersion = 'html-v1' | 'cbtcourse-v1';
 
 export interface Course {

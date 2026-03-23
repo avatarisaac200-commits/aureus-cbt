@@ -7,6 +7,7 @@ import factsJson from '../data/facts.json';
 import { AppTheme, THEMES } from '../theme';
 import { toast } from './ui/Toast';
 import { confirmDialog } from './ui/ConfirmDialog';
+import CommunityHub from './CommunityHub';
 
 interface DashboardProps {
   user: User;
@@ -32,7 +33,7 @@ interface DashboardProps {
 }
 
 type TestSortMode = 'updated' | 'name' | 'duration' | 'attempts';
-type MainTab = 'home' | 'ranks' | 'create' | 'reviews' | 'settings' | 'profile';
+type MainTab = 'home' | 'community' | 'ranks' | 'create' | 'reviews' | 'settings' | 'profile';
 type MobileUiMode = 'dark' | 'light';
 
 interface TestFolder {
@@ -858,6 +859,7 @@ const Dashboard: React.FC<DashboardProps> = ({
 
   const navTabs: Array<{ id: MainTab; label: string }> = [
     { id: 'home', label: 'Home' },
+    { id: 'community', label: 'Community' },
     { id: 'ranks', label: 'Ranks' },
     { id: 'create', label: 'Create' },
     { id: 'reviews', label: 'Reviews' },
@@ -880,6 +882,15 @@ const Dashboard: React.FC<DashboardProps> = ({
           <rect x="6" y="11" width="3" height="7" />
           <rect x="11" y="7" width="3" height="11" />
           <rect x="16" y="4" width="3" height="14" />
+        </svg>
+      );
+    }
+    if (tabId === 'community') {
+      return (
+        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M8 10h8" />
+          <path d="M8 14h5" />
+          <path d="M5 19l1.5-3H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-8L5 19z" />
         </svg>
       );
     }
@@ -1064,6 +1075,12 @@ const Dashboard: React.FC<DashboardProps> = ({
               className={`px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest ${activeTab === 'ranks' ? 'bg-slate-950 text-amber-500' : 'text-slate-500 bg-slate-50'}`}
             >
               Ranks
+            </button>
+            <button
+              onClick={() => setActiveTab('community')}
+              className={`px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest ${activeTab === 'community' ? 'bg-slate-950 text-amber-500' : 'text-slate-500 bg-slate-50'}`}
+            >
+              Community
             </button>
             <button
               onClick={() => setActiveTab('reviews')}
@@ -1488,6 +1505,10 @@ const Dashboard: React.FC<DashboardProps> = ({
                 </div>
               </div>
             </div>
+          )}
+
+          {activeTab === 'community' && (
+            <CommunityHub user={user} isReadOnly={isReadOnly} />
           )}
 
           {activeTab === 'ranks' && (

@@ -176,22 +176,56 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
+    match /forumThreads/{threadId} {
+      allow get, list: if signedIn();
+
+      allow create: if
+        signedIn() &&
+        request.resource.data.authorId == request.auth.uid;
+
+      allow update, delete: if
+        signedIn() &&
+        (
+          resource.data.authorId == request.auth.uid ||
+          isAdmin()
+        );
+
+      match /replies/{replyId} {
+        allow get, list: if signedIn();
+
+        allow create: if
+          signedIn() &&
+          request.resource.data.authorId == request.auth.uid &&
+          request.resource.data.threadId == threadId;
+
+        allow update, delete: if
+          signedIn() &&
+          (
+            resource.data.authorId == request.auth.uid ||
+            isAdmin()
+          );
+      }
+    }
+
     match /brainstormMembers/{userId} {
       allow get: if isOwner(userId) || isAdmin();
       allow list: if isAdmin();
 
       allow create: if
-        isOwner(userId) &&
+        (isOwner(userId) || isAdmin()) &&
         request.resource.data.userId == request.auth.uid;
 
       allow update: if
-        isOwner(userId) &&
-        request.resource.data.userId == resource.data.userId &&
-        request.resource.data.strikeCount >= resource.data.strikeCount &&
+        isAdmin() ||
         (
-          resource.data.blacklisted == true
-          ? request.resource.data.blacklisted == true
-          : true
+          isOwner(userId) &&
+          request.resource.data.userId == resource.data.userId &&
+          request.resource.data.strikeCount >= resource.data.strikeCount &&
+          (
+            resource.data.blacklisted == true
+            ? request.resource.data.blacklisted == true
+            : true
+          )
         );
 
       allow delete: if isAdmin();
