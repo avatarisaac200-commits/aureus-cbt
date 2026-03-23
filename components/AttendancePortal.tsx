@@ -10,8 +10,8 @@ import {
   BRAINSTORM_TIMEZONE,
   DEFAULT_BRAINSTORM_WINDOWS,
   generateBrainstormPhrase,
+  getBrainstormSessionContext,
   getCurrentBrainstormWindow,
-  getLagosDateParts,
   normalizePhrase,
   sanitizeBrainstormWindows
 } from '../brainstorm';
@@ -40,6 +40,7 @@ interface BrainstormCheckinRecord {
   phrase: string;
   checkedWindowIds: string[];
   missedWindowIds: string[];
+  dailyStrikeApplied: boolean;
   createdAt: string;
   updatedAt: string;
   lastCheckInAt?: string;
@@ -59,7 +60,7 @@ const AttendancePortal: React.FC<AttendancePortalProps> = ({
   const [now, setNow] = useState(() => new Date());
   const [brainstormWindows, setBrainstormWindows] = useState(DEFAULT_BRAINSTORM_WINDOWS);
 
-  const lagosNow = useMemo(() => getLagosDateParts(now), [now]);
+  const lagosNow = useMemo(() => getBrainstormSessionContext(now, brainstormWindows), [brainstormWindows, now]);
   const dateKey = lagosNow.dateKey;
   const memberRef = useMemo(() => doc(db, 'brainstormMembers', user.id), [user.id]);
   const recordRef = useMemo(() => doc(db, 'brainstormCheckins', `${dateKey}_${user.id}`), [dateKey, user.id]);
@@ -70,7 +71,8 @@ const AttendancePortal: React.FC<AttendancePortalProps> = ({
   const reconcileAttendance = async () => {
     await runTransaction(db, async (tx) => {
       const nowIso = new Date().toISOString();
-      const currentDateKey = getLagosDateParts(new Date()).dateKey;
+      const sessionContext = getBrainstormSessionContext(new Date(), brainstormWindows);
+      const currentDateKey = sessionContext.dateKey;
       const memberSnap = await tx.get(memberRef);
       const recordDocRef = doc(db, 'brainstormCheckins', `${currentDateKey}_${user.id}`);
       const recordSnap = await tx.get(recordDocRef);
@@ -95,6 +97,7 @@ const AttendancePortal: React.FC<AttendancePortalProps> = ({
             phrase: generateBrainstormPhrase(user.id, currentDateKey),
             checkedWindowIds: [],
             missedWindowIds: [],
+            dailyStrikeApplied: false,
             createdAt: nowIso,
             updatedAt: nowIso
           };
@@ -104,7 +107,7 @@ const AttendancePortal: React.FC<AttendancePortalProps> = ({
       baseRecord.userName = user.name || baseRecord.userName || 'Unknown User';
       baseRecord.phrase = baseRecord.phrase || generateBrainstormPhrase(user.id, currentDateKey);
 
-      const totalMinutes = getLagosDateParts(new Date()).totalMinutes;
+      const totalMinutes = sessionContext.totalMinutes;
       const newlyMissed = brainstormWindows
         .filter((window) => totalMinutes >= window.closeMinute)
         .filter((window) => !baseRecord.checkedWindowIds.includes(window.id) && !baseRecord.missedWindowIds.includes(window.id))
@@ -112,7 +115,11 @@ const AttendancePortal: React.FC<AttendancePortalProps> = ({
 
       if (newlyMissed.length > 0) {
         baseRecord.missedWindowIds = [...baseRecord.missedWindowIds, ...newlyMissed];
-        baseMember.strikeCount += newlyMissed.length;
+      }
+
+      if (!baseRecord.dailyStrikeApplied && baseRecord.missedWindowIds.length >= brainstormWindows.length) {
+        baseRecord.dailyStrikeApplied = true;
+        baseMember.strikeCount += 1;
       }
 
       if (baseMember.strikeCount >= BRAINSTORM_STRIKE_LIMIT && !baseMember.blacklisted) {
@@ -181,7 +188,7 @@ const AttendancePortal: React.FC<AttendancePortalProps> = ({
         throw new Error('Session not ready. Reload the attendance portal and try again.');
       }
       const rightNow = new Date();
-      const lagos = getLagosDateParts(rightNow);
+      const lagos = getBrainstormSessionContext(rightNow, brainstormWindows);
       const currentWindow = brainstormWindows.find((window) => lagos.totalMinutes >= window.openMinute && lagos.totalMinutes < window.closeMinute);
       if (!currentWindow) {
         throw new Error('Check-in is only allowed during the active attendance window.');
@@ -216,6 +223,7 @@ const AttendancePortal: React.FC<AttendancePortalProps> = ({
           phrase: currentRecord.phrase || generateBrainstormPhrase(user.id, dateKey),
           checkedWindowIds: [...currentRecord.checkedWindowIds, currentWindow.id],
           missedWindowIds: currentRecord.missedWindowIds || [],
+          dailyStrikeApplied: Boolean(currentRecord.dailyStrikeApplied),
           createdAt: currentRecord.createdAt || nowIso,
           userId: user.id,
           updatedAt: nowIso,
@@ -328,7 +336,7 @@ const AttendancePortal: React.FC<AttendancePortalProps> = ({
               {submitting ? 'Submitting...' : activeWindow ? `Submit ${activeWindow.label}` : 'Waiting For Next Window'}
             </button>
             <p className="mt-3 text-xs text-slate-500 leading-relaxed">
-              You must authenticate and submit your assigned phrase during all three windows. Every missed window records one strike automatically.
+              You must authenticate and submit your assigned phrase during all three windows. Missing all three windows for the day records one attendance strike.
             </p>
           </div>
         </section>

@@ -200,7 +200,11 @@ service cloud.firestore {
     match /brainstormCheckins/{checkinId} {
       allow get: if
         signedIn() &&
-        (resource.data.userId == request.auth.uid || isAdmin());
+        (
+          isAdmin() ||
+          resource == null ||
+          resource.data.userId == request.auth.uid
+        );
 
       allow list: if isAdmin();
 

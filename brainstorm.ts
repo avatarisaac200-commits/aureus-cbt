@@ -15,9 +15,9 @@ export const BRAINSTORM_STRIKE_LIMIT = 3;
 export const BRAINSTORM_PHRASE_WORD_COUNT = 4;
 
 export const DEFAULT_BRAINSTORM_WINDOWS: BrainstormWindow[] = [
-  { id: 'window_1', label: 'Window 1', opensAtLabel: '6:00 PM', closesAtLabel: '6:10 PM', openMinute: 18 * 60, closeMinute: 18 * 60 + 10 },
-  { id: 'window_2', label: 'Window 2', opensAtLabel: '7:00 PM', closesAtLabel: '7:10 PM', openMinute: 19 * 60, closeMinute: 19 * 60 + 10 },
-  { id: 'window_3', label: 'Window 3', opensAtLabel: '7:50 PM', closesAtLabel: '8:00 PM', openMinute: 19 * 60 + 50, closeMinute: 20 * 60 }
+  { id: 'window_1', label: 'Window 1', opensAtLabel: '9:00 PM', closesAtLabel: '9:10 PM', openMinute: 21 * 60, closeMinute: 21 * 60 + 10 },
+  { id: 'window_2', label: 'Window 2', opensAtLabel: '10:45 PM', closesAtLabel: '10:55 PM', openMinute: 22 * 60 + 45, closeMinute: 22 * 60 + 55 },
+  { id: 'window_3', label: 'Window 3', opensAtLabel: '12:20 AM', closesAtLabel: '12:30 AM', openMinute: 24 * 60 + 20, closeMinute: 24 * 60 + 30 }
 ];
 
 const WORD_BANK = [
@@ -60,8 +60,19 @@ export const getLagosDateParts = (date = new Date()) => {
   };
 };
 
+const shiftDateKey = (dateKey: string, dayOffset: number) => {
+  const [year, month, day] = String(dateKey || '').split('-').map((part) => Number(part));
+  const next = new Date(Date.UTC(year, (month || 1) - 1, (day || 1) + dayOffset));
+  return `${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, '0')}-${String(next.getUTCDate()).padStart(2, '0')}`;
+};
+
+const normalizeRelativeMinute = (minute: number) => {
+  const modulo = ((Math.trunc(minute) % 1440) + 1440) % 1440;
+  return modulo;
+};
+
 export const minutesToTimeInputValue = (totalMinutes: number) => {
-  const safe = Math.max(0, Math.min(23 * 60 + 59, Math.trunc(totalMinutes)));
+  const safe = normalizeRelativeMinute(totalMinutes);
   const hours = Math.floor(safe / 60);
   const minutes = safe % 60;
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
@@ -77,7 +88,7 @@ export const timeInputValueToMinutes = (value: string) => {
 };
 
 export const minutesToLabel = (totalMinutes: number) => {
-  const safe = Math.max(0, Math.min(23 * 60 + 59, Math.trunc(totalMinutes)));
+  const safe = normalizeRelativeMinute(totalMinutes);
   const hours24 = Math.floor(safe / 60);
   const minutes = safe % 60;
   const hours12 = hours24 % 12 || 12;
@@ -96,8 +107,8 @@ export const sanitizeBrainstormWindows = (value: any): BrainstormWindow[] => {
       return {
         id: String(item?.id || `window_${index + 1}`),
         label: String(item?.label || `Window ${index + 1}`),
-        openMinute: Math.max(0, Math.min(23 * 60 + 59, Math.trunc(openMinute))),
-        closeMinute: Math.max(0, Math.min(24 * 60, Math.trunc(closeMinute))),
+        openMinute: Math.max(0, Math.min(2 * 1440, Math.trunc(openMinute))),
+        closeMinute: Math.max(0, Math.min(2 * 1440, Math.trunc(closeMinute))),
         opensAtLabel: minutesToLabel(openMinute),
         closesAtLabel: minutesToLabel(closeMinute)
       } as BrainstormWindow;
@@ -107,8 +118,24 @@ export const sanitizeBrainstormWindows = (value: any): BrainstormWindow[] => {
   return rows.length > 0 ? rows.sort((a, b) => a.openMinute - b.openMinute) : DEFAULT_BRAINSTORM_WINDOWS;
 };
 
+export const getBrainstormSessionContext = (date = new Date(), windows: BrainstormWindow[] = DEFAULT_BRAINSTORM_WINDOWS) => {
+  const lagos = getLagosDateParts(date);
+  const hasAfterMidnightWindow = windows.some((window) => window.openMinute >= 1440 || window.closeMinute > 1440);
+  const firstWindowOpen = windows.reduce((min, window) => Math.min(min, window.openMinute % 1440), windows[0]?.openMinute % 1440 || 0);
+
+  if (hasAfterMidnightWindow && lagos.totalMinutes < firstWindowOpen) {
+    return {
+      ...lagos,
+      dateKey: shiftDateKey(lagos.dateKey, -1),
+      totalMinutes: lagos.totalMinutes + 1440
+    };
+  }
+
+  return lagos;
+};
+
 export const getCurrentBrainstormWindow = (date = new Date(), windows: BrainstormWindow[] = DEFAULT_BRAINSTORM_WINDOWS) => {
-  const { totalMinutes } = getLagosDateParts(date);
+  const { totalMinutes } = getBrainstormSessionContext(date, windows);
   return windows.find((window) => totalMinutes >= window.openMinute && totalMinutes < window.closeMinute) || null;
 };
 

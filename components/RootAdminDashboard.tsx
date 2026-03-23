@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { User } from '../types';
 import { db, firebaseConfig } from '../firebase';
-import { collection, getDocs, doc, deleteDoc, setDoc, updateDoc, query, where, limit } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+import { collection, getDocs, doc, deleteDoc, setDoc, updateDoc, query, where, limit, writeBatch } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import { createUserWithEmailAndPassword, getAuth, sendEmailVerification } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
 import logo from '../assets/logo.png';
@@ -119,6 +119,57 @@ const RootAdminDashboard: React.FC<RootAdminDashboardProps> = ({ user, onLogout,
     }
   };
 
+  const handleClearGlobalAttendanceStrikes = async () => {
+    const ok = await confirmDialog({
+      title: 'Clear all attendance strikes?',
+      message: 'This will reset cumulative attendance strikes and remove every attendance blacklist entry for all users.',
+      confirmText: 'Clear All',
+      variant: 'danger'
+    });
+    if (!ok) return;
+
+    setLoading(true);
+    try {
+      const [membersSnap, blacklistSnap] = await Promise.all([
+        getDocs(query(collection(db, 'brainstormMembers'), limit(3000))),
+        getDocs(query(collection(db, 'brainstormBlacklist'), limit(3000)))
+      ]);
+
+      let batch = writeBatch(db);
+      let writes = 0;
+      const flush = async () => {
+        if (writes === 0) return;
+        await batch.commit();
+        batch = writeBatch(db);
+        writes = 0;
+      };
+
+      for (const memberDoc of membersSnap.docs) {
+        batch.set(doc(db, 'brainstormMembers', memberDoc.id), {
+          strikeCount: 0,
+          blacklisted: false,
+          blacklistedAt: null,
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+        writes += 1;
+        if (writes >= 450) await flush();
+      }
+
+      for (const blacklistDoc of blacklistSnap.docs) {
+        batch.delete(doc(db, 'brainstormBlacklist', blacklistDoc.id));
+        writes += 1;
+        if (writes >= 450) await flush();
+      }
+
+      await flush();
+      toast.success('Attendance reset', 'All attendance strikes and blacklist entries were cleared.');
+    } catch (err: any) {
+      toast.error('Reset failed', err?.message || 'Could not clear attendance strikes.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="v2-page flex-1 w-full bg-slate-50 flex flex-col overflow-hidden min-h-0">
       <div className="v2-shell bg-white border-b border-slate-100 p-6 flex flex-col md:flex-row justify-between items-center gap-4 shrink-0 safe-top">
@@ -160,6 +211,20 @@ const RootAdminDashboard: React.FC<RootAdminDashboardProps> = ({ user, onLogout,
                    <h3 className="text-xl font-bold text-slate-950 mb-3 uppercase tracking-tight">AI PDF Uploader</h3>
                    <p className="text-xs text-slate-400 mb-10 italic">Automatically parse questions from PDFs.</p>
                    <button className="w-full py-5 bg-slate-950 text-amber-500 rounded-2xl font-bold uppercase text-xs tracking-widest shadow-2xl hover:bg-slate-900 transition-all">Open PDF Tool</button>
+                </div>
+                <div className="bg-white p-10 rounded-[2rem] border border-red-100 shadow-xl flex flex-col">
+                   <div className="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center mb-8">
+                      <svg className="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v3m0 4h.01M5.07 19h13.86c1.54 0 2.5-1.67 1.73-3L13.73 4c-.77-1.33-2.69-1.33-3.46 0L3.34 16c-.77 1.33.19 3 1.73 3z"></path></svg>
+                   </div>
+                   <h3 className="text-xl font-bold text-slate-950 mb-3 uppercase tracking-tight">Clear Attendance Strikes</h3>
+                   <p className="text-xs text-slate-400 mb-10 italic">Root-admin-only global reset for attendance strike counts and attendance blacklist entries.</p>
+                   <button
+                     onClick={handleClearGlobalAttendanceStrikes}
+                     disabled={loading}
+                     className="w-full py-5 bg-red-600 text-white rounded-2xl font-bold uppercase text-xs tracking-widest shadow-2xl hover:bg-red-700 transition-all disabled:opacity-40"
+                   >
+                     {loading ? 'Working...' : 'Clear All Attendance Strikes'}
+                   </button>
                 </div>
              </div>
           </div>

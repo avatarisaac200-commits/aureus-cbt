@@ -2036,12 +2036,23 @@ Rules:
   const handleSaveAttendanceWindows = async () => {
     setAttendanceSaving(true);
     try {
+      let previousCloseMinute = -1;
       const windows = attendanceWindows.map((window, index) => {
-        const openMinute = timeInputValueToMinutes(window.openTime);
-        const closeMinute = timeInputValueToMinutes(window.closeTime);
+        let openMinute = timeInputValueToMinutes(window.openTime);
+        let closeMinute = timeInputValueToMinutes(window.closeTime);
+        if (openMinute === null || closeMinute === null) {
+          throw new Error(`Invalid time range for ${window.label || `Window ${index + 1}`}.`);
+        }
+        while (openMinute <= previousCloseMinute) {
+          openMinute += 1440;
+        }
+        while (closeMinute <= openMinute) {
+          closeMinute += 1440;
+        }
         if (openMinute === null || closeMinute === null || closeMinute <= openMinute) {
           throw new Error(`Invalid time range for ${window.label || `Window ${index + 1}`}.`);
         }
+        previousCloseMinute = closeMinute;
         return {
           id: window.id,
           label: window.label || `Window ${index + 1}`,
