@@ -207,6 +207,38 @@ service cloud.firestore {
       }
     }
 
+    match /directConversations/{conversationId} {
+      allow get, list: if
+        signedIn() &&
+        resource.data.participantIds.hasAny([request.auth.uid]);
+
+      allow create: if
+        signedIn() &&
+        request.resource.data.participantIds is list &&
+        request.resource.data.participantIds.size() == 2 &&
+        request.resource.data.participantIds.hasAny([request.auth.uid]);
+
+      allow update, delete: if
+        signedIn() &&
+        resource.data.participantIds.hasAny([request.auth.uid]);
+
+      match /messages/{messageId} {
+        allow get, list: if
+          signedIn() &&
+          get(/databases/$(database)/documents/directConversations/$(conversationId)).data.participantIds.hasAny([request.auth.uid]);
+
+        allow create: if
+          signedIn() &&
+          request.resource.data.authorId == request.auth.uid &&
+          request.resource.data.conversationId == conversationId &&
+          get(/databases/$(database)/documents/directConversations/$(conversationId)).data.participantIds.hasAny([request.auth.uid]);
+
+        allow update, delete: if
+          signedIn() &&
+          resource.data.authorId == request.auth.uid;
+      }
+    }
+
     match /brainstormMembers/{userId} {
       allow get: if isOwner(userId) || isAdmin();
       allow list: if isAdmin();

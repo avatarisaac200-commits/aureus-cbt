@@ -204,6 +204,28 @@ export interface ForumReply {
   createdAt: string;
 }
 
+export interface DirectConversation {
+  id: string;
+  participantIds: string[];
+  participantNames: string[];
+  participantTitles?: string[];
+  participantAvatarUrls?: string[];
+  createdAt: string;
+  updatedAt: string;
+  lastMessageText?: string;
+  lastMessageAt?: string;
+  lastMessageSenderId?: string;
+}
+
+export interface DirectMessage {
+  id: string;
+  conversationId: string;
+  authorId: string;
+  authorName: string;
+  body: string;
+  createdAt: string;
+}
+
 export type CourseFileVersion = 'html-v1' | 'cbtcourse-v1';
 
 export interface Course {
