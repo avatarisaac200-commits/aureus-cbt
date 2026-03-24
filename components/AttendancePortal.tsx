@@ -10,6 +10,7 @@ import {
   BRAINSTORM_TIMEZONE,
   DEFAULT_BRAINSTORM_WINDOWS,
   generateBrainstormPhrase,
+  getBrainstormSessionCloseMinute,
   getBrainstormSessionContext,
   getCurrentBrainstormWindow,
   normalizePhrase,
@@ -108,6 +109,7 @@ const AttendancePortal: React.FC<AttendancePortalProps> = ({
       baseRecord.phrase = baseRecord.phrase || generateBrainstormPhrase(user.id, currentDateKey);
 
       const totalMinutes = sessionContext.totalMinutes;
+      const sessionCloseMinute = getBrainstormSessionCloseMinute(brainstormWindows);
       const newlyMissed = brainstormWindows
         .filter((window) => totalMinutes >= window.closeMinute)
         .filter((window) => !baseRecord.checkedWindowIds.includes(window.id) && !baseRecord.missedWindowIds.includes(window.id))
@@ -117,7 +119,11 @@ const AttendancePortal: React.FC<AttendancePortalProps> = ({
         baseRecord.missedWindowIds = [...baseRecord.missedWindowIds, ...newlyMissed];
       }
 
-      if (!baseRecord.dailyStrikeApplied && baseRecord.missedWindowIds.length >= brainstormWindows.length) {
+      if (
+        !baseRecord.dailyStrikeApplied &&
+        totalMinutes >= sessionCloseMinute &&
+        baseRecord.missedWindowIds.length >= brainstormWindows.length
+      ) {
         baseRecord.dailyStrikeApplied = true;
         baseMember.strikeCount += 1;
       }

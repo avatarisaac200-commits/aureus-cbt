@@ -118,12 +118,19 @@ export const sanitizeBrainstormWindows = (value: any): BrainstormWindow[] => {
   return rows.length > 0 ? rows.sort((a, b) => a.openMinute - b.openMinute) : DEFAULT_BRAINSTORM_WINDOWS;
 };
 
+export const getBrainstormSessionCloseMinute = (windows: BrainstormWindow[] = DEFAULT_BRAINSTORM_WINDOWS) => {
+  return windows.reduce((max, window) => Math.max(max, window.closeMinute), 0);
+};
+
 export const getBrainstormSessionContext = (date = new Date(), windows: BrainstormWindow[] = DEFAULT_BRAINSTORM_WINDOWS) => {
   const lagos = getLagosDateParts(date);
   const hasAfterMidnightWindow = windows.some((window) => window.openMinute >= 1440 || window.closeMinute > 1440);
-  const firstWindowOpen = windows.reduce((min, window) => Math.min(min, window.openMinute % 1440), windows[0]?.openMinute % 1440 || 0);
+  const overnightCutoff = windows.reduce((max, window) => {
+    if (window.closeMinute <= 1440) return max;
+    return Math.max(max, window.closeMinute - 1440);
+  }, 0);
 
-  if (hasAfterMidnightWindow && lagos.totalMinutes < firstWindowOpen) {
+  if (hasAfterMidnightWindow && overnightCutoff > 0 && lagos.totalMinutes < overnightCutoff) {
     return {
       ...lagos,
       dateKey: shiftDateKey(lagos.dateKey, -1),
