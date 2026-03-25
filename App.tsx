@@ -1,6 +1,6 @@
 ﻿
 import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
-import { User, MockTest, ExamResult, Question, TestSection, TestAttempt, DifficultyLevel, SharedQuiz, ViewState, BroadcastNotification, CustomThemeConfig } from './types';
+import { User, MockTest, ExamResult, Question, TestSection, TestAttempt, DifficultyLevel, SharedQuiz, ViewState, BroadcastNotification, CustomThemeConfig, CommunityProfile } from './types';
 import { auth, db } from './firebase';
 import { onAuthStateChanged, sendEmailVerification } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 import { doc, getDoc, getDocFromServer, collection, getDocs, query, where, limit, documentId, updateDoc, addDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
@@ -21,6 +21,7 @@ const ResultScreen = lazy(() => import('./components/ResultScreen'));
 const ReviewInterface = lazy(() => import('./components/ReviewInterface'));
 const UpdateManual = lazy(() => import('./components/UpdateManual'));
 const CoursesHub = lazy(() => import('./components/CoursesHub'));
+const SocialProfileOnboarding = lazy(() => import('./components/SocialProfileOnboarding'));
 
 const DEFAULT_FREE_ACCESS_ENDS_AT_ISO = '2026-04-01T23:00:00.000Z'; // April 2, 2026 00:00 WAT
 const DEADLINE_CONFIG_DOC_ID = 'deadline_config';
@@ -261,6 +262,9 @@ const App: React.FC = () => {
   const [uiMode, setUiMode] = useState<'light' | 'dark'>('light');
   const [customTheme, setCustomTheme] = useState<CustomThemeConfig>(DEFAULT_CUSTOM_THEME);
   const [broadcastToasts, setBroadcastToasts] = useState<Array<{ id: string; title: string; message: string }>>([]);
+  const [communityProfile, setCommunityProfile] = useState<CommunityProfile | null>(null);
+  const [isSocialProfileReady, setIsSocialProfileReady] = useState(false);
+  const [isSocialProfileEditorOpen, setIsSocialProfileEditorOpen] = useState(false);
   const isFlushingQueueRef = useRef(false);
   const bootFallbackNotifiedRef = useRef(false);
 
@@ -339,6 +343,35 @@ const App: React.FC = () => {
     const deadlineMs = Date.parse(freeAccessEndsAtIso);
     return Number.isFinite(deadlineMs) && Date.now() > deadlineMs;
   };
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadCommunityProfile = async () => {
+      if (!currentUser?.id) {
+        setCommunityProfile(null);
+        setIsSocialProfileReady(false);
+        return;
+      }
+      try {
+        const snap: any = await getDoc(doc(db, 'communityProfiles', currentUser.id));
+        if (cancelled) return;
+        if (snap.exists()) {
+          setCommunityProfile({ id: snap.id, ...(snap.data() as Omit<CommunityProfile, 'id'>) });
+        } else {
+          setCommunityProfile(null);
+        }
+      } catch {
+        if (!cancelled) setCommunityProfile(null);
+      } finally {
+        if (!cancelled) setIsSocialProfileReady(true);
+      }
+    };
+
+    void loadCommunityProfile();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser?.id]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -1025,7 +1058,7 @@ const App: React.FC = () => {
       if (firebaseUser) {
         await checkUserStatus(firebaseUser);
         try {
-          const configSnap = await withTimeout(getDoc(doc(db, 'licenseKeys', DEADLINE_CONFIG_DOC_ID)), 12000, 'Deadline config load');
+          const configSnap: any = await withTimeout(getDoc(doc(db, 'licenseKeys', DEADLINE_CONFIG_DOC_ID)), 12000, 'Deadline config load');
           const configured = configSnap.exists() ? (configSnap.data() as any)?.freeAccessEndsAt : null;
           if (typeof configured === 'string' && Number.isFinite(Date.parse(configured))) {
             setFreeAccessEndsAtIso(configured);
@@ -1340,6 +1373,12 @@ const App: React.FC = () => {
     setCurrentView(lastMainView === 'update-manual' ? fallback : lastMainView);
   };
 
+  const needsSocialOnboarding = Boolean(
+    currentUser &&
+    isSocialProfileReady &&
+    (!currentUser.socialOnboardingCompletedAt || !communityProfile?.onboardingCompletedAt)
+  );
+
   if (isLoading) {
     return (
       <div className="h-full w-full flex flex-col items-center justify-center bg-slate-950">
@@ -1453,6 +1492,7 @@ const App: React.FC = () => {
           currentUiMode={uiMode}
           onUiModeChange={setUiMode}
           onUserProfileUpdate={(patch) => setCurrentUser((prev) => (prev ? { ...prev, ...patch } : prev))}
+          onOpenSocialProfileSetup={() => setIsSocialProfileEditorOpen(true)}
         />
       )}
       {currentView === 'attendance' && currentUser && (
@@ -1539,6 +1579,19 @@ const App: React.FC = () => {
             </button>
           ))}
         </div>
+      )}
+      {currentUser && (needsSocialOnboarding || isSocialProfileEditorOpen) && (
+        <SocialProfileOnboarding
+          user={currentUser}
+          initialProfile={communityProfile}
+          canClose={!needsSocialOnboarding}
+          onClose={() => setIsSocialProfileEditorOpen(false)}
+          onComplete={({ userPatch, profile }) => {
+            setCurrentUser((prev) => prev ? { ...prev, ...userPatch } : prev);
+            setCommunityProfile(profile);
+            setIsSocialProfileEditorOpen(false);
+          }}
+        />
       )}
       </Suspense>
     </div>

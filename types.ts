@@ -13,6 +13,11 @@ export interface User {
   role: UserRole;
   title?: string;
   avatarUrl?: string;
+  bio?: string;
+  institution?: string;
+  yearOfStudy?: string;
+  studyInterests?: string[];
+  socialOnboardingCompletedAt?: string;
   emailVerified?: boolean;
   subscriptionStatus?: 'inactive' | 'active' | 'expired' | 'pending';
   subscriptionEndsAt?: string;
@@ -210,11 +215,14 @@ export interface DirectConversation {
   participantNames: string[];
   participantTitles?: string[];
   participantAvatarUrls?: string[];
+  participantProfileIds?: string[];
+  friendshipId?: string;
   createdAt: string;
   updatedAt: string;
   lastMessageText?: string;
   lastMessageAt?: string;
   lastMessageSenderId?: string;
+  lastReadAtBy?: Record<string, string>;
 }
 
 export interface DirectMessage {
@@ -224,6 +232,54 @@ export interface DirectMessage {
   authorName: string;
   body: string;
   createdAt: string;
+}
+
+export interface CommunityProfile {
+  id: string;
+  userId: string;
+  displayName: string;
+  title?: string;
+  avatarUrl?: string;
+  bio?: string;
+  institution?: string;
+  yearOfStudy?: string;
+  studyInterests?: string[];
+  discoverable: boolean;
+  onboardingCompletedAt?: string;
+  lookingForFriends?: boolean;
+  lastActiveAt?: string;
+}
+
+export type FriendRequestStatus = 'pending' | 'accepted' | 'declined' | 'cancelled';
+
+export interface FriendRequest {
+  id: string;
+  senderId: string;
+  senderName: string;
+  senderTitle?: string;
+  senderAvatarUrl?: string;
+  senderProfileId?: string;
+  recipientId: string;
+  recipientName: string;
+  recipientTitle?: string;
+  recipientAvatarUrl?: string;
+  recipientProfileId?: string;
+  note?: string;
+  status: FriendRequestStatus;
+  createdAt: string;
+  updatedAt: string;
+  respondedAt?: string;
+}
+
+export interface Friendship {
+  id: string;
+  memberIds: string[];
+  memberNames: string[];
+  memberTitles?: string[];
+  memberAvatarUrls?: string[];
+  memberProfileIds?: string[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 export type CourseFileVersion = 'html-v1' | 'cbtcourse-v1';

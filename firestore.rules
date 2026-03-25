@@ -239,6 +239,57 @@ service cloud.firestore {
       }
     }
 
+    match /communityProfiles/{profileId} {
+      allow get, list: if signedIn();
+
+      allow create, update: if
+        signedIn() &&
+        (
+          request.auth.uid == profileId ||
+          isAdmin()
+        ) &&
+        request.resource.data.userId == profileId;
+
+      allow delete: if request.auth.uid == profileId || isAdmin();
+    }
+
+    match /friendRequests/{requestId} {
+      allow get, list: if
+        signedIn() &&
+        (
+          resource.data.senderId == request.auth.uid ||
+          resource.data.recipientId == request.auth.uid ||
+          isAdmin()
+        );
+
+      allow create: if
+        signedIn() &&
+        request.resource.data.senderId == request.auth.uid &&
+        request.resource.data.senderId != request.resource.data.recipientId;
+
+      allow update, delete: if
+        signedIn() &&
+        (
+          resource.data.senderId == request.auth.uid ||
+          resource.data.recipientId == request.auth.uid ||
+          isAdmin()
+        );
+    }
+
+    match /friendships/{friendshipId} {
+      allow get, list: if
+        signedIn() &&
+        resource.data.memberIds.hasAny([request.auth.uid]);
+
+      allow create, update, delete: if
+        signedIn() &&
+        (
+          request.resource.data.memberIds.hasAny([request.auth.uid]) ||
+          resource.data.memberIds.hasAny([request.auth.uid]) ||
+          isAdmin()
+        );
+    }
+
     match /brainstormMembers/{userId} {
       allow get: if isOwner(userId) || isAdmin();
       allow list: if isAdmin();

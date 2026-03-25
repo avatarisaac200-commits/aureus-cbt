@@ -1,7 +1,7 @@
 ﻿import React, { useState, useEffect } from 'react';
 import { User, MockTest, ExamResult, QuizQuestion, SharedQuiz, CsvQuestionBundle, CustomThemeConfig } from '../types';
 import { db } from '../firebase';
-import { collection, query, where, onSnapshot, getDocs, getDocsFromServer, limit, addDoc, updateDoc, deleteDoc, doc, orderBy } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+import { collection, query, where, onSnapshot, getDocs, getDocsFromServer, limit, addDoc, updateDoc, deleteDoc, doc, orderBy, setDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import logo from '../assets/logo.png';
 import factsJson from '../data/facts.json';
 import { AppTheme, THEMES } from '../theme';
@@ -30,6 +30,7 @@ interface DashboardProps {
   currentUiMode?: MobileUiMode;
   onUiModeChange?: (mode: MobileUiMode) => void;
   onUserProfileUpdate?: (patch: Partial<User>) => void;
+  onOpenSocialProfileSetup?: () => void;
 }
 
 type TestSortMode = 'updated' | 'name' | 'duration' | 'attempts';
@@ -188,7 +189,8 @@ const Dashboard: React.FC<DashboardProps> = ({
   onOpenUpdateManual,
   currentUiMode = 'light',
   onUiModeChange,
-  onUserProfileUpdate
+  onUserProfileUpdate,
+  onOpenSocialProfileSetup
 }) => {
   const parseIsoDate = (value?: string) => {
     const ms = Date.parse(value || '');
@@ -728,12 +730,20 @@ const Dashboard: React.FC<DashboardProps> = ({
     }
     setIsSavingProfile(true);
     try {
+      const now = new Date().toISOString();
       const patch = {
         name: nextName,
         title: profileTitle.trim(),
         avatarUrl: profileAvatarUrl.trim()
       };
       await updateDoc(doc(db, 'users', user.id), patch);
+      await setDoc(doc(db, 'communityProfiles', user.id), {
+        userId: user.id,
+        displayName: nextName,
+        title: profileTitle.trim(),
+        avatarUrl: profileAvatarUrl.trim(),
+        lastActiveAt: now
+      }, { merge: true });
       onUserProfileUpdate?.(patch);
       toast.success('Profile updated', 'Your profile changes were saved.');
     } catch (err: any) {
@@ -865,6 +875,7 @@ const Dashboard: React.FC<DashboardProps> = ({
     { id: 'reviews', label: 'Reviews' },
     { id: 'profile', label: 'Profile' }
   ];
+  const mobileNavTabs = navTabs.filter((tab) => tab.id !== 'ranks');
 
   const renderTabIcon = (tabId: MainTab) => {
     if (tabId === 'home') {
@@ -1508,7 +1519,7 @@ const Dashboard: React.FC<DashboardProps> = ({
           )}
 
           {activeTab === 'community' && (
-            <CommunityHub user={user} isReadOnly={isReadOnly} />
+            <CommunityHub user={user} isReadOnly={isReadOnly} onOpenSocialProfileSetup={onOpenSocialProfileSetup} />
           )}
 
           {activeTab === 'ranks' && (
@@ -1594,6 +1605,11 @@ const Dashboard: React.FC<DashboardProps> = ({
                   <div className="flex justify-between"><span className="text-slate-400">Role</span><span className="font-bold uppercase text-slate-900">{user.role}</span></div>
                   <div className="flex justify-between"><span className="text-slate-400">License</span><span className="font-bold text-slate-900">{licenseStatusLabel}</span></div>
                 </div>
+                {onOpenSocialProfileSetup ? (
+                  <button onClick={onOpenSocialProfileSetup} className="mt-4 w-full py-4 bg-sky-50 border border-sky-100 text-sky-700 rounded-2xl text-xs font-black uppercase tracking-widest">
+                    Edit Social Profile
+                  </button>
+                ) : null}
                 <button
                   onClick={saveProfile}
                   disabled={isSavingProfile}
@@ -1777,7 +1793,7 @@ const Dashboard: React.FC<DashboardProps> = ({
         </div>
       </div>
       <nav className="fixed bottom-0 left-0 right-0 z-50 flex justify-between items-center bg-[var(--surface)] backdrop-blur-xl border-t border-[var(--edge)] py-2 pb-safe px-1 md:hidden">
-        {navTabs.map((tab) => (
+        {mobileNavTabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
