@@ -141,15 +141,15 @@ const SocialProfileOnboarding: React.FC<SocialProfileOnboardingProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[220] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 safe-top safe-bottom">
-      <div className="w-full max-w-3xl rounded-[2rem] overflow-hidden border border-slate-200 bg-white shadow-2xl">
-        <div className="bg-slate-950 px-6 py-6 border-b-4 border-amber-500 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+    <div className="fixed inset-0 z-[220] bg-slate-950/80 backdrop-blur-sm flex items-stretch sm:items-center justify-center p-0 sm:p-4 overflow-y-auto safe-top safe-bottom">
+      <div className="w-full max-w-3xl min-h-full sm:min-h-0 sm:max-h-[92dvh] rounded-none sm:rounded-[2rem] overflow-hidden border-0 sm:border border-slate-200 bg-white shadow-none sm:shadow-2xl flex flex-col">
+        <div className="bg-slate-950 px-4 py-5 sm:px-6 sm:py-6 border-b-4 border-amber-500 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between shrink-0">
           <div>
             <p className="text-xs font-black uppercase tracking-[0.35em] text-amber-500">Community Setup</p>
-            <h2 className="mt-2 text-2xl font-black uppercase text-white">Build Your Chat Profile</h2>
+            <h2 className="mt-2 text-xl sm:text-2xl font-black uppercase text-white leading-tight">Build Your Chat Profile</h2>
             <p className="mt-2 text-sm text-slate-300">This runs once on first login so people can actually meet and identify each other.</p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center justify-between sm:justify-start gap-3">
             <span className="rounded-full bg-white/10 px-4 py-2 text-xs font-black uppercase tracking-widest text-white">{completionLabel}</span>
             {canClose && onClose ? (
               <button onClick={onClose} className="rounded-xl border border-white/20 px-4 py-2 text-xs font-black uppercase tracking-widest text-slate-200">
@@ -159,11 +159,11 @@ const SocialProfileOnboarding: React.FC<SocialProfileOnboardingProps> = ({
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[220px_minmax(0,1fr)]">
-          <aside className="border-b lg:border-b-0 lg:border-r border-slate-200 bg-slate-50 p-5">
-            <div className="space-y-3">
+        <div className="grid grid-cols-1 lg:grid-cols-[220px_minmax(0,1fr)] min-h-0 flex-1 overflow-hidden">
+          <aside className="border-b lg:border-b-0 lg:border-r border-slate-200 bg-slate-50 p-3 sm:p-5 shrink-0">
+            <div className="flex gap-3 overflow-x-auto pb-1 lg:block lg:space-y-3 lg:overflow-visible">
               {STEPS.map((label, index) => (
-                <div key={label} className={`rounded-2xl px-4 py-3 border ${index === stepIndex ? 'border-amber-300 bg-amber-50' : 'border-slate-200 bg-white'}`}>
+                <div key={label} className={`rounded-2xl px-4 py-3 border min-w-[132px] lg:min-w-0 ${index === stepIndex ? 'border-amber-300 bg-amber-50' : 'border-slate-200 bg-white'}`}>
                   <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">Step {index + 1}</p>
                   <p className="mt-1 text-sm font-black uppercase text-slate-900">{label}</p>
                 </div>
@@ -171,7 +171,7 @@ const SocialProfileOnboarding: React.FC<SocialProfileOnboardingProps> = ({
             </div>
           </aside>
 
-          <div className="p-6 sm:p-8 space-y-6">
+          <div className="p-4 sm:p-8 space-y-6 overflow-y-auto min-h-0">
             {stepIndex === 0 && (
               <section className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -188,13 +188,13 @@ const SocialProfileOnboarding: React.FC<SocialProfileOnboardingProps> = ({
                   <span className="text-[11px] font-black uppercase tracking-widest text-slate-500">Avatar URL</span>
                   <input value={avatarUrl} onChange={(e) => setAvatarUrl(e.target.value)} placeholder="Paste an image link if you want a profile photo" className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold outline-none" />
                 </label>
-                <div className="rounded-[1.75rem] border border-slate-200 bg-slate-50 p-5 flex items-center gap-4">
-                  <div className="h-16 w-16 rounded-2xl overflow-hidden bg-white border border-slate-200 flex items-center justify-center text-lg font-black text-slate-500">
+                <div className="rounded-[1.75rem] border border-slate-200 bg-slate-50 p-4 sm:p-5 flex items-center gap-4">
+                  <div className="h-14 w-14 sm:h-16 sm:w-16 rounded-2xl overflow-hidden bg-white border border-slate-200 flex items-center justify-center text-lg font-black text-slate-500 shrink-0">
                     {avatarUrl.trim() ? <img src={avatarUrl.trim()} alt="Avatar preview" className="h-full w-full object-cover" /> : String(displayName || user.name || 'U').slice(0, 2).toUpperCase()}
                   </div>
-                  <div>
-                    <p className="text-sm font-black uppercase text-slate-900">{displayName.trim() || user.name}</p>
-                    <p className="text-[11px] font-bold uppercase text-slate-500">{title.trim() || 'Student'}</p>
+                  <div className="min-w-0">
+                    <p className="text-sm font-black uppercase text-slate-900 break-words">{displayName.trim() || user.name}</p>
+                    <p className="text-[11px] font-bold uppercase text-slate-500 break-words">{title.trim() || 'Student'}</p>
                   </div>
                 </div>
               </section>
@@ -237,16 +237,16 @@ const SocialProfileOnboarding: React.FC<SocialProfileOnboardingProps> = ({
                   </div>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <label className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4 flex gap-3">
+                  <label className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4 flex gap-3 items-start">
                     <input type="checkbox" checked={lookingForFriends} onChange={(e) => setLookingForFriends(e.target.checked)} className="mt-1" />
-                    <span>
+                    <span className="min-w-0">
                       <span className="block text-sm font-black uppercase text-slate-900">Open to new friends</span>
                       <span className="block mt-1 text-xs text-slate-600">Show that you want new chat requests and study connections.</span>
                     </span>
                   </label>
-                  <label className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4 flex gap-3">
+                  <label className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4 flex gap-3 items-start">
                     <input type="checkbox" checked={discoverable} onChange={(e) => setDiscoverable(e.target.checked)} className="mt-1" />
-                    <span>
+                    <span className="min-w-0">
                       <span className="block text-sm font-black uppercase text-slate-900">Visible in discovery</span>
                       <span className="block mt-1 text-xs text-slate-600">Let other signed-in users find you in the people directory.</span>
                     </span>
@@ -255,7 +255,7 @@ const SocialProfileOnboarding: React.FC<SocialProfileOnboardingProps> = ({
               </section>
             )}
 
-            <div className="flex flex-col-reverse gap-3 border-t border-slate-100 pt-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="sticky bottom-0 -mx-4 sm:-mx-8 mt-2 border-t border-slate-100 bg-white px-4 py-4 sm:px-8 sm:pt-5 sm:pb-5 safe-bottom flex flex-col-reverse gap-3 sm:static sm:mx-0 sm:px-0 sm:py-0 sm:flex-row sm:items-center sm:justify-between">
               <button
                 type="button"
                 onClick={() => setStepIndex((prev) => Math.max(0, prev - 1))}

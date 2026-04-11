@@ -484,11 +484,11 @@ const CommunityHub: React.FC<CommunityHubProps> = ({ user, isReadOnly = false, o
                 Edit Profile
               </button>
             ) : null}
-            <div className="inline-flex rounded-2xl border border-slate-200 bg-slate-50 p-1 gap-1">
-              <button onClick={() => setMode('discover')} className={`rounded-xl px-4 py-3 text-xs font-black uppercase ${mode === 'discover' ? 'bg-slate-950 text-amber-500' : 'text-slate-600'}`}>People</button>
-              <button onClick={() => setMode('friends')} className={`rounded-xl px-4 py-3 text-xs font-black uppercase ${mode === 'friends' ? 'bg-slate-950 text-amber-500' : 'text-slate-600'}`}>Friends</button>
-              <button onClick={() => setMode('messages')} className={`rounded-xl px-4 py-3 text-xs font-black uppercase ${mode === 'messages' ? 'bg-slate-950 text-amber-500' : 'text-slate-600'}`}>Chat</button>
-              <button onClick={() => setMode('threads')} className={`rounded-xl px-4 py-3 text-xs font-black uppercase ${mode === 'threads' ? 'bg-slate-950 text-amber-500' : 'text-slate-600'}`}>Forum</button>
+            <div className="flex w-full flex-wrap rounded-2xl border border-slate-200 bg-slate-50 p-1 gap-1 sm:w-auto sm:inline-flex">
+              <button onClick={() => setMode('discover')} className={`flex-1 sm:flex-none rounded-xl px-4 py-3 text-xs font-black uppercase ${mode === 'discover' ? 'bg-slate-950 text-amber-500' : 'text-slate-600'}`}>People</button>
+              <button onClick={() => setMode('friends')} className={`flex-1 sm:flex-none rounded-xl px-4 py-3 text-xs font-black uppercase ${mode === 'friends' ? 'bg-slate-950 text-amber-500' : 'text-slate-600'}`}>Friends</button>
+              <button onClick={() => setMode('messages')} className={`flex-1 sm:flex-none rounded-xl px-4 py-3 text-xs font-black uppercase ${mode === 'messages' ? 'bg-slate-950 text-amber-500' : 'text-slate-600'}`}>Chat</button>
+              <button onClick={() => setMode('threads')} className={`flex-1 sm:flex-none rounded-xl px-4 py-3 text-xs font-black uppercase ${mode === 'threads' ? 'bg-slate-950 text-amber-500' : 'text-slate-600'}`}>Forum</button>
             </div>
           </div>
         </div>
@@ -519,7 +519,7 @@ const CommunityHub: React.FC<CommunityHubProps> = ({ user, isReadOnly = false, o
               </div>
               <input value={peopleQuery} onChange={(e) => setPeopleQuery(e.target.value)} placeholder="Search by name, level, bio, or interest" className="w-full sm:w-80 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none" />
             </div>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 max-h-[72dvh] overflow-y-auto pr-1">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 xl:max-h-[72dvh] xl:overflow-y-auto pr-1">
               {visibleProfiles.map((profile) => {
                 const isFriend = Boolean(friendshipByPeerId[profile.userId]);
                 const sentRequest = pendingSentByRecipient[profile.userId];
@@ -551,7 +551,7 @@ const CommunityHub: React.FC<CommunityHubProps> = ({ user, isReadOnly = false, o
                             placeholder="Optional intro note"
                             className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs outline-none"
                           />
-                          <div className="grid grid-cols-2 gap-2">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                             {isFriend ? (
                               <button onClick={() => void openChat(profile)} className="rounded-xl bg-slate-950 px-4 py-3 text-xs font-black uppercase text-amber-500">Message</button>
                             ) : receivedRequest ? (
@@ -579,13 +579,13 @@ const CommunityHub: React.FC<CommunityHubProps> = ({ user, isReadOnly = false, o
                 </div>
                 <span className="text-[10px] font-black uppercase text-slate-400">{receivedRequests.filter((item) => item.status === 'pending').length} pending</span>
               </div>
-              <div className="space-y-3 max-h-[34dvh] overflow-y-auto pr-1">
+              <div className="space-y-3 xl:max-h-[34dvh] xl:overflow-y-auto pr-1">
                 {receivedRequests.filter((item) => item.status === 'pending').map((request) => (
                   <div key={request.id} className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
                     <p className="text-sm font-black uppercase text-slate-900">{request.senderName}</p>
                     <p className="text-[11px] font-bold uppercase text-slate-500">{request.senderTitle || 'Student'} | {formatRelativeTime(request.createdAt)}</p>
                     {request.note ? <p className="mt-3 text-sm text-slate-600 whitespace-pre-wrap">{request.note}</p> : null}
-                    <div className="mt-4 grid grid-cols-2 gap-2">
+                    <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
                       <button onClick={() => void acceptFriendRequest(request)} className="rounded-xl bg-emerald-600 px-4 py-3 text-xs font-black uppercase text-white">Accept</button>
                       <button onClick={() => void updateRequestStatus(request, 'declined')} className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs font-black uppercase text-slate-600">Decline</button>
                     </div>
@@ -605,7 +605,7 @@ const CommunityHub: React.FC<CommunityHubProps> = ({ user, isReadOnly = false, o
                 </div>
                 <span className="text-[10px] font-black uppercase text-slate-400">{sentRequests.filter((item) => item.status === 'pending').length} pending</span>
               </div>
-              <div className="space-y-3 max-h-[34dvh] overflow-y-auto pr-1">
+              <div className="space-y-3 xl:max-h-[34dvh] xl:overflow-y-auto pr-1">
                 {sentRequests.filter((item) => item.status === 'pending').map((request) => (
                   <div key={request.id} className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
                     <p className="text-sm font-black uppercase text-slate-900">{request.recipientName}</p>
@@ -633,7 +633,7 @@ const CommunityHub: React.FC<CommunityHubProps> = ({ user, isReadOnly = false, o
               </div>
               <span className="text-[10px] font-black uppercase text-slate-400">{friendProfiles.length} connected</span>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[74dvh] overflow-y-auto pr-1">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 xl:max-h-[74dvh] xl:overflow-y-auto pr-1">
               {friendProfiles.map((profile) => (
                 <div key={profile.userId} className="rounded-[1.75rem] border border-slate-200 bg-slate-50 p-4">
                   <div className="flex items-start gap-3">
@@ -644,7 +644,7 @@ const CommunityHub: React.FC<CommunityHubProps> = ({ user, isReadOnly = false, o
                       <p className="text-sm font-black uppercase text-slate-900 truncate">{profile.displayName}</p>
                       <p className="text-[11px] font-bold uppercase text-slate-500 truncate">{profile.title || 'Student'}</p>
                       <p className="mt-3 text-sm text-slate-600 line-clamp-3">{profile.bio || 'No bio yet.'}</p>
-                      <div className="mt-4 grid grid-cols-2 gap-2">
+                      <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
                         <button onClick={() => void openChat(profile)} className="rounded-xl bg-slate-950 px-4 py-3 text-xs font-black uppercase text-amber-500">Message</button>
                         <button onClick={() => setMode('messages')} className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs font-black uppercase text-slate-600">Open Chat</button>
                       </div>
@@ -689,7 +689,7 @@ const CommunityHub: React.FC<CommunityHubProps> = ({ user, isReadOnly = false, o
               </div>
               <span className="text-[10px] font-black uppercase text-slate-400">{conversations.length} chats</span>
             </div>
-            <div className="space-y-3 max-h-[72dvh] overflow-y-auto pr-1">
+            <div className="space-y-3 xl:max-h-[72dvh] xl:overflow-y-auto pr-1">
               {conversations.map((conversation) => {
                 const peerId = conversation.participantIds.find((id) => id !== user.id) || '';
                 const peer = profileMap[peerId];
@@ -716,7 +716,7 @@ const CommunityHub: React.FC<CommunityHubProps> = ({ user, isReadOnly = false, o
             </div>
           </div>
 
-          <div className="bg-white rounded-[2rem] border border-slate-100 p-4 min-h-[640px] flex flex-col">
+          <div className="bg-white rounded-[2rem] border border-slate-100 p-4 min-h-[420px] sm:min-h-[640px] flex flex-col">
             {!selectedConversation || !selectedPeer ? (
               <div className="flex-1 flex items-center justify-center text-slate-500 text-center px-6">Pick a friend conversation from the left. Private chat is relationship-based, so only accepted friends show up here.</div>
             ) : (
@@ -729,7 +729,7 @@ const CommunityHub: React.FC<CommunityHubProps> = ({ user, isReadOnly = false, o
                   <button onClick={() => setMode('friends')} className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-[10px] font-black uppercase text-slate-600">Friends</button>
                 </div>
                 <div className="flex-1 min-h-0 py-4">
-                  <div className="space-y-3 max-h-[52dvh] overflow-y-auto pr-1">
+                  <div className="space-y-3 xl:max-h-[52dvh] xl:overflow-y-auto pr-1">
                     {messages.map((message) => {
                       const isMine = message.authorId === user.id;
                       return (
@@ -776,7 +776,7 @@ const CommunityHub: React.FC<CommunityHubProps> = ({ user, isReadOnly = false, o
                   </button>
                 ))}
               </div>
-              <div className="space-y-3 max-h-[60dvh] overflow-y-auto pr-1">
+              <div className="space-y-3 xl:max-h-[60dvh] xl:overflow-y-auto pr-1">
                 {visibleThreads.map((thread) => {
                   const authorProfile = profileMap[thread.authorId];
                   const isFriend = Boolean(friendshipByPeerId[thread.authorId]);
@@ -787,7 +787,7 @@ const CommunityHub: React.FC<CommunityHubProps> = ({ user, isReadOnly = false, o
                       <p className="mt-2 text-xs text-slate-600 line-clamp-3">{thread.body}</p>
                       <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                         <span className="text-[11px] font-bold uppercase text-slate-500 truncate">{thread.authorName}</span>
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                           <button
                             onClick={(event) => {
                               event.stopPropagation();
@@ -811,7 +811,7 @@ const CommunityHub: React.FC<CommunityHubProps> = ({ user, isReadOnly = false, o
             </div>
           </div>
 
-          <div className="bg-white rounded-[2rem] border border-slate-100 p-4 min-h-[620px] flex flex-col">
+          <div className="bg-white rounded-[2rem] border border-slate-100 p-4 min-h-[420px] sm:min-h-[620px] flex flex-col">
             {!selectedThread ? (
               <div className="flex-1 flex items-center justify-center text-slate-500">Pick a thread</div>
             ) : (
@@ -832,7 +832,7 @@ const CommunityHub: React.FC<CommunityHubProps> = ({ user, isReadOnly = false, o
                       <p className="text-sm font-black uppercase text-slate-900">{selectedThread.authorName}</p>
                       <p className="text-[11px] font-bold uppercase text-slate-500">{selectedThread.authorTitle || 'Student'} | {selectedThread.replyCount || 0} replies</p>
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       {profileMap[selectedThread.authorId] ? (
                         <button
                           onClick={() => {
@@ -855,7 +855,7 @@ const CommunityHub: React.FC<CommunityHubProps> = ({ user, isReadOnly = false, o
                 </div>
 
                 <div className="flex-1 min-h-0 py-4">
-                  <div className="space-y-3 max-h-[48dvh] overflow-y-auto pr-1">
+                  <div className="space-y-3 xl:max-h-[48dvh] xl:overflow-y-auto pr-1">
                     {replies.map((reply) => {
                       const replyProfile = profileMap[reply.authorId];
                       const isFriend = Boolean(friendshipByPeerId[reply.authorId]);

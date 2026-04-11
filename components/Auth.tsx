@@ -82,18 +82,18 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
   };
 
   return (
-    <div className="v2-page flex-1 min-h-[100dvh] bg-slate-50 flex flex-col justify-start md:justify-center items-center p-6 overflow-y-auto no-scrollbar safe-top safe-bottom">
-      <div className="mb-10 flex flex-col items-center shrink-0 animate-in fade-in slide-in-from-bottom-4 duration-700">
-        <img src={logo} alt="Aureus Medicos CBT Logo" className="w-28 h-28 mb-6 drop-shadow-2xl" />
-        <h1 className="text-slate-900 font-black text-3xl tracking-tighter uppercase text-center leading-none">Aureus Medicos CBT</h1>
+    <div className="v2-page flex-1 min-h-[100dvh] bg-slate-50 flex flex-col justify-start md:justify-center items-center px-0 py-0 sm:p-6 overflow-y-auto no-scrollbar safe-top safe-bottom">
+      <div className="mb-8 mt-6 px-6 sm:mt-0 sm:mb-10 flex flex-col items-center shrink-0 animate-in fade-in slide-in-from-bottom-4 duration-700">
+        <img src={logo} alt="Aureus Medicos CBT Logo" className="w-24 h-24 sm:w-28 sm:h-28 mb-5 sm:mb-6 drop-shadow-2xl" />
+        <h1 className="text-slate-900 font-black text-[1.75rem] sm:text-3xl tracking-tighter uppercase text-center leading-none">Aureus Medicos CBT</h1>
         <p className="text-amber-600 font-black text-xs tracking-[0.4em] uppercase mt-2">Exam Practice Portal</p>
       </div>
-      <div className="w-full max-w-md bg-white rounded-[2.5rem] shadow-2xl overflow-hidden border border-slate-100 max-h-[calc(100dvh-9rem)] flex flex-col">
-        <div className="bg-slate-950 px-8 py-10 text-center border-b-4 border-amber-500 shrink-0">
+      <div className="w-full max-w-md bg-white rounded-t-[2rem] sm:rounded-[2.5rem] shadow-2xl overflow-visible sm:overflow-hidden border-x-0 border-b-0 sm:border border-slate-100 min-h-0 sm:max-h-[calc(100dvh-9rem)] flex flex-col">
+        <div className="bg-slate-950 px-6 py-8 sm:px-8 sm:py-10 text-center border-b-4 border-amber-500 shrink-0 rounded-t-[2rem] sm:rounded-t-[2.5rem]">
            <h1 className="text-xl font-black text-white tracking-widest mb-1 uppercase">{isLogin ? 'Sign In' : 'Create Account'}</h1>
            <p className="text-amber-400 text-xs font-bold uppercase tracking-[0.2em]">Aureus Medicos CBT</p>
         </div>
-        <div className="p-8 md:p-12 overflow-y-auto">
+        <div className="p-5 sm:p-8 md:p-12 overflow-visible sm:overflow-y-auto">
           <form onSubmit={handleSubmit} className="space-y-4">
             {!isLogin && (
               <div>
@@ -137,7 +137,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
           </div>
         </div>
       </div>
-      <p className="mt-8 text-slate-400 text-xs font-bold uppercase tracking-widest text-center px-6 leading-relaxed">
+      <p className="mt-6 sm:mt-8 mb-6 sm:mb-0 text-slate-400 text-xs font-bold uppercase tracking-widest text-center px-6 leading-relaxed">
         Email verification is required.<br/>
         Staff can sign in with @aureusmedicos.com.
       </p>
