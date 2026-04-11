@@ -67,6 +67,25 @@ const SocialProfileOnboarding: React.FC<SocialProfileOnboardingProps> = ({
     setStudyInterests((prev) => prev.includes(value) ? prev.filter((item) => item !== value) : [...prev, value].slice(0, 6));
   };
 
+  const handleAvatarFileUpload = (file: File | null) => {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      toast.warning('Invalid file', 'Please upload an image file.');
+      return;
+    }
+    if (file.size > 1024 * 1024) {
+      toast.warning('Image too large', 'Please use an image smaller than 1MB.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const next = String(reader.result || '');
+      if (!next) return;
+      setAvatarUrl(next);
+    };
+    reader.readAsDataURL(file);
+  };
+
   const validateStep = () => {
     if (stepIndex === 0 && !displayName.trim()) {
       toast.warning('Missing name', 'Add the name people will see in chat.');
@@ -188,6 +207,23 @@ const SocialProfileOnboarding: React.FC<SocialProfileOnboardingProps> = ({
                   <span className="text-[11px] font-black uppercase tracking-widest text-slate-500">Avatar URL</span>
                   <input value={avatarUrl} onChange={(e) => setAvatarUrl(e.target.value)} placeholder="Paste an image link if you want a profile photo" className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold outline-none" />
                 </label>
+                <div className="rounded-[1.5rem] border border-dashed border-slate-300 bg-slate-50 p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-[11px] font-black uppercase tracking-widest text-slate-500">Upload From Device</p>
+                      <p className="mt-1 text-xs text-slate-600">Choose a photo from your phone or computer. Max size: 1MB.</p>
+                    </div>
+                    <label className="inline-flex cursor-pointer items-center justify-center rounded-2xl bg-slate-950 px-4 py-3 text-xs font-black uppercase tracking-widest text-amber-500">
+                      Choose Photo
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => handleAvatarFileUpload(e.target.files?.[0] || null)}
+                      />
+                    </label>
+                  </div>
+                </div>
                 <div className="rounded-[1.75rem] border border-slate-200 bg-slate-50 p-4 sm:p-5 flex items-center gap-4">
                   <div className="h-14 w-14 sm:h-16 sm:w-16 rounded-2xl overflow-hidden bg-white border border-slate-200 flex items-center justify-center text-lg font-black text-slate-500 shrink-0">
                     {avatarUrl.trim() ? <img src={avatarUrl.trim()} alt="Avatar preview" className="h-full w-full object-cover" /> : String(displayName || user.name || 'U').slice(0, 2).toUpperCase()}

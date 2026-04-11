@@ -42,9 +42,10 @@ service cloud.firestore {
 
       allow update: if
         isOwner(userId) &&
-        request.resource.data.id == resource.data.id &&
-        request.resource.data.email == resource.data.email &&
-        request.resource.data.role == resource.data.role;
+        request.resource.data.id == userId &&
+        (resource.data.id == null || request.resource.data.id == resource.data.id) &&
+        (resource.data.email == null || request.resource.data.email == resource.data.email) &&
+        (resource.data.role == null || request.resource.data.role == resource.data.role);
     }
 
     match /questions/{questionId} {
