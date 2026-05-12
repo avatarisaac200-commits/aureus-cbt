@@ -145,10 +145,47 @@ service cloud.firestore {
         request.resource.data.userId == request.auth.uid &&
         request.resource.data.userId is string &&
         request.resource.data.courseId is string &&
+        (!('userName' in request.resource.data) || request.resource.data.userName is string) &&
         request.resource.data.createdAt is string &&
         enrollmentId == (request.resource.data.courseId + '_' + request.auth.uid);
 
       allow update, delete: if isAdmin();
+    }
+
+    match /announcements/{announcementId} {
+      allow get, list: if signedIn();
+      allow create: if signedIn() && isAdmin() && request.resource.data.authorId == request.auth.uid;
+      allow update, delete: if signedIn() && isAdmin();
+    }
+
+    match /announcementReads/{readId} {
+      allow get, list: if signedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if signedIn() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if signedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+    }
+
+    match /classSessions/{sessionId} {
+      allow get, list: if signedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /notifications/{notificationId} {
+      allow get, list: if signedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if signedIn() && isAdmin() && request.resource.data.userId is string;
+      allow update: if signedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    match /notificationPreferences/{preferenceId} {
+      allow get, list: if signedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if signedIn() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if signedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+    }
+
+    match /pushSubscriptions/{subscriptionId} {
+      allow get, list: if signedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if signedIn() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if signedIn() && (resource.data.userId == request.auth.uid || isAdmin());
     }
 
     match /licenseKeys/{keyId} {

@@ -68,6 +68,14 @@ const sanitizeHex = (value: string, fallback: string) => {
   return /^#([0-9a-fA-F]{6})$/.test(v) ? v : fallback;
 };
 
+const verifyTestPassword = (test: MockTest): 'granted' | 'incorrect' | 'cancelled' => {
+  const requiredPassword = String(test.accessPassword || '').trim();
+  if (!requiredPassword) return 'granted';
+  const entered = window.prompt(`Enter password for "${test.name}"`);
+  if (entered === null) return 'cancelled';
+  return entered.trim() === requiredPassword ? 'granted' : 'incorrect';
+};
+
 const normalizeCustomTheme = (value: any): CustomThemeConfig => {
   const source = value && typeof value === 'object' ? value : {};
   return {
@@ -837,6 +845,14 @@ const App: React.FC = () => {
         clearLinkedTestId();
         return false;
       }
+      const passwordStatus = verifyTestPassword(test);
+      if (passwordStatus !== 'granted') {
+        if (passwordStatus === 'incorrect') {
+          toast.error('Access denied', 'Incorrect test password.');
+        }
+        clearLinkedTestId();
+        return false;
+      }
 
       const attemptsSnap = await getDocs(
         query(
@@ -1451,6 +1467,13 @@ const App: React.FC = () => {
             if (isReadOnlyForUnactivatedUser(currentUser)) {
               setShowMonetizationModal(true);
               toast.warning('Activation required', 'Activate your license key in Settings before starting a test.');
+              return;
+            }
+            const passwordStatus = verifyTestPassword(test);
+            if (passwordStatus !== 'granted') {
+              if (passwordStatus === 'incorrect') {
+                toast.error('Access denied', 'Incorrect test password.');
+              }
               return;
             }
             try {

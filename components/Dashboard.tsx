@@ -1,5 +1,5 @@
 ﻿import React, { useState, useEffect } from 'react';
-import { User, MockTest, ExamResult, QuizQuestion, SharedQuiz, CsvQuestionBundle, CustomThemeConfig } from '../types';
+import { User, MockTest, ExamResult, QuizQuestion, SharedQuiz, CsvQuestionBundle, CustomThemeConfig, Announcement, AnnouncementRead, AppNotification, ClassSession, Course, NotificationPreference, NotificationType } from '../types';
 import { db } from '../firebase';
 import { collection, query, where, onSnapshot, getDocs, getDocsFromServer, limit, addDoc, updateDoc, deleteDoc, doc, orderBy, setDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import logo from '../assets/logo.png';
@@ -8,6 +8,15 @@ import { AppTheme, THEMES } from '../theme';
 import { toast } from './ui/Toast';
 import { confirmDialog } from './ui/ConfirmDialog';
 import CommunityHub from './CommunityHub';
+import NotificationBell from './notifications/NotificationBell';
+import NotificationPreferences from './notifications/NotificationPreferences';
+import AnnouncementFeed from './announcements/AnnouncementFeed';
+import AnnouncementComposer from './announcements/AnnouncementComposer';
+import ClassCalendar from './schedule/ClassCalendar';
+import SessionModal from './schedule/SessionModal';
+import { buildAnnouncementReadId, getBodyPreview, getDefaultNotificationPreferences, isTeacherRole, overlaps, sanitizeRichText } from '../lib/classboard';
+import { maybeShowBrowserNotification, notify } from '../lib/notify';
+import { usePushNotifications } from '../lib/usePushNotifications';
 
 interface DashboardProps {
   user: User;
@@ -34,8 +43,9 @@ interface DashboardProps {
 }
 
 type TestSortMode = 'updated' | 'name' | 'duration' | 'attempts';
-type MainTab = 'home' | 'community' | 'ranks' | 'create' | 'reviews' | 'settings' | 'profile';
+type MainTab = 'home' | 'announcements' | 'schedule' | 'community' | 'ranks' | 'create' | 'reviews' | 'settings' | 'profile';
 type MobileUiMode = 'dark' | 'light';
+type TestShelf = 'all' | 'unfiled' | 'archived' | string;
 
 interface TestFolder {
   id: string;
@@ -232,7 +242,7 @@ const Dashboard: React.FC<DashboardProps> = ({
   const [activeTab, setActiveTab] = useState<MainTab>('home');
   const [testFolders, setTestFolders] = useState<TestFolder[]>([]);
   const [newFolderName, setNewFolderName] = useState('');
-  const [selectedFolderId, setSelectedFolderId] = useState<'all' | 'unfiled' | string>('all');
+  const [selectedFolderId, setSelectedFolderId] = useState<TestShelf>('all');
   const [testFolderAssignments, setTestFolderAssignments] = useState<Record<string, string>>({});
   const [sortMode, setSortMode] = useState<TestSortMode>('updated');
   const [activationInput, setActivationInput] = useState('');
@@ -258,7 +268,19 @@ const Dashboard: React.FC<DashboardProps> = ({
   const [profileAvatarUrl, setProfileAvatarUrl] = useState(user.avatarUrl || '');
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [showDailyFact, setShowDailyFact] = useState(false);
+  const [classOptions, setClassOptions] = useState<Course[]>([]);
+  const [classEnrollments, setClassEnrollments] = useState<Array<{ id: string; courseId: string; userId: string; userName: string }>>([]);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [announcementReads, setAnnouncementReads] = useState<AnnouncementRead[]>([]);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreference[]>([]);
+  const [scheduleSessions, setScheduleSessions] = useState<ClassSession[]>([]);
+  const [selectedAnnouncement, setSelectedAnnouncement] = useState<Announcement | null>(null);
+  const [selectedSession, setSelectedSession] = useState<ClassSession | null>(null);
+  const [showAnnouncementComposer, setShowAnnouncementComposer] = useState(false);
+  const [showSessionModal, setShowSessionModal] = useState(false);
   const isStudent = user.role === 'student';
+  const isTeacher = isTeacherRole(user);
   const licenseEndsMs = Date.parse(user.subscriptionEndsAt || '');
   const licenseEndsLabel = Number.isFinite(licenseEndsMs)
     ? new Date(licenseEndsMs).toLocaleDateString()
@@ -269,6 +291,29 @@ const Dashboard: React.FC<DashboardProps> = ({
   const dailyFactDateKey = getUtcDateKey();
   const dailyFact = getDailyFact();
   const dailyFactBadge = dailyFact?.category?.replace(/-/g, ' ') || 'daily fact';
+  const enrolledClassIds = Array.from(new Set(classEnrollments.filter((row) => row.userId === user.id).map((row) => row.courseId)));
+  const visibleClassIds = isTeacher ? classOptions.map((item) => item.id) : enrolledClassIds;
+  const unreadAnnouncementIds = new Set(
+    announcements
+      .filter((item) => !announcementReads.some((read) => read.announcementId === item.id && read.userId === user.id))
+      .map((item) => item.id)
+  );
+  const studentsForComposer = classEnrollments
+    .filter((row) => visibleClassIds.includes(row.courseId))
+    .map((row) => ({ id: row.userId, name: row.userName || 'Student' }));
+  const readCountsByAnnouncement = announcementReads.reduce<Record<string, number>>((acc, item) => {
+    acc[item.announcementId] = (acc[item.announcementId] || 0) + 1;
+    return acc;
+  }, {});
+  const totalRecipientsByAnnouncement = announcements.reduce<Record<string, number>>((acc, item) => {
+    const classRecipients = classEnrollments.filter((row) => row.courseId === item.classId);
+    acc[item.id] = item.targetAudience === 'all'
+      ? classRecipients.length
+      : classRecipients.filter((row) => (item.targetIds || []).includes(row.userId)).length;
+    return acc;
+  }, {});
+
+  usePushNotifications(user, notificationsEnabled);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -661,6 +706,120 @@ const Dashboard: React.FC<DashboardProps> = ({
     return () => unsub();
   }, [activeTab]);
 
+  useEffect(() => {
+    const coursesQuery = isTeacher
+      ? query(collection(db, 'courses'), orderBy('updatedAt', 'desc'), limit(200))
+      : query(collection(db, 'courses'), where('isPublished', '==', true), orderBy('updatedAt', 'desc'), limit(200));
+    const unsub = onSnapshot(coursesQuery, (snap) => {
+      const rows = snap.docs.map((d) => ({ ...d.data(), id: d.id } as Course));
+      setClassOptions(rows);
+    }, () => {
+      setClassOptions([]);
+    });
+    return () => unsub();
+  }, [isTeacher]);
+
+  useEffect(() => {
+    const unsub = onSnapshot(query(collection(db, 'courseEnrollmentsPublic'), limit(5000)), (snap) => {
+      const baseRows = snap.docs.map((d) => {
+        const data = d.data() as any;
+        return {
+          id: d.id,
+          courseId: String(data.courseId || ''),
+          userId: String(data.userId || ''),
+          userName: String(data.userName || data.userId || 'Student')
+        };
+      }).filter((row) => row.courseId && row.userId);
+      setClassEnrollments(baseRows);
+    }, () => {
+      setClassEnrollments([]);
+    });
+    return () => unsub();
+  }, []);
+
+  useEffect(() => {
+    if (visibleClassIds.length === 0 && !isTeacher) {
+      setAnnouncements([]);
+      return;
+    }
+    const unsub = onSnapshot(query(collection(db, 'announcements'), limit(300)), (snap) => {
+      const rows = snap.docs
+        .map((d) => ({ ...d.data(), id: d.id } as Announcement))
+        .filter((item) => item.published !== false)
+        .filter((item) => visibleClassIds.includes(item.classId))
+        .filter((item) => {
+          if (isTeacher) return true;
+          if (item.targetAudience === 'all') return true;
+          return (item.targetIds || []).includes(user.id);
+        });
+      setAnnouncements(rows);
+    }, () => {
+      setAnnouncements([]);
+    });
+    return () => unsub();
+  }, [isTeacher, user.id, visibleClassIds.join('|')]);
+
+  useEffect(() => {
+    const unsub = onSnapshot(query(collection(db, 'announcementReads'), limit(5000)), (snap) => {
+      const rows = snap.docs.map((d) => ({ ...d.data(), id: d.id } as AnnouncementRead));
+      setAnnouncementReads(rows);
+    }, () => {
+      setAnnouncementReads([]);
+    });
+    return () => unsub();
+  }, []);
+
+  useEffect(() => {
+    if (visibleClassIds.length === 0 && !isTeacher) {
+      setScheduleSessions([]);
+      return;
+    }
+    const unsub = onSnapshot(query(collection(db, 'classSessions'), limit(300)), (snap) => {
+      const rows = snap.docs
+        .map((d) => ({ ...d.data(), id: d.id } as ClassSession))
+        .filter((item) => visibleClassIds.includes(item.classId));
+      setScheduleSessions(rows);
+    }, () => {
+      setScheduleSessions([]);
+    });
+    return () => unsub();
+  }, [isTeacher, visibleClassIds.join('|')]);
+
+  useEffect(() => {
+    const unsub = onSnapshot(
+      query(collection(db, 'notifications'), where('userId', '==', user.id), limit(100)),
+      async (snap) => {
+        const rows = snap.docs
+          .map((d) => ({ ...d.data(), id: d.id } as AppNotification))
+          .sort((a, b) => Date.parse(b.createdAt || '') - Date.parse(a.createdAt || ''));
+        setNotifications(rows);
+
+        const unreadRows = rows.filter((item) => !item.isRead).slice(0, 1);
+        if (unreadRows.length === 0) return;
+        const pref = notificationPreferences.find((item) => item.notificationType === unreadRows[0].type);
+        maybeShowBrowserNotification(unreadRows[0], pref, user);
+      },
+      () => setNotifications([])
+    );
+    return () => unsub();
+  }, [notificationPreferences, user]);
+
+  useEffect(() => {
+    const unsub = onSnapshot(query(collection(db, 'notificationPreferences'), where('userId', '==', user.id), limit(50)), async (snap) => {
+      if (snap.empty) {
+        const defaults = getDefaultNotificationPreferences(user.id);
+        await Promise.all(defaults.map((row) => setDoc(doc(db, 'notificationPreferences', row.id), row).catch(() => undefined)));
+        setNotificationPreferences(defaults);
+        return;
+      }
+      const rows = snap.docs.map((d) => ({ ...d.data(), id: d.id } as NotificationPreference));
+      setNotificationPreferences(rows);
+    }, () => {
+      setNotificationPreferences([]);
+    });
+    return () => unsub();
+  }, [user.id]);
+
   if (loading) {
     return (
       <div className="h-full w-full flex flex-col items-center justify-center bg-slate-50"><img src={logo} className="w-12 h-12 animate-pulse mb-4" alt="Loading" /><p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Opening Portal...</p></div>
@@ -700,6 +859,221 @@ const Dashboard: React.FC<DashboardProps> = ({
       await deleteDoc(doc(db, 'quizzes', quiz.id));
     } catch (err: any) {
       toast.error('Delete failed', err?.message || 'Failed to delete quiz.');
+    }
+  };
+
+  const recipientsForClass = (classId: string, targetIds?: string[]) => {
+    const classRows = classEnrollments.filter((row) => row.courseId === classId);
+    if (!targetIds || targetIds.length === 0) return classRows.map((row) => row.userId);
+    return classRows.filter((row) => targetIds.includes(row.userId)).map((row) => row.userId);
+  };
+
+  const markNotificationRead = async (id: string) => {
+    try {
+      await updateDoc(doc(db, 'notifications', id), {
+        isRead: true,
+        readAt: new Date().toISOString()
+      });
+    } catch {
+      // Ignore transient notification read errors.
+    }
+  };
+
+  const markAllNotificationsRead = async () => {
+    await Promise.all(
+      notifications
+        .filter((item) => !item.isRead)
+        .map((item) => markNotificationRead(item.id))
+    );
+  };
+
+  const toggleNotificationPreference = async (type: NotificationType, key: 'inApp' | 'push' | 'email') => {
+    const match = notificationPreferences.find((item) => item.notificationType === type);
+    if (!match) return;
+    try {
+      await updateDoc(doc(db, 'notificationPreferences', match.id), {
+        [key]: !match[key]
+      });
+    } catch {
+      toast.error('Update failed', 'Could not update notification preferences.');
+    }
+  };
+
+  const markAnnouncementRead = async (announcementId: string) => {
+    if (isTeacher) return;
+    const existing = announcementReads.find((item) => item.announcementId === announcementId && item.userId === user.id);
+    if (existing) return;
+    try {
+      await setDoc(doc(db, 'announcementReads', buildAnnouncementReadId(announcementId, user.id)), {
+        announcementId,
+        userId: user.id,
+        readAt: new Date().toISOString()
+      });
+    } catch {
+      // Ignore read receipt failures.
+    }
+  };
+
+  const saveAnnouncement = async (payload: {
+    classId: string;
+    classTitle: string;
+    title: string;
+    body: string;
+    targetAudience: 'all' | 'group' | 'individual';
+    targetIds: string[];
+    isPinned: boolean;
+    scheduledAt?: string;
+    attachments: string[];
+  }) => {
+    try {
+      const now = new Date().toISOString();
+      const published = !payload.scheduledAt || Date.parse(payload.scheduledAt) <= Date.now();
+      const base = {
+        classId: payload.classId,
+        classTitle: payload.classTitle,
+        authorId: user.id,
+        authorName: user.name,
+        title: payload.title,
+        body: sanitizeRichText(payload.body),
+        bodyPreview: getBodyPreview(payload.body),
+        targetAudience: payload.targetAudience,
+        targetIds: payload.targetIds,
+        isPinned: payload.isPinned,
+        attachments: payload.attachments,
+        scheduledAt: payload.scheduledAt || '',
+        published,
+        publishedAt: published ? now : '',
+        createdAt: selectedAnnouncement?.createdAt || now,
+        updatedAt: now,
+        editedAt: selectedAnnouncement && selectedAnnouncement.published ? now : ''
+      };
+
+      if (selectedAnnouncement) {
+        await updateDoc(doc(db, 'announcements', selectedAnnouncement.id), base);
+      } else {
+        await addDoc(collection(db, 'announcements'), base);
+      }
+
+      if (published) {
+        const recipients = recipientsForClass(payload.classId, payload.targetAudience === 'all' ? undefined : payload.targetIds);
+        await notify(recipients, 'announcement_posted', payload.title, getBodyPreview(payload.body, 120), {
+          classId: payload.classId,
+          type: 'announcement'
+        });
+      }
+
+      setShowAnnouncementComposer(false);
+      setSelectedAnnouncement(null);
+      toast.success('Announcement saved', 'Your class notice has been saved.');
+    } catch (err: any) {
+      toast.error('Save failed', err?.message || 'Could not save announcement.');
+    }
+  };
+
+  const deleteAnnouncement = async (announcement: Announcement) => {
+    const confirmed = await confirmDialog({
+      title: 'Delete announcement?',
+      message: `Delete "${announcement.title}"?`,
+      confirmText: 'Delete',
+      variant: 'danger'
+    });
+    if (!confirmed) return;
+    try {
+      await deleteDoc(doc(db, 'announcements', announcement.id));
+      toast.success('Deleted', 'Announcement removed.');
+    } catch {
+      toast.error('Delete failed', 'Could not delete announcement.');
+    }
+  };
+
+  const saveSession = async (payload: {
+    classId: string;
+    classTitle: string;
+    title: string;
+    description?: string;
+    location?: string;
+    lessonPlan?: string;
+    startTime: string;
+    endTime: string;
+    recurrence: 'none' | 'weekly' | 'custom';
+    recurrenceDays: number[];
+    recurrenceEndDate?: string;
+    color: string;
+  }) => {
+    if (!payload.startTime || !payload.endTime) {
+      toast.warning('Missing time', 'Choose a valid date and time.');
+      return;
+    }
+    if (Date.parse(payload.endTime) <= Date.parse(payload.startTime)) {
+      toast.warning('Invalid time', 'End time must be after start time.');
+      return;
+    }
+    const conflicting = scheduleSessions.find((item) => item.teacherId === user.id && item.id !== selectedSession?.id && overlaps(item.startTime, item.endTime, payload.startTime, payload.endTime));
+    if (conflicting) {
+      toast.error('Conflict detected', `This overlaps with "${conflicting.title}".`);
+      return;
+    }
+    const now = new Date().toISOString();
+    const nextData = {
+      classId: payload.classId,
+      classTitle: payload.classTitle,
+      teacherId: user.id,
+      teacherName: user.name,
+      title: payload.title,
+      description: payload.description || '',
+      location: payload.location || '',
+      lessonPlan: payload.lessonPlan || '',
+      startTime: payload.startTime,
+      endTime: payload.endTime,
+      recurrence: payload.recurrence,
+      recurrenceDays: payload.recurrenceDays,
+      recurrenceEndDate: payload.recurrenceEndDate || '',
+      color: payload.color,
+      isCancelled: false,
+      cancelledOccurrences: selectedSession?.cancelledOccurrences || [],
+      createdAt: selectedSession?.createdAt || now,
+      updatedAt: now
+    };
+    try {
+      if (selectedSession) {
+        await updateDoc(doc(db, 'classSessions', selectedSession.id), nextData);
+      } else {
+        await addDoc(collection(db, 'classSessions'), nextData);
+      }
+      const recipients = recipientsForClass(payload.classId);
+      await notify(recipients, 'schedule_updated', payload.title, `Schedule updated for ${payload.classTitle}`, {
+        classId: payload.classId,
+        startTime: payload.startTime
+      });
+      setShowSessionModal(false);
+      setSelectedSession(null);
+      toast.success('Session saved', 'Class schedule updated.');
+    } catch (err: any) {
+      toast.error('Save failed', err?.message || 'Could not save session.');
+    }
+  };
+
+  const deleteSession = async (session: ClassSession, mode: 'single' | 'all' = 'all') => {
+    const confirmed = await confirmDialog({
+      title: mode === 'all' ? 'Delete session series?' : 'Cancel this occurrence?',
+      message: mode === 'all' ? `Delete "${session.title}" and all recurrences?` : `Cancel one occurrence of "${session.title}"?`,
+      confirmText: mode === 'all' ? 'Delete' : 'Cancel occurrence',
+      variant: 'danger'
+    });
+    if (!confirmed) return;
+    try {
+      if (mode === 'all' || session.recurrence === 'none') {
+        await deleteDoc(doc(db, 'classSessions', session.id));
+      } else {
+        const dayKey = new Date(session.startTime).toISOString().slice(0, 10);
+        await updateDoc(doc(db, 'classSessions', session.id), {
+          cancelledOccurrences: Array.from(new Set([...(session.cancelledOccurrences || []), dayKey])),
+          updatedAt: new Date().toISOString()
+        });
+      }
+      toast.success('Schedule updated', 'Session updated successfully.');
+    } catch {
+      toast.error('Delete failed', 'Could not update this session.');
     }
   };
 
@@ -856,6 +1230,9 @@ const Dashboard: React.FC<DashboardProps> = ({
   const viewableTests = tests
     .filter(test => {
       const folderId = testFolderAssignments[test.id];
+      const isArchived = Boolean(test.isArchived);
+      if (selectedFolderId === 'archived') return isArchived;
+      if (isArchived) return false;
       if (selectedFolderId === 'all') return true;
       if (selectedFolderId === 'unfiled') return !folderId || !activeFolderIds.has(folderId);
       return folderId === selectedFolderId;
@@ -869,6 +1246,8 @@ const Dashboard: React.FC<DashboardProps> = ({
 
   const navTabs: Array<{ id: MainTab; label: string }> = [
     { id: 'home', label: 'Home' },
+    { id: 'announcements', label: 'Announcements' },
+    { id: 'schedule', label: 'Schedule' },
     { id: 'community', label: 'Community' },
     { id: 'ranks', label: 'Ranks' },
     { id: 'create', label: 'Create' },
@@ -893,6 +1272,23 @@ const Dashboard: React.FC<DashboardProps> = ({
           <rect x="6" y="11" width="3" height="7" />
           <rect x="11" y="7" width="3" height="11" />
           <rect x="16" y="4" width="3" height="14" />
+        </svg>
+      );
+    }
+    if (tabId === 'announcements') {
+      return (
+        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M4 6h16v10H7l-3 3V6z" />
+          <path d="M8 10h8" />
+          <path d="M8 13h5" />
+        </svg>
+      );
+    }
+    if (tabId === 'schedule') {
+      return (
+        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <rect x="3" y="5" width="18" height="16" rx="2" />
+          <path d="M16 3v4M8 3v4M3 10h18" />
         </svg>
       );
     }
@@ -966,9 +1362,10 @@ const Dashboard: React.FC<DashboardProps> = ({
       <div className="v2-shell v3-topbar topbar bg-slate-950 py-[14px] px-[18px] md:px-8 flex justify-between items-center shrink-0 border-b border-slate-900 shadow-xl z-50 safe-top sticky top-0">
          <div>
            <p className="text-xs text-amber-500 uppercase tracking-widest font-semibold">Exam Practice Portal</p>
-           <h1 className="font-display text-lg font-bold text-slate-100">Student Dashboard</h1>
+           <h1 className="font-display text-lg font-bold text-slate-100">{isTeacher ? 'Classboard Dashboard' : 'Student Dashboard'}</h1>
          </div>
          <div className="flex items-center gap-3">
+           <NotificationBell items={notifications} onMarkRead={markNotificationRead} onMarkAllRead={markAllNotificationsRead} />
            <div className="connection-badge">
              <span className="connection-dot"></span>
              <span className="hidden md:inline">Connection Stable</span>
@@ -1082,6 +1479,18 @@ const Dashboard: React.FC<DashboardProps> = ({
               Home
             </button>
             <button
+              onClick={() => setActiveTab('announcements')}
+              className={`px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest ${activeTab === 'announcements' ? 'bg-slate-950 text-amber-500' : 'text-slate-500 bg-slate-50'}`}
+            >
+              Announcements
+            </button>
+            <button
+              onClick={() => setActiveTab('schedule')}
+              className={`px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest ${activeTab === 'schedule' ? 'bg-slate-950 text-amber-500' : 'text-slate-500 bg-slate-50'}`}
+            >
+              Schedule
+            </button>
+            <button
               onClick={() => setActiveTab('ranks')}
               className={`px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest ${activeTab === 'ranks' ? 'bg-slate-950 text-amber-500' : 'text-slate-500 bg-slate-50'}`}
             >
@@ -1153,6 +1562,13 @@ const Dashboard: React.FC<DashboardProps> = ({
                   >
                     Unfiled
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedFolderId('archived')}
+                    className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest ${selectedFolderId === 'archived' ? 'bg-slate-900 text-amber-500' : 'bg-slate-100 text-slate-600'}`}
+                  >
+                    Archived Tests
+                  </button>
                   {testFolders.map(folder => (
                     <div key={folder.id} className="inline-flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-xl pr-1 shrink-0">
                       <button
@@ -1197,7 +1613,7 @@ const Dashboard: React.FC<DashboardProps> = ({
               <div className="xl:col-span-2 space-y-10">
                 <section>
                   <div className="flex items-center justify-between mb-8">
-                    <h2 className="text-xl font-bold text-slate-950 uppercase">Active Tests</h2>
+                    <h2 className="text-xl font-bold text-slate-950 uppercase">{selectedFolderId === 'archived' ? 'Archived Tests' : 'Active Tests'}</h2>
                     <p className="text-xs font-black uppercase tracking-widest text-slate-400">{viewableTests.length} visible</p>
                   </div>
                   <div className="v3-test-grid grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -1219,6 +1635,18 @@ const Dashboard: React.FC<DashboardProps> = ({
                         <p className="text-xs text-slate-400 mb-6 font-medium italic line-clamp-3 leading-relaxed">{test.description || 'Start this test.'}</p>
                         <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6">
                           Taken by {testCounts[test.id] ?? 0} people
+                        </div>
+                        <div className="flex flex-wrap gap-2 mb-4">
+                          {test.accessPassword && (
+                            <span className="px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-widest bg-indigo-50 text-indigo-700 border border-indigo-100">
+                              Password Required
+                            </span>
+                          )}
+                          {test.isArchived && (
+                            <span className="px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-widest bg-slate-100 text-slate-700 border border-slate-200">
+                              Archived
+                            </span>
+                          )}
                         </div>
                         <div className="mb-4">
                           <label className="text-xs font-black uppercase tracking-widest text-slate-500 block mb-2">Folder</label>
@@ -1316,7 +1744,9 @@ const Dashboard: React.FC<DashboardProps> = ({
                     ))}
                     {viewableTests.length === 0 && (
                       <div className="col-span-full py-16 text-center rounded-2xl border border-dashed border-slate-200 bg-white">
-                        <p className="text-xs font-black uppercase tracking-widest text-slate-400">No tests in this folder.</p>
+                        <p className="text-xs font-black uppercase tracking-widest text-slate-400">
+                          {selectedFolderId === 'archived' ? 'No archived tests available.' : 'No tests in this folder.'}
+                        </p>
                       </div>
                     )}
                   </div>
@@ -1349,6 +1779,89 @@ const Dashboard: React.FC<DashboardProps> = ({
                 </div>
               </aside>
             </div>
+            </div>
+          )}
+
+          {activeTab === 'announcements' && (
+            <div className="space-y-6">
+              <section className="bg-white rounded-[2rem] border border-slate-100 p-6 shadow-sm flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-widest text-slate-500">Announcements</p>
+                  <h2 className="text-lg font-black uppercase text-slate-950">Class-wide notices and read receipts</h2>
+                </div>
+                {isTeacher && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedAnnouncement(null);
+                      setShowAnnouncementComposer(true);
+                    }}
+                    className="px-5 py-3 rounded-2xl bg-slate-950 text-amber-500 text-xs font-black uppercase tracking-widest"
+                  >
+                    New Announcement
+                  </button>
+                )}
+              </section>
+              <AnnouncementFeed
+                user={user}
+                items={announcements}
+                unreadIds={unreadAnnouncementIds}
+                readCounts={readCountsByAnnouncement}
+                totalRecipientsByAnnouncement={totalRecipientsByAnnouncement}
+                onMarkRead={markAnnouncementRead}
+                onEdit={(announcement) => {
+                  setSelectedAnnouncement(announcement);
+                  setShowAnnouncementComposer(true);
+                }}
+                onDelete={(announcement) => void deleteAnnouncement(announcement)}
+              />
+            </div>
+          )}
+
+          {activeTab === 'schedule' && (
+            <div className="space-y-6">
+              <ClassCalendar
+                user={user}
+                sessions={scheduleSessions}
+                canEdit={isTeacher}
+                onNewSession={() => {
+                  setSelectedSession(null);
+                  setShowSessionModal(true);
+                }}
+                onSelectSession={(session) => {
+                  setSelectedSession(session);
+                  setShowSessionModal(true);
+                }}
+              />
+              {selectedSession && (
+                <section className="bg-white rounded-[2rem] border border-slate-100 p-6 shadow-sm">
+                  <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+                    <div>
+                      <p className="text-xs font-black uppercase tracking-widest text-slate-500">{selectedSession.classTitle}</p>
+                      <h3 className="text-lg font-black uppercase text-slate-950">{selectedSession.title}</h3>
+                      <p className="mt-2 text-sm text-slate-600">
+                        {selectedSession.description || 'No session description provided.'}
+                      </p>
+                      <p className="mt-3 text-xs font-black uppercase tracking-widest text-slate-400">
+                        {new Date(selectedSession.startTime).toLocaleString()} - {new Date(selectedSession.endTime).toLocaleTimeString()}
+                      </p>
+                    </div>
+                    {isTeacher && (
+                      <div className="flex gap-2">
+                        <button type="button" onClick={() => setShowSessionModal(true)} className="px-4 py-3 rounded-xl border border-slate-200 text-xs font-black uppercase tracking-widest text-slate-700">
+                          Edit
+                        </button>
+                        <button type="button" onClick={() => void deleteSession(selectedSession, selectedSession.recurrence === 'none' ? 'all' : 'single')} className="px-4 py-3 rounded-xl border border-red-200 text-xs font-black uppercase tracking-widest text-red-600">
+                          Cancel Once
+                        </button>
+                        <button type="button" onClick={() => void deleteSession(selectedSession, 'all')} className="px-4 py-3 rounded-xl bg-red-50 border border-red-100 text-xs font-black uppercase tracking-widest text-red-700">
+                          Delete Series
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </section>
+              )}
             </div>
           )}
 
@@ -1700,6 +2213,12 @@ const Dashboard: React.FC<DashboardProps> = ({
                 </div>
               </section>
 
+              <NotificationPreferences
+                user={user}
+                preferences={notificationPreferences}
+                onToggle={toggleNotificationPreference}
+              />
+
               <section className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm">
                 <h2 className="text-lg font-bold text-slate-950 uppercase mb-2">Theme</h2>
                 <p className="text-xs text-slate-500 mb-5">Pick the app look for this device.</p>
@@ -1792,6 +2311,29 @@ const Dashboard: React.FC<DashboardProps> = ({
           )}
         </div>
       </div>
+      <AnnouncementComposer
+        open={showAnnouncementComposer}
+        user={user}
+        classes={classOptions.filter((item) => isTeacher || enrolledClassIds.includes(item.id))}
+        students={studentsForComposer}
+        initialValue={selectedAnnouncement}
+        onClose={() => {
+          setShowAnnouncementComposer(false);
+          setSelectedAnnouncement(null);
+        }}
+        onSave={saveAnnouncement}
+      />
+      <SessionModal
+        open={showSessionModal}
+        classes={classOptions.filter((item) => isTeacher || enrolledClassIds.includes(item.id))}
+        initialValue={selectedSession}
+        canEdit={isTeacher}
+        onClose={() => {
+          setShowSessionModal(false);
+          setSelectedSession(null);
+        }}
+        onSave={saveSession}
+      />
       <nav className="fixed bottom-0 left-0 right-0 z-50 flex justify-between items-center bg-[var(--surface)] backdrop-blur-xl border-t border-[var(--edge)] py-2 pb-safe px-1 md:hidden">
         {mobileNavTabs.map((tab) => (
           <button

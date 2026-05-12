@@ -1,0 +1,11 @@
+name = "aureus-classboard-worker"
+main = "src/index.ts"
+compatibility_date = "2026-04-13"
+compatibility_flags = ["nodejs_compat"]
+
+[triggers]
+crons = ["*/1 * * * *", "*/5 * * * *"]
+
+[vars]
+FIREBASE_PROJECT_ID = "aureus-medicos-cbt"
+WEB_PUSH_SUBJECT = "mailto:support@example.com"

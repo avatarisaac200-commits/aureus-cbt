@@ -84,6 +84,8 @@ export interface MockTest {
   totalDurationSeconds: number;
   allowRetake: boolean;
   maxAttempts?: number | null;
+  accessPassword?: string;
+  isArchived?: boolean;
   createdBy: string;
   creatorName: string;
   isApproved: boolean;
@@ -178,6 +180,102 @@ export interface BroadcastNotification {
   createdAt: string;
   createdBy: string;
   createdByName: string;
+}
+
+export type NotificationType =
+  | 'announcement_posted'
+  | 'session_reminder'
+  | 'schedule_updated'
+  | 'grade_released'
+  | 'deadline_approaching'
+  | 'new_message';
+
+export interface AppNotification {
+  id: string;
+  userId: string;
+  type: NotificationType;
+  title: string;
+  body: string;
+  data?: Record<string, string>;
+  isRead: boolean;
+  createdAt: string;
+  readAt?: string;
+}
+
+export interface NotificationPreference {
+  id: string;
+  userId: string;
+  notificationType: NotificationType;
+  inApp: boolean;
+  push: boolean;
+  email: boolean;
+}
+
+export interface PushSubscriptionRecord {
+  id: string;
+  userId: string;
+  endpoint: string;
+  keys?: {
+    p256dh?: string;
+    auth?: string;
+  };
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export type AnnouncementAudience = 'all' | 'group' | 'individual';
+
+export interface Announcement {
+  id: string;
+  classId: string;
+  classTitle: string;
+  authorId: string;
+  authorName: string;
+  title: string;
+  body: string;
+  bodyPreview?: string;
+  targetAudience: AnnouncementAudience;
+  targetIds?: string[];
+  isPinned: boolean;
+  attachments?: string[];
+  scheduledAt?: string;
+  published: boolean;
+  publishedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+  editedAt?: string;
+}
+
+export interface AnnouncementRead {
+  id: string;
+  announcementId: string;
+  userId: string;
+  readAt: string;
+}
+
+export type SessionRecurrence = 'none' | 'weekly' | 'custom';
+
+export interface ClassSession {
+  id: string;
+  classId: string;
+  classTitle: string;
+  teacherId: string;
+  teacherName: string;
+  title: string;
+  description?: string;
+  location?: string;
+  lessonPlan?: string;
+  startTime: string;
+  endTime: string;
+  recurrence: SessionRecurrence;
+  recurrenceDays?: number[];
+  recurrenceEndDate?: string;
+  color?: string;
+  isCancelled?: boolean;
+  cancelledOccurrences?: string[];
+  reminderSentAt?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export type ForumChannel = 'general' | 'questions' | 'resources' | 'wins';

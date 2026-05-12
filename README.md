@@ -43,3 +43,19 @@ This project now includes a Cloud Function that keeps `leaderboardPublic` in syn
 ### Backfill existing leaderboard data
 
 After deploy, open Admin Dashboard -> Question Bank -> **Rebuild Ranks** once.
+
+## Classboard On Firebase Spark
+
+If you stay on Firebase `Spark`, do not use Firebase Cloud Functions for the classboard backend.
+
+Use the Cloudflare Worker flow instead:
+
+- setup guide: [docs/cloudflare-worker-classboard.md](./docs/cloudflare-worker-classboard.md)
+- worker source: [workers/classboard](./workers/classboard)
+
+This worker handles:
+
+- scheduled announcement publishing
+- class session reminders
+- web push delivery
+- notification fanout into Firestore

@@ -527,6 +527,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
   const [editTestName, setEditTestName] = useState('');
   const [editTestDesc, setEditTestDesc] = useState('');
   const [editTestDuration, setEditTestDuration] = useState(60);
+  const [editTestPasswordEnabled, setEditTestPasswordEnabled] = useState(false);
+  const [editTestPassword, setEditTestPassword] = useState('');
+  const [editTestArchived, setEditTestArchived] = useState(false);
   const [editingCsvQuestions, setEditingCsvQuestions] = useState<EditableCsvQuestion[]>([]);
   const [editingCsvLoading, setEditingCsvLoading] = useState(false);
   const [editingCsvQuestionCount, setEditingCsvQuestionCount] = useState(20);
@@ -549,6 +552,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
   const [csvBundleSize, setCsvBundleSize] = useState(100);
   const [allowRetake, setAllowRetake] = useState(true);
   const [maxAttempts, setMaxAttempts] = useState<number | ''>('');
+  const [testPasswordEnabled, setTestPasswordEnabled] = useState(false);
+  const [testPassword, setTestPassword] = useState('');
+  const [testArchived, setTestArchived] = useState(false);
   const [sections, setSections] = useState<TestSection[]>([
     {
       id: 'sec_' + Date.now(),
@@ -1284,6 +1290,9 @@ Rules:
   const handleCreateTest = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!testName) return notify("Test name is required.");
+    if (testPasswordEnabled && !testPassword.trim()) {
+      return notify("Enter a password or turn password protection off.");
+    }
     if (testGenerationMode === 'csv-dynamic' && csvDynamicQuestions.length === 0) {
       return notify("Upload a CSV file for CSV Dynamic mode.");
     }
@@ -1379,6 +1388,8 @@ Rules:
         generationMode: testGenerationMode,
         allowRetake,
         maxAttempts: allowRetake ? (maxAttempts === '' ? null : Number(maxAttempts)) : 1,
+        accessPassword: testPasswordEnabled ? testPassword.trim() : '',
+        isArchived: testArchived,
         createdBy: user.id,
         creatorName: user.name,
         isApproved: true,
@@ -1401,6 +1412,9 @@ Rules:
         setCsvDynamicFileName('');
         setCsvBundleEnabled(false);
       }
+      setTestPasswordEnabled(false);
+      setTestPassword('');
+      setTestArchived(false);
       setActiveTab('tests');
     } catch (e: any) { notify("Error creating test. " + (e?.message || "")); }
     finally { setLoading(false); }
@@ -1610,6 +1624,9 @@ Rules:
     setEditTestName(test.name || '');
     setEditTestDesc(test.description || '');
     setEditTestDuration(Math.max(1, Math.floor((test.totalDurationSeconds || 3600) / 60)));
+    setEditTestPasswordEnabled(Boolean(test.accessPassword));
+    setEditTestPassword(test.accessPassword || '');
+    setEditTestArchived(Boolean(test.isArchived));
     const primarySection = test.sections?.[0];
     const csvCountFallback = primarySection
       ? Math.max(1, Number(primarySection.questionCount || primarySection.questionIds.length || 1))
@@ -1681,6 +1698,9 @@ Rules:
     setEditTestName('');
     setEditTestDesc('');
     setEditTestDuration(60);
+    setEditTestPasswordEnabled(false);
+    setEditTestPassword('');
+    setEditTestArchived(false);
     setEditingCsvQuestions([]);
     setEditingCsvLoading(false);
     setEditingCsvQuestionCount(20);
@@ -1699,6 +1719,10 @@ Rules:
     const isCsvDynamic = (activeEditTest.generationMode || 'fixed') === 'csv-dynamic';
     setLoading(true);
     try {
+      if (editTestPasswordEnabled && !editTestPassword.trim()) {
+        notify('Enter a password or turn password protection off.');
+        return;
+      }
       if (isCsvDynamic) {
         if (editingCsvQuestions.length === 0) {
           notify('No CSV questions loaded for this test.');
@@ -1794,6 +1818,8 @@ Rules:
           name: editTestName.trim(),
           description: editTestDesc.trim(),
           totalDurationSeconds: Math.max(1, editTestDuration) * 60,
+          accessPassword: editTestPasswordEnabled ? editTestPassword.trim() : '',
+          isArchived: editTestArchived,
           sections: nextSections,
           csvPoolSize: editingCsvQuestions.length,
           csvBundlesEnabled: editingCsvBundleEnabled,
@@ -1810,6 +1836,8 @@ Rules:
           name: editTestName.trim(),
           description: editTestDesc.trim(),
           totalDurationSeconds: Math.max(1, editTestDuration) * 60,
+          accessPassword: editTestPasswordEnabled ? editTestPassword.trim() : '',
+          isArchived: editTestArchived,
           updatedAt: new Date().toISOString()
         });
       }
@@ -1844,6 +1872,22 @@ Rules:
       notify(`"${test.name}" moved to top.`);
     } catch (err: any) {
       notify('Failed to move test. ' + (err?.message || ''));
+    }
+  };
+
+  const toggleArchiveTest = async (test: MockTest) => {
+    try {
+      const nextArchived = !test.isArchived;
+      await updateDoc(doc(db, 'tests', test.id), {
+        isArchived: nextArchived,
+        archivedAt: nextArchived ? new Date().toISOString() : '',
+        archivedBy: nextArchived ? user.id : '',
+        updatedAt: new Date().toISOString()
+      });
+      await loadManagedTests();
+      notify(nextArchived ? 'Test moved to archived tests.' : 'Test restored to active tests.');
+    } catch (err: any) {
+      notify('Failed to update archive status. ' + (err?.message || ''));
     }
   };
 
@@ -2320,6 +2364,37 @@ Rules:
                     placeholder="Unlimited"
                   />
                 </div>
+
+                <div className="flex items-center justify-between bg-slate-50 p-4 rounded-2xl">
+                  <span className="text-xs font-bold uppercase text-slate-400">Password Protect</span>
+                  <button
+                    type="button"
+                    onClick={() => setTestPasswordEnabled(!testPasswordEnabled)}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest ${testPasswordEnabled ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-600'}`}
+                  >
+                    {testPasswordEnabled ? 'On' : 'Off'}
+                  </button>
+                </div>
+                {testPasswordEnabled && (
+                  <input
+                    type="text"
+                    value={testPassword}
+                    onChange={(e) => setTestPassword(e.target.value)}
+                    className="w-full p-4 bg-slate-50 border rounded-2xl text-xs font-bold"
+                    placeholder="Enter test password"
+                  />
+                )}
+
+                <div className="flex items-center justify-between bg-slate-50 p-4 rounded-2xl">
+                  <span className="text-xs font-bold uppercase text-slate-400">Archive Test</span>
+                  <button
+                    type="button"
+                    onClick={() => setTestArchived(!testArchived)}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest ${testArchived ? 'bg-amber-500 text-slate-950' : 'bg-slate-200 text-slate-600'}`}
+                  >
+                    {testArchived ? 'Archived' : 'Active'}
+                  </button>
+                </div>
                 
                 {testGenerationMode !== 'csv-dynamic' && (
                 <div className="space-y-3">
@@ -2674,9 +2749,21 @@ Rules:
                               {Math.round((test.totalDurationSeconds || 0) / 60)} mins - {test.sections?.length || 0} section(s) - {(test.generationMode || 'fixed')} mode
                             </p>
                           </div>
-                          <span className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-widest ${isPaused ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                            {isPaused ? 'Paused' : 'Live'}
-                          </span>
+                          <div className="flex flex-wrap gap-2">
+                            <span className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-widest ${isPaused ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                              {isPaused ? 'Paused' : 'Live'}
+                            </span>
+                            {test.isArchived && (
+                              <span className="px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-widest bg-slate-200 text-slate-700">
+                                Archived
+                              </span>
+                            )}
+                            {test.accessPassword && (
+                              <span className="px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-widest bg-indigo-100 text-indigo-700">
+                                Password
+                              </span>
+                            )}
+                          </div>
                         </div>
                         <p className="text-sm text-slate-500">{test.description || 'No instructions set.'}</p>
                         <div className="flex flex-wrap gap-2">
@@ -2687,6 +2774,9 @@ Rules:
                           {(test.generationMode || 'fixed') === 'dynamic' && (
                             <button onClick={() => rebuildDynamicPools(test)} className="px-5 py-2 bg-sky-50 rounded-xl text-xs font-bold uppercase tracking-widest text-sky-700 hover:bg-sky-100">Rebuild Pools</button>
                           )}
+                          <button onClick={() => toggleArchiveTest(test)} className="px-5 py-2 bg-slate-100 rounded-xl text-xs font-bold uppercase tracking-widest text-slate-700 hover:bg-slate-200">
+                            {test.isArchived ? 'Restore' : 'Archive'}
+                          </button>
                           <button onClick={() => togglePauseTest(test)} className="px-5 py-2 bg-amber-100 rounded-xl text-xs font-bold uppercase tracking-widest text-amber-700 hover:bg-amber-200">{isPaused ? 'Resume' : 'Pause'}</button>
                           <button onClick={() => removeTest(test)} className="px-5 py-2 bg-red-50 rounded-xl text-xs font-bold uppercase tracking-widest text-red-600 hover:bg-red-100">Delete</button>
                         </div>
@@ -2698,6 +2788,35 @@ Rules:
                         <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl">
                           <span className="text-xs font-bold uppercase text-slate-400">Time (mins)</span>
                           <input type="number" min={1} value={editTestDuration} onChange={(e) => setEditTestDuration(parseInt(e.target.value) || 1)} className="bg-transparent font-bold w-full text-center text-xl outline-none" />
+                        </div>
+                        <div className="flex items-center justify-between bg-slate-50 p-4 rounded-2xl">
+                          <span className="text-xs font-bold uppercase text-slate-400">Password Protect</span>
+                          <button
+                            type="button"
+                            onClick={() => setEditTestPasswordEnabled(!editTestPasswordEnabled)}
+                            className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest ${editTestPasswordEnabled ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-600'}`}
+                          >
+                            {editTestPasswordEnabled ? 'On' : 'Off'}
+                          </button>
+                        </div>
+                        {editTestPasswordEnabled && (
+                          <input
+                            type="text"
+                            value={editTestPassword}
+                            onChange={(e) => setEditTestPassword(e.target.value)}
+                            className="w-full p-4 bg-slate-50 border rounded-2xl text-xs font-bold"
+                            placeholder="Enter test password"
+                          />
+                        )}
+                        <div className="flex items-center justify-between bg-slate-50 p-4 rounded-2xl">
+                          <span className="text-xs font-bold uppercase text-slate-400">Archive Test</span>
+                          <button
+                            type="button"
+                            onClick={() => setEditTestArchived(!editTestArchived)}
+                            className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest ${editTestArchived ? 'bg-amber-500 text-slate-950' : 'bg-slate-200 text-slate-600'}`}
+                          >
+                            {editTestArchived ? 'Archived' : 'Active'}
+                          </button>
                         </div>
                         {(test.generationMode || 'fixed') === 'csv-dynamic' && (
                           <div className="space-y-4 rounded-2xl border border-slate-100 p-4 bg-slate-50/50">

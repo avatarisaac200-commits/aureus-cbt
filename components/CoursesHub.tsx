@@ -738,6 +738,7 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
           await setDoc(ref, {
             courseId: course.id,
             userId: user.id,
+            userName: user.name,
             createdAt: new Date().toISOString()
           });
         }
