@@ -180,7 +180,7 @@ const VideoLearningHub: React.FC<VideoLearningHubProps> = ({ user, isReadOnly, o
       <header className="shrink-0 border-b border-white/10 bg-slate-950/95 safe-top">
         <div className="px-4 md:px-8 py-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <button onClick={onBack} className="w-10 h-10 rounded-xl border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10" aria-label="Back">←</button>
+            <button onClick={onBack} className="min-h-[44px] rounded-xl border border-amber-300 bg-amber-300 px-4 text-xs font-black uppercase tracking-widest text-slate-950 shadow-lg hover:bg-amber-200" aria-label="Back to main app">Back to app</button>
             <div>
               <p className="text-[11px] font-black uppercase tracking-[0.3em] text-amber-400">Video Academy</p>
               <h1 className="text-lg md:text-2xl font-black tracking-tight">Lecture Library</h1>
@@ -222,6 +222,7 @@ const VideoLearningHub: React.FC<VideoLearningHubProps> = ({ user, isReadOnly, o
                   if (autoPlayNext && nextLesson) window.setTimeout(() => selectLesson(nextLesson), 900);
                 }}
                 onNext={nextLesson ? () => selectLesson(nextLesson) : undefined}
+                onBackToApp={onBack}
               />
 
               <section className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-5 md:p-7">

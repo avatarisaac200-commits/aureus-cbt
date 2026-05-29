@@ -2392,10 +2392,11 @@ const Dashboard: React.FC<DashboardProps> = ({
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`flex-1 max-w-[86px] flex flex-col items-center justify-center gap-1 py-2 rounded-xl min-h-[46px] text-[10px] uppercase tracking-widest font-semibold transition-all ${activeTab === tab.id ? 'text-[var(--gold)]' : 'text-[var(--muted)]'}`}
+            title={tab.label}
+            aria-label={tab.label}
+            className={`flex-1 max-w-[64px] flex items-center justify-center py-2 rounded-xl min-h-[46px] transition-all ${activeTab === tab.id ? 'text-[var(--gold)]' : 'text-[var(--muted)]'}`}
           >
             <span className="inline-flex items-center justify-center leading-none">{renderTabIcon(tab.id)}</span>
-            <span>{tab.label}</span>
           </button>
         ))}
       </nav>

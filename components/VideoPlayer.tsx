@@ -9,6 +9,7 @@ interface VideoPlayerProps {
   onProgress?: (positionSeconds: number, durationSeconds: number) => void;
   onComplete?: () => void;
   onNext?: () => void;
+  onBackToApp?: () => void;
 }
 
 const SPEEDS = [0.75, 1, 1.25, 1.5, 2];
@@ -19,7 +20,8 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   autoPlay = false,
   onProgress,
   onComplete,
-  onNext
+  onNext,
+  onBackToApp
 }) => {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
@@ -58,15 +60,40 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     }
   }, [isPlaying, sendCommand]);
 
+  const unlockOrientation = useCallback(() => {
+    const orientation = screen.orientation as ScreenOrientation & { unlock?: () => void };
+    orientation?.unlock?.();
+  }, []);
+
+  const lockLandscape = useCallback(async () => {
+    const orientation = screen.orientation as ScreenOrientation & { lock?: (orientation: OrientationLockType) => Promise<void> };
+    await orientation?.lock?.('landscape').catch(() => undefined);
+  }, []);
+
   const requestFullscreen = useCallback(() => {
     const el = wrapperRef.current;
     if (!el) return;
     if (document.fullscreenElement) {
-      document.exitFullscreen().catch(() => undefined);
+      document.exitFullscreen().catch(() => undefined).finally(unlockOrientation);
       return;
     }
-    el.requestFullscreen?.().catch(() => undefined);
-  }, []);
+    el.requestFullscreen?.()
+      .then(() => {
+        if (window.matchMedia('(max-width: 768px)').matches) void lockLandscape();
+      })
+      .catch(() => undefined);
+  }, [lockLandscape, unlockOrientation]);
+
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      if (!document.fullscreenElement) unlockOrientation();
+    };
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', onFullscreenChange);
+      unlockOrientation();
+    };
+  }, [unlockOrientation]);
 
   useEffect(() => {
     setPosition(Math.max(0, initialPositionSeconds || 0));
@@ -117,6 +144,17 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   return (
     <div className={isTheater ? 'fixed inset-0 z-[180] bg-black p-0 md:p-6 flex items-center justify-center' : ''}>
       <div ref={wrapperRef} className="relative overflow-hidden bg-black shadow-2xl border border-white/10 rounded-[1.5rem] video-player-shell">
+        {onBackToApp && (
+          <button
+            type="button"
+            onClick={onBackToApp}
+            className="absolute left-3 top-3 z-20 inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-white/20 bg-white px-4 py-2 text-xs font-black uppercase tracking-widest text-slate-950 shadow-lg hover:bg-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-300"
+            aria-label="Back to main app"
+          >
+            <span aria-hidden="true">&larr;</span>
+            <span>Back to app</span>
+          </button>
+        )}
         {!isReady && (
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-slate-950">
             <div className="w-12 h-12 rounded-full border-4 border-white/10 border-t-amber-400 animate-spin mb-4"></div>
@@ -137,7 +175,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
             if (speed !== 1) window.setTimeout(() => sendCommand('setPlaybackRate', [speed]), 500);
           }}
         />
-        <div className="bg-slate-950/95 border-t border-white/10 px-4 py-3 md:px-5">
+        <div className="bg-slate-950 border-t border-white/10 px-4 py-3 md:px-5 text-white">
           <input
             type="range"
             min={0}
@@ -148,27 +186,27 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
             aria-label="Seek video"
           />
           <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-white">
-            <div className="flex items-center gap-2">
-              <button onClick={togglePlayback} className="w-10 h-10 rounded-xl bg-amber-400 text-slate-950 font-black hover:bg-amber-300 transition-colors" aria-label={isPlaying ? 'Pause video' : 'Play video'}>
+            <div className="flex flex-wrap items-center gap-2">
+              <button onClick={togglePlayback} className="w-11 h-11 rounded-xl bg-amber-300 text-slate-950 text-sm font-black shadow-sm hover:bg-amber-200 transition-colors focus:outline-none focus:ring-2 focus:ring-amber-100" aria-label={isPlaying ? 'Pause video' : 'Play video'}>
                 {isPlaying ? 'II' : '▶'}
               </button>
-              <button onClick={() => seekTo(position - 10)} className="px-3 h-10 rounded-xl bg-white/10 text-xs font-black uppercase tracking-widest hover:bg-white/15">-10s</button>
-              <button onClick={() => seekTo(position + 10)} className="px-3 h-10 rounded-xl bg-white/10 text-xs font-black uppercase tracking-widest hover:bg-white/15">+10s</button>
-              <span className="text-xs font-bold text-slate-300 tabular-nums">{formatVideoDuration(position)} / {duration ? formatVideoDuration(duration) : 'Live'}</span>
+              <button onClick={() => seekTo(position - 10)} className="px-3 h-11 rounded-xl border border-white/20 bg-white text-slate-950 text-xs font-black uppercase tracking-widest hover:bg-slate-200 focus:outline-none focus:ring-2 focus:ring-white">-10s</button>
+              <button onClick={() => seekTo(position + 10)} className="px-3 h-11 rounded-xl border border-white/20 bg-white text-slate-950 text-xs font-black uppercase tracking-widest hover:bg-slate-200 focus:outline-none focus:ring-2 focus:ring-white">+10s</button>
+              <span className="text-xs font-bold text-white tabular-nums">{formatVideoDuration(position)} / {duration ? formatVideoDuration(duration) : 'Live'}</span>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <select
                 value={speed}
                 onChange={(event) => setSpeed(Number(event.target.value))}
-                className="h-10 rounded-xl bg-white/10 border border-white/10 px-3 text-xs font-black uppercase tracking-widest outline-none"
+                className="h-11 rounded-xl bg-white text-slate-950 border border-white/20 px-3 text-xs font-black uppercase tracking-widest outline-none focus:ring-2 focus:ring-white"
                 aria-label="Playback speed"
               >
                 {SPEEDS.map((item) => <option key={item} value={item} className="bg-slate-950">{item}x</option>)}
               </select>
-              <span className="hidden sm:inline-flex h-10 items-center rounded-xl bg-white/10 px-3 text-xs font-black uppercase tracking-widest text-slate-300">Quality Auto</span>
-              <button onClick={() => setIsTheater((value) => !value)} className="h-10 px-3 rounded-xl bg-white/10 text-xs font-black uppercase tracking-widest hover:bg-white/15">{isTheater ? 'Exit' : 'Theater'}</button>
-              {onNext && <button onClick={onNext} className="h-10 px-3 rounded-xl bg-emerald-400 text-slate-950 text-xs font-black uppercase tracking-widest hover:bg-emerald-300">Next</button>}
-              <button onClick={requestFullscreen} className="h-10 px-3 rounded-xl bg-white/10 text-xs font-black uppercase tracking-widest hover:bg-white/15">Full</button>
+              <span className="hidden sm:inline-flex h-11 items-center rounded-xl border border-white/15 bg-slate-800 px-3 text-xs font-black uppercase tracking-widest text-white">Quality Auto</span>
+              <button onClick={() => setIsTheater((value) => !value)} className="h-11 px-3 rounded-xl border border-white/20 bg-white text-slate-950 text-xs font-black uppercase tracking-widest hover:bg-slate-200 focus:outline-none focus:ring-2 focus:ring-white">{isTheater ? 'Exit' : 'Theater'}</button>
+              {onNext && <button onClick={onNext} className="h-11 px-3 rounded-xl bg-emerald-300 text-slate-950 text-xs font-black uppercase tracking-widest hover:bg-emerald-200 focus:outline-none focus:ring-2 focus:ring-emerald-100">Next</button>}
+              <button onClick={requestFullscreen} className="h-11 px-3 rounded-xl bg-amber-300 text-slate-950 text-xs font-black uppercase tracking-widest hover:bg-amber-200 focus:outline-none focus:ring-2 focus:ring-amber-100">Full Screen</button>
             </div>
           </div>
           <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10">
