@@ -21,6 +21,7 @@ const ResultScreen = lazy(() => import('./components/ResultScreen'));
 const ReviewInterface = lazy(() => import('./components/ReviewInterface'));
 const UpdateManual = lazy(() => import('./components/UpdateManual'));
 const CoursesHub = lazy(() => import('./components/CoursesHub'));
+const VideoLearningHub = lazy(() => import('./components/VideoLearningHub'));
 const SocialProfileOnboarding = lazy(() => import('./components/SocialProfileOnboarding'));
 
 const DEFAULT_FREE_ACCESS_ENDS_AT_ISO = '2026-04-01T23:00:00.000Z'; // April 2, 2026 00:00 WAT
@@ -38,6 +39,7 @@ const APP_UI_MODE_STORAGE_KEY = 'appUiMode';
 const UPDATE_MANUAL_VERSION = '3.15.0';
 const UPDATE_MANUAL_SEEN_PREFIX = 'updateManualSeen';
 const BROADCAST_NOTIFICATIONS_SEEN_AT_PREFIX = 'broadcastSeenAt';
+const SOCIAL_PROFILE_PROMPT_DISMISSED_PREFIX = 'socialProfilePromptDismissed';
 
 type MonetizationMode = 'pre-deadline' | 'post-deadline';
 
@@ -62,6 +64,7 @@ const getThemeStorageKey = (userId: string) => `${APP_THEME_STORAGE_KEY}:${userI
 const getCustomThemeStorageKey = (userId: string) => `${APP_CUSTOM_THEME_STORAGE_KEY}:${userId}`;
 const getUiModeStorageKey = (userId: string) => `${APP_UI_MODE_STORAGE_KEY}:${userId}`;
 const getUpdateManualSeenKey = () => `${UPDATE_MANUAL_SEEN_PREFIX}:${UPDATE_MANUAL_VERSION}:global`;
+const getSocialProfilePromptDismissedKey = (userId: string) => `${SOCIAL_PROFILE_PROMPT_DISMISSED_PREFIX}:${userId}`;
 
 const sanitizeHex = (value: string, fallback: string) => {
   const v = String(value || '').trim();
@@ -111,6 +114,7 @@ const viewToPath = (view: ViewState) => {
   if (view === 'verify-email') return '/verify-email';
   if (view === 'dashboard') return '/dashboard';
   if (view === 'courses') return '/courses';
+  if (view === 'videos') return '/videos';
   if (view === 'attendance') return ATTENDANCE_ROUTE;
   if (view === 'blacklist') return BLACKLIST_ROUTE;
   if (view === 'admin') return '/admin';
@@ -125,6 +129,7 @@ const pathToView = (path: string): ViewState | null => {
   if (normalized === '/verify-email') return 'verify-email';
   if (normalized === '/dashboard' || normalized === '/') return 'dashboard';
   if (normalized === '/courses') return 'courses';
+  if (normalized === '/videos') return 'videos';
   if (normalized === ATTENDANCE_ROUTE) return 'attendance';
   if (normalized === BLACKLIST_ROUTE) return 'blacklist';
   if (normalized === '/admin') return 'admin';
@@ -246,6 +251,53 @@ const MonetizationModal: React.FC<MonetizationModalProps> = ({
   );
 };
 
+interface SocialProfilePromptProps {
+  onCreateNow: () => void;
+  onCreateLater: () => void;
+}
+
+const SocialProfilePrompt: React.FC<SocialProfilePromptProps> = ({ onCreateNow, onCreateLater }) => {
+  return (
+    <div className="fixed inset-0 z-[215] bg-slate-950/70 backdrop-blur-sm flex items-start sm:items-center justify-center p-3 sm:p-4 overflow-y-auto safe-top safe-bottom">
+      <div className="w-full max-w-lg bg-white rounded-[2rem] border border-slate-100 shadow-2xl overflow-hidden">
+        <div className="bg-slate-950 border-b-4 border-amber-500 px-6 py-6">
+          <p className="text-amber-500 text-xs font-black uppercase tracking-[0.3em] mb-2">Community Profile</p>
+          <h2 className="text-white text-xl font-black uppercase tracking-tight">Create Your Chat Profile?</h2>
+        </div>
+        <div className="p-6 space-y-5">
+          <p className="text-sm leading-relaxed text-slate-600">
+            A chat profile helps classmates identify you in the community, friend requests, and messages. You can set it up now or continue and do it later.
+          </p>
+
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <p className="text-[11px] font-black uppercase tracking-widest text-slate-500">Create it later</p>
+            <p className="mt-2 text-sm leading-relaxed text-slate-600">
+              Open <strong>Dashboard</strong>, go to <strong>Profile</strong>, then tap <strong>Edit Social Profile</strong>. You can also open <strong>Community</strong> and tap <strong>Edit Profile</strong>.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={onCreateNow}
+              className="w-full rounded-2xl bg-slate-950 px-5 py-4 text-xs font-black uppercase tracking-widest text-amber-500 shadow-lg"
+            >
+              Create Now
+            </button>
+            <button
+              type="button"
+              onClick={onCreateLater}
+              className="w-full rounded-2xl border border-slate-200 bg-white px-5 py-4 text-xs font-black uppercase tracking-widest text-slate-600"
+            >
+              Later
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentView, setCurrentView] = useState<ViewState>('auth');
@@ -273,6 +325,7 @@ const App: React.FC = () => {
   const [communityProfile, setCommunityProfile] = useState<CommunityProfile | null>(null);
   const [isSocialProfileReady, setIsSocialProfileReady] = useState(false);
   const [isSocialProfileEditorOpen, setIsSocialProfileEditorOpen] = useState(false);
+  const [isSocialProfilePromptDismissed, setIsSocialProfilePromptDismissed] = useState(false);
   const isFlushingQueueRef = useRef(false);
   const bootFallbackNotifiedRef = useRef(false);
 
@@ -379,6 +432,14 @@ const App: React.FC = () => {
     return () => {
       cancelled = true;
     };
+  }, [currentUser?.id]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !currentUser?.id) {
+      setIsSocialProfilePromptDismissed(false);
+      return;
+    }
+    setIsSocialProfilePromptDismissed(window.localStorage.getItem(getSocialProfilePromptDismissedKey(currentUser.id)) === 'true');
   }, [currentUser?.id]);
 
   useEffect(() => {
@@ -1394,6 +1455,19 @@ const App: React.FC = () => {
     isSocialProfileReady &&
     (!currentUser.socialOnboardingCompletedAt || !communityProfile?.onboardingCompletedAt)
   );
+  const shouldShowSocialProfilePrompt = needsSocialOnboarding && !isSocialProfileEditorOpen && !isSocialProfilePromptDismissed;
+
+  const handleCreateSocialProfileNow = () => {
+    setIsSocialProfileEditorOpen(true);
+  };
+
+  const handleCreateSocialProfileLater = () => {
+    if (typeof window !== 'undefined' && currentUser?.id) {
+      window.localStorage.setItem(getSocialProfilePromptDismissedKey(currentUser.id), 'true');
+    }
+    setIsSocialProfilePromptDismissed(true);
+    toast.info('Profile setup saved for later', 'Open Profile, then Edit Social Profile when you are ready.');
+  };
 
   if (isLoading) {
     return (
@@ -1496,6 +1570,7 @@ const App: React.FC = () => {
           }}
           onReturnToAdmin={() => setCurrentView(currentUser.role === 'root-admin' ? 'root-admin' : 'admin')}
           onOpenCourses={() => setCurrentView('courses')}
+          onOpenVideos={() => setCurrentView('videos')}
           onSaveOfflineTest={saveTestForOffline}
           isReadOnly={isReadOnlyForUnactivatedUser(currentUser)}
           deadlineLabel={deadlineLabel}
@@ -1528,6 +1603,13 @@ const App: React.FC = () => {
       )}
       {currentView === 'courses' && currentUser && (
         <CoursesHub
+          user={currentUser}
+          isReadOnly={isReadOnlyForUnactivatedUser(currentUser)}
+          onBack={() => setCurrentView('dashboard')}
+        />
+      )}
+      {currentView === 'videos' && currentUser && (
+        <VideoLearningHub
           user={currentUser}
           isReadOnly={isReadOnlyForUnactivatedUser(currentUser)}
           onBack={() => setCurrentView('dashboard')}
@@ -1603,16 +1685,23 @@ const App: React.FC = () => {
           ))}
         </div>
       )}
-      {currentUser && (needsSocialOnboarding || isSocialProfileEditorOpen) && (
+      {currentUser && shouldShowSocialProfilePrompt && (
+        <SocialProfilePrompt
+          onCreateNow={handleCreateSocialProfileNow}
+          onCreateLater={handleCreateSocialProfileLater}
+        />
+      )}
+      {currentUser && isSocialProfileEditorOpen && (
         <SocialProfileOnboarding
           user={currentUser}
           initialProfile={communityProfile}
-          canClose={!needsSocialOnboarding}
+          canClose
           onClose={() => setIsSocialProfileEditorOpen(false)}
           onComplete={({ userPatch, profile }) => {
             setCurrentUser((prev) => prev ? { ...prev, ...userPatch } : prev);
             setCommunityProfile(profile);
             setIsSocialProfileEditorOpen(false);
+            setIsSocialProfilePromptDismissed(true);
           }}
         />
       )}

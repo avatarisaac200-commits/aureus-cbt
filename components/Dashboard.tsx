@@ -24,6 +24,7 @@ interface DashboardProps {
   onStartTest: (test: MockTest, options?: { quizMode?: boolean }) => void;
   onReviewResult: (result: ExamResult) => void;
   onOpenCourses?: () => void;
+  onOpenVideos?: () => void;
   onSaveOfflineTest?: (test: MockTest) => void;
   onReturnToAdmin?: () => void;
   isReadOnly?: boolean;
@@ -43,7 +44,7 @@ interface DashboardProps {
 }
 
 type TestSortMode = 'updated' | 'name' | 'duration' | 'attempts';
-type MainTab = 'home' | 'announcements' | 'schedule' | 'community' | 'ranks' | 'create' | 'reviews' | 'settings' | 'profile';
+type MainTab = 'home' | 'announcements' | 'schedule' | 'community' | 'videos' | 'ranks' | 'create' | 'reviews' | 'settings' | 'profile';
 type MobileUiMode = 'dark' | 'light';
 type TestShelf = 'all' | 'unfiled' | 'archived' | string;
 
@@ -185,6 +186,7 @@ const Dashboard: React.FC<DashboardProps> = ({
   onStartTest,
   onReviewResult,
   onOpenCourses,
+  onOpenVideos,
   onSaveOfflineTest,
   onReturnToAdmin,
   isReadOnly = false,
@@ -1249,6 +1251,7 @@ const Dashboard: React.FC<DashboardProps> = ({
     { id: 'announcements', label: 'Announcements' },
     { id: 'schedule', label: 'Schedule' },
     { id: 'community', label: 'Community' },
+    { id: 'videos', label: 'Videos' },
     { id: 'ranks', label: 'Ranks' },
     { id: 'create', label: 'Create' },
     { id: 'reviews', label: 'Reviews' },
@@ -1298,6 +1301,14 @@ const Dashboard: React.FC<DashboardProps> = ({
           <path d="M8 10h8" />
           <path d="M8 14h5" />
           <path d="M5 19l1.5-3H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-8L5 19z" />
+        </svg>
+      );
+    }
+    if (tabId === 'videos') {
+      return (
+        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <rect x="3" y="5" width="18" height="14" rx="2" />
+          <path d="M10 9l5 3-5 3V9z" />
         </svg>
       );
     }
@@ -1469,6 +1480,14 @@ const Dashboard: React.FC<DashboardProps> = ({
                 Open Courses
               </button>
             )}
+            {onOpenVideos && (
+              <button
+                onClick={onOpenVideos}
+                className="px-6 py-3 text-xs font-black text-violet-700 bg-violet-50 border border-violet-100 rounded-2xl hover:bg-violet-100 uppercase tracking-widest shadow-sm"
+              >
+                Watch Videos
+              </button>
+            )}
           </div>
 
           <div className="mb-8 bg-white rounded-2xl border border-slate-100 p-2 hidden md:inline-flex gap-2">
@@ -1501,6 +1520,12 @@ const Dashboard: React.FC<DashboardProps> = ({
               className={`px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest ${activeTab === 'community' ? 'bg-slate-950 text-amber-500' : 'text-slate-500 bg-slate-50'}`}
             >
               Community
+            </button>
+            <button
+              onClick={() => setActiveTab('videos')}
+              className={`px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest ${activeTab === 'videos' ? 'bg-slate-950 text-amber-500' : 'text-slate-500 bg-slate-50'}`}
+            >
+              Videos
             </button>
             <button
               onClick={() => setActiveTab('reviews')}
@@ -1776,6 +1801,14 @@ const Dashboard: React.FC<DashboardProps> = ({
                       Open Courses
                     </button>
                   )}
+                  {onOpenVideos && (
+                    <button
+                      onClick={onOpenVideos}
+                      className="w-full py-4 bg-violet-50 border border-violet-100 text-violet-700 rounded-2xl text-xs font-black uppercase tracking-widest"
+                    >
+                      Watch Videos
+                    </button>
+                  )}
                 </div>
               </aside>
             </div>
@@ -2033,6 +2066,26 @@ const Dashboard: React.FC<DashboardProps> = ({
 
           {activeTab === 'community' && (
             <CommunityHub user={user} isReadOnly={isReadOnly} onOpenSocialProfileSetup={onOpenSocialProfileSetup} />
+          )}
+
+          {activeTab === 'videos' && (
+            <section className="bg-slate-950 rounded-[2rem] border border-slate-900 p-8 md:p-10 shadow-sm text-white overflow-hidden">
+              <div className="max-w-2xl">
+                <p className="text-xs font-black uppercase tracking-[0.3em] text-amber-400">Video Academy</p>
+                <h2 className="mt-3 text-2xl md:text-4xl font-black tracking-tight">Continue learning with embedded lecture videos.</h2>
+                <p className="mt-4 text-sm md:text-base leading-relaxed text-slate-300">
+                  Watch published YouTube lectures inside the app, resume where you stopped, bookmark important lessons, and track completion across modules.
+                </p>
+                <button
+                  type="button"
+                  onClick={onOpenVideos}
+                  disabled={!onOpenVideos}
+                  className="mt-6 px-7 py-4 rounded-2xl bg-amber-400 text-slate-950 text-xs font-black uppercase tracking-widest disabled:opacity-40"
+                >
+                  Open Video Academy
+                </button>
+              </div>
+            </section>
           )}
 
           {activeTab === 'ranks' && (

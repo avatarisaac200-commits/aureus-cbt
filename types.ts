@@ -421,6 +421,46 @@ export interface CourseSession {
   status: 'completed' | 'timed-out' | 'abandoned';
 }
 
+export type VideoLessonVisibility = 'draft' | 'published';
+
+export interface VideoLesson {
+  id: string;
+  title: string;
+  description: string;
+  youtubeUrl: string;
+  youtubeVideoId: string;
+  course: string;
+  category: string;
+  thumbnail: string;
+  duration: number;
+  order: number;
+  tags: string[];
+  visibility: VideoLessonVisibility;
+  isPublished: boolean;
+  createdBy: string;
+  creatorName: string;
+  createdAt: string;
+  updatedAt: string;
+  viewCount?: number;
+  completedCount?: number;
+  totalWatchSeconds?: number;
+}
+
+export interface VideoProgress {
+  id: string;
+  userId: string;
+  userName: string;
+  lessonId: string;
+  course: string;
+  lastPositionSeconds: number;
+  durationSeconds: number;
+  progressPercent: number;
+  completed: boolean;
+  bookmarked: boolean;
+  firstWatchedAt: string;
+  lastWatchedAt: string;
+}
+
 export interface CustomThemeConfig {
   bgStart: string;
   bgEnd: string;
@@ -434,4 +474,4 @@ export interface CustomThemeConfig {
   border: string;
 }
 
-export type ViewState = 'auth' | 'verify-email' | 'dashboard' | 'courses' | 'attendance' | 'blacklist' | 'exam' | 'admin' | 'root-admin' | 'results' | 'review' | 'update-manual';
+export type ViewState = 'auth' | 'verify-email' | 'dashboard' | 'courses' | 'videos' | 'attendance' | 'blacklist' | 'exam' | 'admin' | 'root-admin' | 'results' | 'review' | 'update-manual';

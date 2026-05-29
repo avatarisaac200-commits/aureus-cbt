@@ -1,0 +1,1419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BIO 102 — Viruses, Bacteria & Fungi Crash Course</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=JetBrains+Mono:wght@300;400;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,300;0,8..60,400;0,8..60,600;1,8..60,300&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ink: #0d0d0d;
+  --paper: #f7f2f2;
+  --paper2: #eddede;
+  --accent: #7b1a1a;
+  --accent2: #5a0a0a;
+  --gold: #c0784a;
+  --velvet: #9b1c1c;
+  --velvet-light: #fce8e8;
+  --velvet-bright: #c0392b;
+  --muted: #6b5151;
+  --border: #d4b8b8;
+  --highlight: #fff0e0;
+  --green: #1e6b45;
+  --green2: #d4edda;
+  --red2: #fde8e8;
+  --blue2: #f0e8f8;
+  --purple: #5a1a7a;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--paper);color:var(--ink);font-family:'Source Serif 4',serif;font-size:17px;line-height:1.75;min-height:100vh;}
+html{scroll-behavior:smooth;}
+::-webkit-scrollbar{width:6px;}
+::-webkit-scrollbar-track{background:var(--paper2);}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
+
+/* ── SIDEBAR ── */
+#sidebar{position:fixed;left:0;top:0;bottom:0;width:260px;background:var(--accent2);color:#f8eded;overflow-y:auto;z-index:100;display:flex;flex-direction:column;border-right:3px solid var(--gold);}
+#sidebar h2{font-family:'Playfair Display',serif;font-size:1.1rem;padding:24px 20px 8px;color:var(--gold);letter-spacing:.05em;text-transform:uppercase;border-bottom:1px solid rgba(255,255,255,.1);margin-bottom:8px;}
+.sidebar-logo{padding:20px 20px 0;font-family:'Playfair Display',serif;font-size:1.35rem;color:#fff;font-style:italic;line-height:1.2;}
+.sidebar-logo span{color:var(--gold);}
+.nav-item{display:block;padding:9px 20px 9px 28px;font-family:'JetBrains Mono',monospace;font-size:.77rem;color:rgba(255,210,210,.85);cursor:pointer;border-left:3px solid transparent;transition:all .2s;text-decoration:none;position:relative;}
+.nav-item:hover{background:rgba(255,255,255,.08);color:#fff;border-left-color:var(--gold);}
+.nav-item.active{background:rgba(255,255,255,.13);color:#fff;border-left-color:var(--velvet-bright);}
+.nav-section{padding:12px 20px 4px;font-family:'JetBrains Mono',monospace;font-size:.65rem;letter-spacing:.15em;text-transform:uppercase;color:rgba(255,180,180,.45);}
+.progress-bar{margin:16px 16px 8px;height:4px;background:rgba(255,255,255,.15);border-radius:2px;}
+.progress-fill{height:100%;background:var(--gold);border-radius:2px;transition:width .5s;width:0%;}
+.progress-label{font-family:'JetBrains Mono',monospace;font-size:.68rem;color:rgba(255,200,200,.5);padding:0 16px 16px;}
+#score-display{margin:8px 16px 0;font-family:'JetBrains Mono',monospace;font-size:.8rem;color:var(--gold);padding:8px 12px;background:rgba(0,0,0,.2);border-radius:4px;display:flex;justify-content:space-between;align-items:center;}
+
+/* ── MAIN ── */
+#main{margin-left:260px;min-height:100vh;}
+
+/* ── HERO ── */
+.hero{background:linear-gradient(135deg,var(--accent2) 0%,#3a0505 100%);color:white;padding:60px 80px 50px;border-bottom:4px solid var(--gold);position:relative;overflow:hidden;}
+.hero::before{content:'VIRUS · BACTERIA · FUNGI';position:absolute;right:-20px;top:30px;font-family:'Playfair Display',serif;font-size:4rem;color:rgba(255,255,255,.04);white-space:nowrap;pointer-events:none;letter-spacing:.2em;}
+.hero h1{font-family:'Playfair Display',serif;font-size:3.2rem;line-height:1.1;font-weight:900;margin-bottom:12px;}
+.hero h1 em{color:var(--gold);font-style:italic;}
+.hero p{font-size:1.05rem;color:rgba(255,210,210,.85);max-width:620px;margin-bottom:24px;}
+.hero-meta{display:flex;gap:16px;flex-wrap:wrap;}
+.hero-badge{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);padding:6px 14px;border-radius:20px;font-family:'JetBrains Mono',monospace;font-size:.78rem;color:var(--gold);}
+
+/* ── SECTIONS ── */
+.section{max-width:860px;margin:0 auto;padding:56px 60px 40px;border-bottom:1px solid var(--border);opacity:0;transform:translateY(16px);transition:opacity .5s,transform .5s;}
+.section:last-child{border-bottom:none;}
+.section.visible{opacity:1;transform:none;}
+.section-tag{font-family:'JetBrains Mono',monospace;font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--velvet-bright);margin-bottom:8px;}
+.section h2{font-family:'Playfair Display',serif;font-size:2rem;font-weight:700;margin-bottom:20px;color:var(--accent2);line-height:1.2;}
+.section h3{font-family:'Playfair Display',serif;font-size:1.35rem;margin:32px 0 12px;color:var(--velvet);border-bottom:2px solid var(--border);padding-bottom:6px;}
+.section h4{font-family:'Source Serif 4',serif;font-size:1.05rem;font-weight:600;margin:24px 0 8px;color:var(--ink);}
+.section p{margin-bottom:14px;color:#2a1010;}
+
+/* ── KEY/MATH BOXES ── */
+.math-box{background:white;border:2px solid var(--accent2);border-radius:6px;padding:20px 28px;margin:20px 0;box-shadow:4px 4px 0 var(--accent2);font-size:1.02rem;overflow-x:auto;}
+.math-box.gold{border-color:var(--gold);box-shadow:4px 4px 0 var(--gold);}
+.math-box.red{border-color:var(--velvet-bright);box-shadow:4px 4px 0 var(--velvet-bright);}
+.math-box.green{border-color:var(--green);box-shadow:4px 4px 0 var(--green);}
+.math-box.purple{border-color:var(--purple);box-shadow:4px 4px 0 var(--purple);}
+.box-label{font-family:'JetBrains Mono',monospace;font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:8px;}
+
+/* ── TERM GRID ── */
+.term-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin:16px 0;}
+.term-card{background:white;border:1.5px solid var(--border);border-radius:6px;padding:16px 18px;transition:all .2s;position:relative;}
+.term-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--velvet);border-radius:6px 6px 0 0;}
+.term-card:hover{border-color:var(--velvet);box-shadow:0 4px 12px rgba(155,28,28,.12);transform:translateY(-2px);}
+.term-name{font-family:'Playfair Display',serif;font-weight:700;color:var(--accent2);margin-bottom:6px;font-size:1rem;}
+.term-def{font-size:.88rem;color:#3a1010;line-height:1.55;}
+.term-example{font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--green);margin-top:8px;padding-top:8px;border-top:1px solid var(--border);}
+
+/* ── TABLES ── */
+.styled-table{width:100%;border-collapse:collapse;margin:16px 0;font-family:'JetBrains Mono',monospace;font-size:.83rem;box-shadow:0 2px 8px rgba(0,0,0,.07);border-radius:6px;overflow:hidden;}
+.styled-table th{background:var(--accent2);color:var(--gold);padding:11px 14px;text-align:left;font-weight:600;font-size:.78rem;letter-spacing:.05em;}
+.styled-table td{padding:9px 14px;border-bottom:1px solid var(--border);background:white;vertical-align:top;}
+.styled-table tr:hover td{background:#f8eded;}
+.styled-table tr:last-child td{border:none;}
+
+/* ── CALLOUT BOXES ── */
+.note{background:var(--highlight);border-left:4px solid var(--gold);padding:14px 20px;margin:18px 0;border-radius:0 5px 5px 0;font-size:.93rem;}
+.note strong{color:var(--gold);}
+.warning{background:var(--red2);border-left:4px solid var(--velvet-bright);padding:14px 20px;margin:18px 0;border-radius:0 5px 5px 0;font-size:.93rem;}
+.warning strong{color:var(--velvet-bright);}
+.success-box{background:var(--green2);border-left:4px solid var(--green);padding:14px 20px;margin:18px 0;border-radius:0 5px 5px 0;font-size:.93rem;}
+.success-box strong{color:var(--green);}
+.info-box{background:var(--blue2);border-left:4px solid var(--purple);padding:14px 20px;margin:18px 0;border-radius:0 5px 5px 0;font-size:.93rem;}
+.info-box strong{color:var(--purple);}
+
+/* ── FUN FACT ── */
+.fun-fact{background:white;border:2px solid var(--gold);border-radius:6px;padding:18px 24px;margin:20px 0;box-shadow:4px 4px 0 var(--gold);position:relative;}
+.fun-fact-label{font-family:'JetBrains Mono',monospace;font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;color:var(--gold);margin-bottom:6px;font-weight:600;}
+.fun-fact p{margin:0;font-size:.92rem;color:#2a1010;}
+
+/* ── QUIZ ── */
+.quiz-box{background:var(--accent2);color:white;border-radius:8px;padding:28px 32px;margin:28px 0;position:relative;}
+.quiz-box::before{content:'MCQ CHECKPOINT';position:absolute;top:-11px;left:24px;background:var(--velvet-bright);color:white;font-family:'JetBrains Mono',monospace;font-size:.68rem;padding:3px 12px;border-radius:20px;letter-spacing:.1em;}
+.quiz-box h4{font-family:'Playfair Display',serif;font-size:1.1rem;color:var(--gold);margin-bottom:8px;}
+.quiz-box p{color:rgba(255,210,210,.9);margin-bottom:16px;}
+.quiz-options{display:flex;flex-direction:column;gap:10px;}
+.quiz-opt{background:rgba(255,255,255,.1);border:1.5px solid rgba(255,255,255,.2);color:white;padding:10px 18px;border-radius:5px;cursor:pointer;text-align:left;font-family:'Source Serif 4',serif;font-size:.95rem;transition:all .2s;display:flex;align-items:center;gap:12px;}
+.quiz-opt:hover:not(:disabled){background:rgba(255,255,255,.18);}
+.quiz-opt.correct{background:rgba(30,107,69,.5);border-color:#4caf50;}
+.quiz-opt.wrong{background:rgba(192,57,43,.5);border-color:#f44336;}
+.quiz-opt .opt-letter{font-family:'JetBrains Mono',monospace;font-size:.72rem;background:rgba(255,255,255,.15);padding:2px 7px;border-radius:3px;min-width:24px;text-align:center;flex-shrink:0;}
+.quiz-feedback{margin-top:14px;padding:12px 16px;border-radius:5px;font-size:.88rem;display:none;}
+.quiz-feedback.show{display:block;}
+.quiz-feedback.ok{background:rgba(30,107,69,.3);border:1px solid #4caf50;}
+.quiz-feedback.bad{background:rgba(192,57,43,.3);border:1px solid #f44336;}
+
+/* ── COMPARISON CARD ── */
+.compare-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin:20px 0;}
+.compare-card{background:white;border-radius:8px;overflow:hidden;box-shadow:0 3px 12px rgba(0,0,0,.08);}
+.compare-header{padding:14px 16px;font-family:'Playfair Display',serif;font-size:1rem;font-weight:700;color:white;text-align:center;}
+.compare-header.virus{background:var(--velvet);}
+.compare-header.bacteria{background:#1a4a6b;}
+.compare-header.fungi{background:#4a1a6b;}
+.compare-body{padding:14px 16px;font-size:.85rem;color:#2a1010;line-height:1.6;}
+.compare-body li{list-style:none;padding:4px 0;border-bottom:1px dashed var(--border);}
+.compare-body li:last-child{border:none;}
+.compare-body li::before{content:'▸ ';color:var(--velvet);}
+
+/* ── STEP/DERIVATION BOX ── */
+.derivation-box{background:var(--paper2);border-left:4px solid var(--gold);padding:18px 24px;margin:20px 0;border-radius:0 6px 6px 0;}
+.derivation-box .step{display:flex;gap:16px;align-items:flex-start;padding:8px 0;border-bottom:1px dotted var(--border);}
+.derivation-box .step:last-child{border:none;}
+.step-num{font-family:'JetBrains Mono',monospace;font-size:.75rem;color:var(--gold);min-width:28px;padding-top:2px;font-weight:600;}
+.step-content{flex:1;font-size:.92rem;}
+.step-reason{font-size:.82rem;color:var(--muted);font-style:italic;margin-top:2px;}
+
+/* ── TIMELINE ── */
+.timeline{position:relative;padding-left:32px;margin:24px 0;}
+.timeline::before{content:'';position:absolute;left:8px;top:0;bottom:0;width:2px;background:linear-gradient(180deg,var(--velvet),var(--gold));}
+.tl-item{position:relative;margin-bottom:20px;}
+.tl-dot{position:absolute;left:-28px;top:5px;width:12px;height:12px;border-radius:50%;background:var(--gold);border:2px solid var(--paper);}
+.tl-year{font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--velvet);margin-bottom:3px;font-weight:600;}
+.tl-content{background:white;border:1.5px solid var(--border);border-radius:6px;padding:12px 16px;}
+.tl-title{font-family:'Playfair Display',serif;font-weight:700;margin-bottom:3px;}
+.tl-desc{font-size:.85rem;color:var(--muted);margin:0;}
+
+/* ── CHECKPOINT ── */
+.checkpoint{background:var(--paper2);border:2px solid var(--green);border-radius:8px;padding:24px 32px;margin:36px 0;text-align:center;}
+.checkpoint-icon{font-size:32px;margin-bottom:6px;}
+.checkpoint h3{font-family:'Playfair Display',serif;color:var(--green);margin:0 0 6px;border:none;padding:0;}
+.checkpoint-score{font-family:'JetBrains Mono',monospace;font-size:1.6rem;color:var(--green);margin:6px 0;}
+.checkpoint p{color:var(--muted);font-size:.9rem;margin:0;}
+
+/* ── SHAPE VISUALIZER ── */
+.shape-grid{display:flex;gap:20px;flex-wrap:wrap;justify-content:center;margin:20px 0;}
+.shape-item{text-align:center;cursor:pointer;}
+.shape-svg{width:80px;height:80px;display:block;margin:0 auto 6px;filter:drop-shadow(2px 3px 5px rgba(0,0,0,.15));}
+.shape-label{font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--muted);}
+
+/* ── ACCORDION ── */
+.accordion{margin:16px 0;}
+.acc-item{border:1.5px solid var(--border);border-radius:6px;margin-bottom:8px;overflow:hidden;}
+.acc-header{background:white;padding:14px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;font-family:'Playfair Display',serif;font-weight:700;color:var(--accent2);transition:background .2s;}
+.acc-header:hover{background:#f8eded;}
+.acc-icon{font-family:'JetBrains Mono',monospace;font-size:.9rem;color:var(--velvet);transition:transform .25s;}
+.acc-item.open .acc-icon{transform:rotate(45deg);}
+.acc-body{max-height:0;overflow:hidden;transition:max-height .35s ease;background:#fff;}
+.acc-body-inner{padding:0 20px 16px;font-size:.92rem;color:#2a1010;}
+
+/* ── DISEASE TABLE BADGE ── */
+.badge{display:inline-block;padding:2px 10px;border-radius:12px;font-family:'JetBrains Mono',monospace;font-size:.68rem;font-weight:600;letter-spacing:.06em;}
+.badge-virus{background:#fde8e8;color:var(--velvet);}
+.badge-bacteria{background:#e8f0fd;color:#1a3a6b;}
+.badge-fungi{background:#f0e8fd;color:#4a1a6b);}
+.badge-danger{background:#fff0e0;color:#8a4000;}
+
+/* ── FINAL SCORE ── */
+#final-section{background:linear-gradient(135deg,var(--accent2),#3a0505);color:white;padding:56px 60px;text-align:center;max-width:860px;margin:0 auto;}
+#final-section h2{font-family:'Playfair Display',serif;font-size:2.2rem;color:var(--gold);margin-bottom:12px;}
+.big-score{font-family:'Playfair Display',serif;font-size:5rem;font-weight:900;color:var(--gold);}
+.grade-badge{display:inline-block;padding:8px 24px;border-radius:30px;font-family:'JetBrains Mono',monospace;font-size:.82rem;margin:12px 0;letter-spacing:.1em;}
+#restart-btn{background:var(--gold);color:var(--ink);border:none;padding:14px 40px;border-radius:4px;font-family:'Playfair Display',serif;font-size:1rem;font-weight:700;cursor:pointer;margin-top:20px;transition:all .2s;}
+#restart-btn:hover{background:#d8884a;transform:translateY(-2px);}
+
+mark{background:var(--highlight);color:var(--ink);padding:1px 5px;border-radius:3px;}
+code{font-family:'JetBrains Mono',monospace;background:var(--paper2);color:var(--velvet);padding:2px 7px;border-radius:3px;font-size:.85rem;}
+
+/* ── KEYWORD TOOLTIPS ── */
+kw{color:var(--accent2);font-weight:600;border-bottom:1.5px dotted var(--accent2);cursor:help;transition:color .15s,border-color .15s;position:relative;}
+kw:hover{color:var(--velvet-bright);border-bottom-color:var(--velvet-bright);}
+
+#kw-tooltip{position:fixed;z-index:9999;max-width:340px;min-width:220px;background:#fff;border:2px solid var(--accent2);border-radius:10px;box-shadow:0 8px 32px rgba(90,10,10,.18),0 2px 8px rgba(0,0,0,.1);padding:0;pointer-events:none;opacity:0;transform:translateY(6px) scale(.97);transition:opacity .18s,transform .18s;font-family:'Source Serif 4',serif;}
+#kw-tooltip.visible{opacity:1;transform:translateY(0) scale(1);}
+#kw-tooltip .tt-header{background:var(--accent2);color:#fff;border-radius:8px 8px 0 0;padding:10px 16px 8px;display:flex;align-items:center;gap:8px;}
+#kw-tooltip .tt-tag{font-family:'JetBrains Mono',monospace;font-size:.6rem;letter-spacing:.12em;text-transform:uppercase;color:var(--gold);background:rgba(0,0,0,.2);border-radius:20px;padding:2px 8px;white-space:nowrap;}
+#kw-tooltip .tt-word{font-family:'Playfair Display',serif;font-size:1.05rem;font-weight:700;color:#fff;flex:1;}
+#kw-tooltip .tt-body{padding:12px 16px 14px;}
+#kw-tooltip .tt-def{font-size:.9rem;line-height:1.6;color:#2a1010;margin:0 0 8px;}
+#kw-tooltip .tt-example{font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--green);border-top:1px solid var(--border);padding-top:7px;margin:0;}
+#kw-tooltip .tt-mnemonic{font-style:italic;font-size:.82rem;color:var(--velvet-bright);margin:6px 0 0;}
+
+/* ── RESPONSIVE ── */
+@media(max-width:768px){
+  #sidebar{width:100%;height:auto;position:relative;}
+  #main{margin-left:0;}
+  .section{padding:32px 24px;}
+  .hero{padding:40px 24px;}
+  .hero h1{font-size:2rem;}
+  .compare-grid{grid-template-columns:1fr;}
+}
+</style>
+</head>
+<body>
+
+<!-- ══════ SIDEBAR ══════ -->
+<nav id="sidebar">
+  <div class="sidebar-logo">BIO <span>102</span><br>Crash Course</div>
+  <div id="score-display"><span>📊 Score</span><span id="score-txt">0 / 0</span></div>
+  <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+  <div class="progress-label" id="progress-label">0 questions answered</div>
+
+  <div class="nav-section">Viruses</div>
+  <a class="nav-item" href="#sec1">§1 Virus Characteristics</a>
+  <a class="nav-item" href="#sec2">§2 Virus Classification</a>
+  <a class="nav-item" href="#sec3">§3 Transmission & Replication</a>
+
+  <div class="nav-section">Bacteria</div>
+  <a class="nav-item" href="#sec4">§4 Bacteria Characteristics</a>
+  <a class="nav-item" href="#sec5">§5 Identification Methods</a>
+  <a class="nav-item" href="#sec6">§6 Classification & Disease</a>
+
+  <div class="nav-section">Fungi</div>
+  <a class="nav-item" href="#sec7">§7 Fungi Characteristics</a>
+  <a class="nav-item" href="#sec8">§8 Fungi Classification</a>
+
+  <div class="nav-section">Comparison & Exam</div>
+  <a class="nav-item" href="#sec9">§9 Big Picture Comparison</a>
+  <a class="nav-item" href="#finalquiz">§10 Final MCQ Exam</a>
+</nav>
+
+<!-- ══════ MAIN ══════ -->
+<div id="main">
+
+<!-- HERO -->
+<div class="hero">
+  <h1>Viruses, Bacteria<br><em>&amp; Fungi</em></h1>
+  <p>A complete BIO 102 crash course covering the basic characteristics, identification, and classification of the three most important groups of microorganisms — with term cards, comparison tables, quizzes, and clinical examples throughout.</p>
+  <div class="hero-meta">
+    <span class="hero-badge">⏱ ~2 hours</span>
+    <span class="hero-badge">🦠 3 kingdoms</span>
+    <span class="hero-badge">✎ 30+ MCQs</span>
+    <span class="hero-badge">📋 Exam prep</span>
+    <span class="hero-badge" style="background:rgba(192,120,74,.2);border-color:var(--gold);color:#fff;">💡 Hover <span style="border-bottom:1.5px dotted var(--gold);color:var(--gold);">underlined terms</span> for instant definitions</span>
+  </div>
+</div>
+
+<!-- ══════════════════════════ §1 VIRUSES — CHARACTERISTICS ══════════════════════════ -->
+<div class="section" id="sec1">
+  <div class="section-tag">§ 1 — Viruses</div>
+  <h2>Characteristics of Viruses</h2>
+  <p>Viruses occupy a uniquely controversial position in biology — they are considered <strong>non-living acellular pathogens</strong> because they lack the hallmarks of life independently. They cannot grow, metabolise food, or reproduce on their own. Only inside a host cell do they spring into action, hijacking cellular machinery to replicate. Understanding what makes a virus a virus is foundational to everything else in microbiology.</p>
+
+  <div class="math-box red">
+    <div class="box-label">Core Definition</div>
+    A <strong>virus</strong> is a non-living, acellular obligate intracellular parasite consisting of genetic material (DNA <em>or</em> RNA, never both) enclosed in a protein coat (<kw>capsid</kw>), sometimes surrounded by a lipid <kw>envelope</kw>. It can only replicate inside a living host cell.
+  </div>
+
+  <h3>The 11 Key Characteristics</h3>
+  <div class="term-grid">
+    <div class="term-card">
+      <div class="term-name">1. Acellular</div>
+      <div class="term-def">Viruses lack all cellular structures — no cytoplasm, no nucleus, no organelles. They are biological particles, not true cells.</div>
+    </div>
+    <div class="term-card">
+      <div class="term-name">2. No Independent Metabolism</div>
+      <div class="term-def">They cannot convert food to energy, respire, or grow independently. 100% dependent on host cell biochemistry.</div>
+    </div>
+    <div class="term-card">
+      <div class="term-name">3. <kw>Genetic Material</kw></div>
+      <div class="term-def">Contains <em>either</em> DNA or RNA — never both. Can be single-stranded or double-stranded, linear or circular, positive-sense or negative-sense.</div>
+      <div class="term-example">DNA = instruction manual · RNA = ready-to-read translation</div>
+    </div>
+    <div class="term-card">
+      <div class="term-name">4. <kw>Capsid</kw> (Protein Coat)</div>
+      <div class="term-def">A protective shell made of protein subunits called <kw>capsomeres</kw>. It protects the genetic material and determines viral shape.</div>
+    </div>
+    <div class="term-card">
+      <div class="term-name">5. <kw>Envelope</kw></div>
+      <div class="term-def">A lipoprotein layer surrounding the capsid in many (not all) viruses, derived from the host cell membrane. Enveloped viruses are more sensitive to detergents.</div>
+      <div class="term-example">HIV, Influenza = enveloped · Poliovirus = non-enveloped (naked)</div>
+    </div>
+    <div class="term-card">
+      <div class="term-name">6. Obligate Intracellular Parasite</div>
+      <div class="term-def">Must infect a living host cell to replicate. Outside a host, they are inert particles — neither alive nor dead in the conventional sense.</div>
+    </div>
+    <div class="term-card">
+      <div class="term-name">7. No Metabolism</div>
+      <div class="term-def">They don't respire, produce energy, or synthesise food. Considered non-living for this reason.</div>
+    </div>
+    <div class="term-card">
+      <div class="term-name">8. Ultramicroscopic Size</div>
+      <div class="term-def">About 100–1000× smaller than human cells. The smallest viruses are ~2000× smaller than a grain of sand. Visualised only by electron microscopy.</div>
+    </div>
+    <div class="term-card">
+      <div class="term-name">9. Host Specificity</div>
+      <div class="term-def">Each virus infects only specific host types and specific cell types within that host — determined by surface receptor compatibility.</div>
+      <div class="term-example">HIV infects CD4+ T-cells · Rabies targets nervous tissue</div>
+    </div>
+    <div class="term-card">
+      <div class="term-name">10. Varied Shapes</div>
+      <div class="term-def">Icosahedral, helical, spherical, or complex (combining multiple shapes). Shape is determined by the capsid structure.</div>
+    </div>
+    <div class="term-card">
+      <div class="term-name">11. Structural Proteins</div>
+      <div class="term-def">Structural proteins make up the capsid. Some viruses also have non-structural proteins (enzymes like reverse transcriptase, polymerases).</div>
+    </div>
+  </div>
+
+  <h3>Viral Shapes at a Glance</h3>
+  <p>Scientists classify viruses partly by morphology. The four main shapes and their examples:</p>
+  <table class="styled-table">
+    <thead><tr><th>Shape / Symmetry</th><th>Description</th><th>Examples</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Icosahedral (Polyhedral)</strong></td><td>20 triangular faces; spherical-looking; most common shape</td><td>Adenovirus, Poliovirus, Herpesvirus, Reovirus</td></tr>
+      <tr><td><strong>Helical</strong></td><td>Rod or filamentous; capsomeres arranged in a helix around the nucleic acid</td><td>Tobacco Mosaic Virus (TMV), Paramyxovirus</td></tr>
+      <tr><td><strong>Spherical (Enveloped)</strong></td><td>Pleomorphic; envelope gives rounded appearance</td><td>Influenza virus, HIV, Orthomyxovirus</td></tr>
+      <tr><td><strong>Complex</strong></td><td>Combines more than one structural type; most elaborate architecture</td><td>Poxvirus (brick-shaped body), T4 Bacteriophage (head + tail)</td></tr>
+    </tbody>
+  </table>
+
+  <div class="note">
+    <strong>💡 Sense/Antisense RNA — Exam Trap!</strong> <strong>Positive-sense (+) RNA</strong> can be directly used as mRNA by the host ribosome — no extra step needed. <strong>Negative-sense (−) RNA</strong> must first be converted to positive-sense by a viral RNA-dependent RNA polymerase (RdRp) before protein synthesis can begin. Most DNA viruses are effectively positive-sense.
+  </div>
+
+  <div class="fun-fact">
+    <div class="fun-fact-label">🎉 Fun Fact</div>
+    <p>The smallest known virus is <strong>Circovirus</strong>, at just ~17 nm — roughly 2,000× smaller than a grain of sand. The largest, <strong>Mimivirus</strong>, is so big it can be seen under a light microscope and was initially mistaken for a bacterium!</p>
+  </div>
+
+  <div class="quiz-box" id="q1">
+    <h4>✎ Quick Check 1.1</h4>
+    <p>Which of the following is NOT a characteristic of viruses?</p>
+    <div class="quiz-options">
+      <button class="quiz-opt" onclick="checkQ('q1',this,false)"><span class="opt-letter">A</span> They contain either DNA or RNA as genetic material</button>
+      <button class="quiz-opt" onclick="checkQ('q1',this,false)"><span class="opt-letter">B</span> They are obligate intracellular parasites</button>
+      <button class="quiz-opt" onclick="checkQ('q1',this,true)"><span class="opt-letter">C</span> They can reproduce independently without a host cell</button>
+      <button class="quiz-opt" onclick="checkQ('q1',this,false)"><span class="opt-letter">D</span> They are ultramicroscopic in size</button>
+    </div>
+    <div class="quiz-feedback" id="q1-fb">Viruses CANNOT reproduce independently — they are obligate intracellular parasites that require a living host cell to replicate. This is one of the key reasons they are considered non-living.</div>
+  </div>
+
+  <div class="quiz-box" id="q2">
+    <h4>✎ Quick Check 1.2</h4>
+    <p>The protein coat surrounding the viral genetic material is called:</p>
+    <div class="quiz-options">
+      <button class="quiz-opt" onclick="checkQ('q2',this,false)"><span class="opt-letter">A</span> Envelope</button>
+      <button class="quiz-opt" onclick="checkQ('q2',this,true)"><span class="opt-letter">B</span> Capsid</button>
+      <button class="quiz-opt" onclick="checkQ('q2',this,false)"><span class="opt-letter">C</span> Nucleoid</button>
+      <button class="quiz-opt" onclick="checkQ('q2',this,false)"><span class="opt-letter">D</span> Mycelium</button>
+    </div>
+    <div class="quiz-feedback" id="q2-fb">The capsid is the protein coat made of capsomeres. The envelope is a lipoprotein layer that SOME viruses have outside their capsid — derived from the host cell membrane. The nucleoid is a bacterial structure.</div>
+  </div>
+</div>
+
+<!-- ══════════════════════════ §2 VIRUS CLASSIFICATION ══════════════════════════ -->
+<div class="section" id="sec2">
+  <div class="section-tag">§ 2 — Viruses</div>
+  <h2>Classification of Viruses</h2>
+  <p>Viruses are classified on the basis of their <strong>phenotypic characteristics</strong> — physical features, core contents, chemical composition, capsid structure, size, shape, replication modes, and genome structure. The Baltimore classification system, organised by genetic material, is the most widely used today.</p>
+
+  <h3>Classification by Genetic Material — The Baltimore System</h3>
+  <table class="styled-table">
+    <thead><tr><th>Group</th><th>Type</th><th>Sense</th><th>Key Examples</th><th>Exam Notes</th></tr></thead>
+    <tbody>
+      <tr><td><strong>I</strong></td><td>Double-stranded DNA (dsDNA)</td><td>Positive</td><td>Herpesviruses, Adenovirus, Poxvirus</td><td>Replicate in nucleus (except Poxvirus)</td></tr>
+      <tr><td><strong>II</strong></td><td>Single-stranded DNA (ssDNA)</td><td>Positive</td><td>Parvoviruses, Circoviruses</td><td>Smallest viruses belong here</td></tr>
+      <tr><td><strong>III</strong></td><td>Double-stranded RNA (dsRNA)</td><td>Ambisense</td><td>Reovirus, Rotavirus</td><td>Rotavirus → major cause of infant diarrhoea</td></tr>
+      <tr><td><strong>IV</strong></td><td>Single-stranded RNA (+)</td><td>Positive</td><td>Poliovirus, Hepatitis A, Rhinovirus, Coronavirus</td><td>RNA directly serves as mRNA</td></tr>
+      <tr><td><strong>V</strong></td><td>Single-stranded RNA (−)</td><td>Negative</td><td>Influenza, Rabies, Ebola, Paramyxovirus</td><td>Need RdRp enzyme to convert to (+) sense first</td></tr>
+      <tr><td><strong>VI</strong></td><td>ssRNA + reverse transcriptase</td><td>Positive</td><td>HIV, HTLV (Retroviruses)</td><td>RNA → DNA → integrated provirus</td></tr>
+      <tr><td><strong>VII</strong></td><td>dsDNA + reverse transcriptase</td><td>Positive</td><td>Hepatitis B virus</td><td>Uses reverse transcriptase unlike other DNA viruses</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Classification by Host Range</h3>
+  <div class="accordion">
+    <div class="acc-item" id="acc1">
+      <div class="acc-header" onclick="toggleAcc('acc1')">
+        🐾 Animal Viruses <span class="acc-icon">+</span>
+      </div>
+      <div class="acc-body">
+        <div class="acc-body-inner">
+          <p>Viruses that infect by invading the cells of animals including humans. They must bind to specific cell surface receptors to gain entry.</p>
+          <p><strong>Examples:</strong> Influenza virus, Mumps virus, Rabies virus, Poliovirus, Herpes simplex virus, HIV, Hepatitis B/C, Ebola virus, Coronavirus (SARS-CoV-2)</p>
+          <div class="success-box"><strong>Clinical Link:</strong> Most human diseases caused by viruses fall in this category — from the common cold (Rhinovirus) to deadly haemorrhagic fevers (Ebolavirus). Vaccines target these viruses by priming the immune system to recognise capsid or envelope proteins.</div>
+        </div>
+      </div>
+    </div>
+    <div class="acc-item" id="acc2">
+      <div class="acc-header" onclick="toggleAcc('acc2')">
+        🌿 Plant Viruses <span class="acc-icon">+</span>
+      </div>
+      <div class="acc-body">
+        <div class="acc-body-inner">
+          <p>Infect plants by invading plant cells. Replication is obligate — only within host plant cells. Transmitted by insects (aphids, whiteflies), contaminated tools, or infected seeds.</p>
+          <p><strong>Examples:</strong> Tobacco Mosaic Virus (TMV) — the first virus ever discovered (Ivanovsky, 1892), Potato Virus Y, Beet Yellow Virus, Turnip Yellow Virus, Cauliflower Mosaic Virus</p>
+          <div class="fun-fact" style="margin:10px 0;"><div class="fun-fact-label">Historical Note</div><p>TMV was the first entity described as a "filterable agent" — it passed through porcelain filters that trapped bacteria, leading to the recognition of viruses as a distinct category of infectious agent.</p></div>
+        </div>
+      </div>
+    </div>
+    <div class="acc-item" id="acc3">
+      <div class="acc-header" onclick="toggleAcc('acc3')">
+        🧫 Bacteriophages (Phages) <span class="acc-icon">+</span>
+      </div>
+      <div class="acc-body">
+        <div class="acc-body-inner">
+          <p>Viruses that specifically infect bacteria cells. They are the most abundant biological entities on Earth — estimated 10³¹ phages exist. They have a complex morphology with head (icosahedral), tail, and tail fibres.</p>
+          <p><strong>Types:</strong> DNA virus (T4 bacteriophage), MV-11 virus, RNA virus (Qβ phage), λ-phage (lambda phage — key in molecular biology research)</p>
+          <div class="info-box"><strong>Lytic vs Lysogenic Cycles:</strong> In the <strong>lytic cycle</strong>, the phage immediately replicates and lyses (bursts) the host bacterium. In the <strong>lysogenic cycle</strong>, the phage DNA integrates into the bacterial chromosome as a <em>prophage</em> and replicates along with the host — potentially remaining dormant for generations before activation.</div>
+        </div>
+      </div>
+    </div>
+    <div class="acc-item" id="acc4">
+      <div class="acc-header" onclick="toggleAcc('acc4')">
+        🐛 Insect Viruses <span class="acc-icon">+</span>
+      </div>
+      <div class="acc-body">
+        <div class="acc-body-inner">
+          <p>Viruses that infect insects — also called viral pathogens of insects. Considered powerful <strong>biocontrol agents</strong> in modern agriculture as alternatives to chemical pesticides.</p>
+          <p><strong>Examples:</strong> Ascovirus, Entomopoxvirus, Baculoviruses (used commercially as bioinsecticides), Nuclear Polyhedrosis Virus (NPV)</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <h3>Classification by Replication Site</h3>
+  <table class="styled-table">
+    <thead><tr><th>Replication Location</th><th>Examples</th></tr></thead>
+    <tbody>
+      <tr><td>Cytoplasm only</td><td>All RNA viruses except Influenza virus</td></tr>
+      <tr><td>Nucleus AND cytoplasm</td><td>Influenza virus, Poxvirus</td></tr>
+      <tr><td>Nucleus only</td><td>All DNA viruses except Poxvirus</td></tr>
+    </tbody>
+  </table>
+
+  <div class="warning">
+    <strong>⚠ Common Exam Trap:</strong> Poxvirus is a DNA virus that replicates in the CYTOPLASM, not the nucleus — it is the exception to the rule that DNA viruses replicate in the nucleus. Similarly, Influenza is an RNA virus that replicates in both nucleus and cytoplasm.
+  </div>
+
+  <div class="quiz-box" id="q3">
+    <h4>✎ Quick Check 2.1</h4>
+    <p>HIV belongs to which Baltimore classification group?</p>
+    <div class="quiz-options">
+      <button class="quiz-opt" onclick="checkQ('q3',this,false)"><span class="opt-letter">A</span> Group I (dsDNA)</button>
+      <button class="quiz-opt" onclick="checkQ('q3',this,false)"><span class="opt-letter">B</span> Group IV (ssRNA +)</button>
+      <button class="quiz-opt" onclick="checkQ('q3',this,true)"><span class="opt-letter">C</span> Group VI (ssRNA + reverse transcriptase)</button>
+      <button class="quiz-opt" onclick="checkQ('q3',this,false)"><span class="opt-letter">D</span> Group V (ssRNA −)</button>
+    </div>
+    <div class="quiz-feedback" id="q3-fb">HIV is a Retrovirus (Group VI) — it carries positive-sense ssRNA plus reverse transcriptase enzyme, which converts its RNA genome into DNA. That DNA is then integrated into the host chromosome as a provirus.</div>
+  </div>
+
+  <div class="quiz-box" id="q4">
+    <h4>✎ Quick Check 2.2</h4>
+    <p>Which virus is the exception to the rule that DNA viruses replicate in the nucleus?</p>
+    <div class="quiz-options">
+      <button class="quiz-opt" onclick="checkQ('q4',this,false)"><span class="opt-letter">A</span> Herpesvirus</button>
+      <button class="quiz-opt" onclick="checkQ('q4',this,false)"><span class="opt-letter">B</span> Adenovirus</button>
+      <button class="quiz-opt" onclick="checkQ('q4',this,true)"><span class="opt-letter">C</span> Poxvirus</button>
+      <button class="quiz-opt" onclick="checkQ('q4',this,false)"><span class="opt-letter">D</span> Hepatitis B</button>
+    </div>
+    <div class="quiz-feedback" id="q4-fb">Poxvirus (which causes smallpox) is a dsDNA virus that uniquely replicates entirely within the CYTOPLASM. It carries its own DNA-dependent RNA polymerase, making it independent of the host nucleus.</div>
+  </div>
+</div>
+
+<!-- ══════════════════════════ §3 TRANSMISSION ══════════════════════════ -->
+<div class="section" id="sec3">
+  <div class="section-tag">§ 3 — Viruses</div>
+  <h2>Transmission &amp; Replication Cycle</h2>
+
+  <h3>Modes of Viral Transmission</h3>
+  <table class="styled-table">
+    <thead><tr><th>Route</th><th>Mechanism</th><th>Key Viral Examples</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Airborne</strong></td><td>Transmission via respiratory droplets/aerosols into the respiratory tract</td><td>Rhinovirus (common cold), Influenza, SARS-CoV-2, Measles</td></tr>
+      <tr><td><strong>Fecal-Oral</strong></td><td>Via contaminated food or water</td><td>Hepatitis A virus, Poliovirus, Rotavirus, Norovirus</td></tr>
+      <tr><td><strong>Sexual Transmission (STD)</strong></td><td>Via sexual contact with an infected person</td><td>Retrovirus (HIV), Human Papillomavirus (HPV), Herpes Simplex Virus 2</td></tr>
+      <tr><td><strong>Blood Transfusion</strong></td><td>Via infected blood or blood products</td><td>Hepatitis B virus, HIV, Hepatitis C</td></tr>
+      <tr><td><strong>Zoonoses</strong></td><td>Via bite from infected animal, insect, or bird</td><td>Rabies virus (dog bite), Alphavirus (mosquito), Flavivirus (mosquito), Ebolavirus (bats)</td></tr>
+    </tbody>
+  </table>
+
+  <h3>The Viral Replication Cycle</h3>
+  <div class="derivation-box">
+    <div class="step">
+      <div class="step-num">①</div>
+      <div class="step-content"><strong>Attachment (Adsorption)</strong> — Viral surface proteins bind specifically to complementary receptors on the host cell surface. This determines host specificity.
+        <div class="step-reason">e.g. HIV gp120 protein binds CD4 receptor on T-helper cells</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">②</div>
+      <div class="step-content"><strong>Penetration (Entry)</strong> — The virus or its nucleic acid enters the host cell. Enveloped viruses fuse their envelope with the cell membrane; non-enveloped viruses inject their genome or enter via endocytosis.
+        <div class="step-reason">Bacteriophages inject DNA while leaving their capsid outside</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">③</div>
+      <div class="step-content"><strong>Uncoating</strong> — The capsid is disassembled inside the host cell, releasing the viral nucleic acid.
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">④</div>
+      <div class="step-content"><strong>Biosynthesis (Replication)</strong> — The viral genome is replicated and viral proteins (capsid proteins, enzymes) are synthesised using host cell ribosomes and resources.
+        <div class="step-reason">The host cell is essentially converted into a virus factory</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">⑤</div>
+      <div class="step-content"><strong>Assembly (Maturation)</strong> — New viral components (genome + capsid proteins) are assembled into complete virions.
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">⑥</div>
+      <div class="step-content"><strong>Release (Lysis or Budding)</strong> — New virions exit the host cell. Non-enveloped viruses burst the cell open (lysis). Enveloped viruses bud off, acquiring their envelope from the host cell membrane.
+        <div class="step-reason">Lysis kills the cell; budding may allow continued host cell survival temporarily</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="quiz-box" id="q5">
+    <h4>✎ Quick Check 3.1</h4>
+    <p>Hepatitis A virus is most likely transmitted via which route?</p>
+    <div class="quiz-options">
+      <button class="quiz-opt" onclick="checkQ('q5',this,false)"><span class="opt-letter">A</span> Blood transfusion</button>
+      <button class="quiz-opt" onclick="checkQ('q5',this,true)"><span class="opt-letter">B</span> Fecal-oral route via contaminated food/water</button>
+      <button class="quiz-opt" onclick="checkQ('q5',this,false)"><span class="opt-letter">C</span> Airborne droplets</button>
+      <button class="quiz-opt" onclick="checkQ('q5',this,false)"><span class="opt-letter">D</span> Sexual contact</button>
+    </div>
+    <div class="quiz-feedback" id="q5-fb">Hepatitis A is transmitted via the fecal-oral route — through ingestion of contaminated food or water. Hepatitis B (not A) is transmitted via blood transfusion and sexual contact.</div>
+  </div>
+
+  <div class="quiz-box" id="q6">
+    <h4>✎ Quick Check 3.2</h4>
+    <p>During which step of viral replication does the virus use host ribosomes to produce viral proteins?</p>
+    <div class="quiz-options">
+      <button class="quiz-opt" onclick="checkQ('q6',this,false)"><span class="opt-letter">A</span> Attachment</button>
+      <button class="quiz-opt" onclick="checkQ('q6',this,false)"><span class="opt-letter">B</span> Penetration</button>
+      <button class="quiz-opt" onclick="checkQ('q6',this,true)"><span class="opt-letter">C</span> Biosynthesis</button>
+      <button class="quiz-opt" onclick="checkQ('q6',this,false)"><span class="opt-letter">D</span> Release</button>
+    </div>
+    <div class="quiz-feedback" id="q6-fb">Biosynthesis (replication phase) is when the viral genome is copied and viral proteins are synthesised using the host cell's ribosomes, tRNA, amino acids, and energy. This is why viruses are obligate intracellular parasites.</div>
+  </div>
+</div>
+
+<!-- ══════════════════════════ §4 BACTERIA — CHARACTERISTICS ══════════════════════════ -->
+<div class="section" id="sec4">
+  <div class="section-tag">§ 4 — Bacteria</div>
+  <h2>Characteristics of Bacteria</h2>
+  <p>Bacteria are <strong>microscopic, single-celled prokaryotic organisms</strong> that cannot be seen with the naked eye. Unlike viruses, bacteria are unambiguously living — they metabolise, grow, and reproduce independently. They are the most abundant organisms on Earth and occupy every conceivable habitat. Their cell wall composition and morphology are the foundations for identification and classification.</p>
+
+  <div class="math-box gold">
+    <div class="box-label">Core Definition</div>
+    Bacteria are <strong>unicellular prokaryotes</strong> with: no true nucleus (DNA in nucleoid region), no membrane-bound organelles, a peptidoglycan cell wall, and reproduction by <kw>binary fission</kw>. They are typically 0.5–5 µm in size.
+  </div>
+
+  <h3>The 11 Key Characteristics</h3>
+  <div class="term-grid">
+    <div class="term-card">
+      <div class="term-name">1. Unicellular</div>
+      <div class="term-def">Made up of a single cell that carries out all life functions.</div>
+    </div>
+    <div class="term-card">
+      <div class="term-name">2. <kw>Prokaryotic</kw></div>
+      <div class="term-def">Lack a true membrane-bound nucleus. DNA exists freely in the nucleoid region of the cytoplasm.</div>
+    </div>
+    <div class="term-card">
+      <div class="term-name">3. No Membrane-Bound Organelles</div>
+      <div class="term-def">Lack mitochondria, ER, Golgi apparatus. Ribosomes (70S) are present but are smaller than eukaryotic ribosomes (80S).</div>
+      <div class="term-example">This difference is targeted by many antibiotics (e.g. streptomycin)</div>
+    </div>
+    <div class="term-card">
+      <div class="term-name">4. <kw>Peptidoglycan</kw> Cell Wall</div>
+      <div class="term-def">All bacteria have cell walls made of peptidoglycan (murein). The thickness and structure differ between Gram-positive and Gram-negative bacteria.</div>
+    </div>
+    <div class="term-card">
+      <div class="term-name">5. Microscopic Size</div>
+      <div class="term-def">Typically 0.5–5 µm. Can be seen under a light microscope (unlike viruses, which need electron microscopy).</div>
+    </div>
+    <div class="term-card">
+      <div class="term-name">6. Various Shapes</div>
+      <div class="term-def">Cocci (spherical), Bacilli (rod), Spirilla (spiral), Vibrios (comma-shaped). Shape is a primary identification tool.</div>
+    </div>
+    <div class="term-card">
+      <div class="term-name">7. <kw>Binary Fission</kw></div>
+      <div class="term-def">Asexual reproduction by splitting into two identical daughter cells. Under ideal conditions, can divide every 20 minutes.</div>
+    </div>
+    <div class="term-card">
+      <div class="term-name">8. Motility</div>
+      <div class="term-def">Some are motile using flagella (whip-like projections), pili, or gliding. Motility helps bacteria chemotaxis toward nutrients or away from toxins.</div>
+    </div>
+    <div class="term-card">
+      <div class="term-name">9. Autotrophic &amp; Heterotrophic</div>
+      <div class="term-def">Some (autotrophs) make their own food via photosynthesis or chemosynthesis. Others (heterotrophs) obtain nutrients from organic matter.</div>
+    </div>
+    <div class="term-card">
+      <div class="term-name">10. Ubiquitous</div>
+      <div class="term-def">Found almost everywhere: soil, water, air, deep ocean vents, hot springs, and inside other organisms. Highly adaptable to extreme environments.</div>
+    </div>
+    <div class="term-card">
+      <div class="term-name">11. Beneficial &amp; Pathogenic</div>
+      <div class="term-def">Many are essential for ecosystem function (nitrogen fixation, decomposition). Others cause serious diseases.</div>
+    </div>
+  </div>
+
+  <div class="fun-fact">
+    <div class="fun-fact-label">🎉 Fun Fact</div>
+    <p>The human body contains approximately <strong>38 trillion bacterial cells</strong> — slightly more than the 30 trillion human cells! The gut alone hosts over <strong>1,000 species</strong> of bacteria that aid digestion, synthesise vitamins, and protect against pathogens.</p>
+  </div>
+
+  <div class="quiz-box" id="q7">
+    <h4>✎ Quick Check 4.1</h4>
+    <p>Which feature is COMMON to both viruses and bacteria?</p>
+    <div class="quiz-options">
+      <button class="quiz-opt" onclick="checkQ('q7',this,false)"><span class="opt-letter">A</span> Peptidoglycan cell wall</button>
+      <button class="quiz-opt" onclick="checkQ('q7',this,false)"><span class="opt-letter">B</span> Ability to reproduce via binary fission</button>
+      <button class="quiz-opt" onclick="checkQ('q7',this,true)"><span class="opt-letter">C</span> Possession of nucleic acid (DNA or RNA)</button>
+      <button class="quiz-opt" onclick="checkQ('q7',this,false)"><span class="opt-letter">D</span> Cytoplasm and ribosomes</button>
+    </div>
+    <div class="quiz-feedback" id="q7-fb">Both viruses and bacteria contain nucleic acid (genetic material). However: bacteria have BOTH DNA and RNA; viruses have one or the other. Bacteria have peptidoglycan walls, ribosomes, and cytoplasm — viruses have none of these.</div>
+  </div>
+</div>
+
+<!-- ══════════════════════════ §5 BACTERIA — IDENTIFICATION ══════════════════════════ -->
+<div class="section" id="sec5">
+  <div class="section-tag">§ 5 — Bacteria</div>
+  <h2>Identification of Bacteria</h2>
+  <p>Bacteria are identified through a combination of laboratory and observational methods. In clinical microbiology, accurate identification is critical for choosing the correct antibiotic treatment.</p>
+
+  <h3>1. Morphological Identification</h3>
+  <p>Based on the shape and cellular arrangement of bacteria:</p>
+  <table class="styled-table">
+    <thead><tr><th>Shape Category</th><th>Description</th><th>Example</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Cocci</strong></td><td>Spherical / round cells</td><td><em>Staphylococcus aureus, Streptococcus pyogenes</em></td></tr>
+      <tr><td><strong>Bacilli</strong></td><td>Rod-shaped cells</td><td><em>Escherichia coli, Bacillus anthracis</em></td></tr>
+      <tr><td><strong>Spirilla</strong></td><td>Rigid spiral-shaped cells</td><td><em>Spirillum volutans</em></td></tr>
+      <tr><td><strong>Vibrios</strong></td><td>Comma-shaped / curved rods</td><td><em>Vibrio cholerae</em></td></tr>
+    </tbody>
+  </table>
+
+  <h4>Arrangement Terminology</h4>
+  <table class="styled-table">
+    <thead><tr><th>Prefix</th><th>Arrangement</th><th>Example</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Diplo-</strong></td><td>Pairs of two</td><td>Diplococcus (Streptococcus pneumoniae)</td></tr>
+      <tr><td><strong>Strepto-</strong></td><td>Chains</td><td>Streptococcus (chains of cocci)</td></tr>
+      <tr><td><strong>Staphylo-</strong></td><td>Clusters (like grapes)</td><td>Staphylococcus (grape-like clusters)</td></tr>
+      <tr><td><strong>Tetrad</strong></td><td>Groups of 4</td><td>Micrococcus</td></tr>
+      <tr><td><strong>Sarcina</strong></td><td>Packets of 8</td><td>Sarcina ventriculi</td></tr>
+    </tbody>
+  </table>
+
+  <h3>2. Staining Techniques</h3>
+  <div class="term-grid">
+    <div class="term-card">
+      <div class="term-name"><kw>Gram Staining</kw></div>
+      <div class="term-def">The most important staining technique. Differentiates bacteria based on cell wall thickness. Uses crystal violet, iodine, alcohol wash, and safranin counterstain.</div>
+      <div class="term-example">Gram+ = purple (thick peptidoglycan) · Gram− = pink (thin peptidoglycan + outer membrane)</div>
+    </div>
+    <div class="term-card">
+      <div class="term-name">Acid-Fast Staining (Ziehl-Neelsen)</div>
+      <div class="term-def">Detects acid-fast bacteria — those with waxy mycolic acid in their cell walls that resist decolourisation by acid-alcohol. Result: bright red on blue background.</div>
+      <div class="term-example">Mycobacterium tuberculosis (TB), M. leprae (leprosy)</div>
+    </div>
+    <div class="term-card">
+      <div class="term-name">Endospore Staining (Schaeffer-Fulton)</div>
+      <div class="term-def">Detects heat-resistant endospores formed by certain bacteria under harsh conditions. Malachite green + steam drives dye into spores; safranin counterstains vegetative cells.</div>
+      <div class="term-example">Clostridium tetani (tetanus), Bacillus anthracis (anthrax)</div>
+    </div>
+  </div>
+
+  <div class="math-box">
+    <div class="box-label">Gram Staining Steps — Must Memorise</div>
+    <strong>1.</strong> Apply Crystal Violet (primary stain) → <strong>2.</strong> Apply Iodine (mordant — fixes stain) → <strong>3.</strong> Decolourisation with Alcohol/Acetone → <strong>4.</strong> Counterstain with Safranin
+    <br><br>
+    <strong>Gram-positive:</strong> Thick peptidoglycan retains crystal violet → <mark>Purple</mark><br>
+    <strong>Gram-negative:</strong> Thin peptidoglycan + outer lipid membrane loses crystal violet after wash → takes up safranin → <mark>Pink/Red</mark>
+  </div>
+
+  <h3>3. Biochemical Tests</h3>
+  <table class="styled-table">
+    <thead><tr><th>Test</th><th>What It Detects</th><th>Positive Result Indicates</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Sugar Fermentation Test</strong></td><td>Ability to ferment specific sugars (glucose, lactose)</td><td>Acid &amp; gas production; distinguishes enteric bacteria</td></tr>
+      <tr><td><strong>Catalase Test</strong></td><td>Presence of catalase enzyme (H₂O₂ → H₂O + O₂)</td><td>Bubbles in H₂O₂; Staphylococcus (+) vs Streptococcus (−)</td></tr>
+      <tr><td><strong>Oxidase Test</strong></td><td>Cytochrome c oxidase enzyme</td><td>Purple colour; Neisseria and Pseudomonas (+)</td></tr>
+      <tr><td><strong>Urease Test</strong></td><td>Ability to hydrolyse urea</td><td>Pink-red colour; Helicobacter pylori (+)</td></tr>
+      <tr><td><strong>Indole Test</strong></td><td>Tryptophanase enzyme (degrades tryptophan)</td><td>Red layer with Kovacs' reagent; E. coli (+)</td></tr>
+      <tr><td><strong>Coagulase Test</strong></td><td>Coagulase enzyme (clots plasma)</td><td>Clot formation; Staphylococcus aureus (+)</td></tr>
+    </tbody>
+  </table>
+
+  <h3>4. Molecular Methods</h3>
+  <div class="term-grid">
+    <div class="term-card"><div class="term-name">DNA Sequencing</div><div class="term-def">Determines the exact nucleotide sequence of bacterial DNA. Gold standard for definitive identification and phylogenetic classification.</div></div>
+    <div class="term-card"><div class="term-name">PCR (Polymerase Chain Reaction)</div><div class="term-def">Amplifies specific DNA sequences for detection. Extremely sensitive — can detect a single bacterium. Used for rapid clinical diagnosis.</div><div class="term-example">COVID-19 PCR tests use this same principle</div></div>
+    <div class="term-card"><div class="term-name">16S rRNA Analysis</div><div class="term-def">The 16S ribosomal RNA gene is highly conserved in bacteria but contains variable regions unique to each species. Sequencing these regions allows precise species identification.</div></div>
+  </div>
+
+  <h3>5. Culture Characteristics</h3>
+  <p>Growing bacteria on specific agar media reveals colony characteristics that aid identification: colony colour, size, edge morphology (smooth, irregular, filamentous), texture (mucoid, dry), and haemolysis patterns on blood agar.</p>
+  <div class="note"><strong>📋 Key Media Examples:</strong> MacConkey agar (selects Gram-negative, differentiates lactose fermenters) · Blood agar (shows haemolysis patterns) · Chocolate agar (for fastidious organisms like Neisseria, Haemophilus) · Mannitol Salt Agar (selective for Staphylococcus)</div>
+
+  <div class="quiz-box" id="q8">
+    <h4>✎ Quick Check 5.1</h4>
+    <p>In Gram staining, why do Gram-positive bacteria appear purple?</p>
+    <div class="quiz-options">
+      <button class="quiz-opt" onclick="checkQ('q8',this,false)"><span class="opt-letter">A</span> They absorb the safranin counterstain</button>
+      <button class="quiz-opt" onclick="checkQ('q8',this,true)"><span class="opt-letter">B</span> Their thick peptidoglycan wall retains the crystal violet-iodine complex after decolourisation</button>
+      <button class="quiz-opt" onclick="checkQ('q8',this,false)"><span class="opt-letter">C</span> They have an outer lipopolysaccharide membrane that binds crystal violet</button>
+      <button class="quiz-opt" onclick="checkQ('q8',this,false)"><span class="opt-letter">D</span> Their thin cell wall allows more dye to enter</button>
+    </div>
+    <div class="quiz-feedback" id="q8-fb">Gram-positive bacteria have a THICK peptidoglycan cell wall that traps the crystal violet-iodine complex even after the alcohol wash. Gram-negative bacteria have a thin peptidoglycan layer but an outer lipid membrane — the alcohol dissolves this membrane and washes out the crystal violet, so they take up the safranin counterstain (pink).</div>
+  </div>
+
+  <div class="quiz-box" id="q9">
+    <h4>✎ Quick Check 5.2</h4>
+    <p>The catalase test differentiates which two clinically important bacteria?</p>
+    <div class="quiz-options">
+      <button class="quiz-opt" onclick="checkQ('q9',this,false)"><span class="opt-letter">A</span> E. coli vs Salmonella</button>
+      <button class="quiz-opt" onclick="checkQ('q9',this,true)"><span class="opt-letter">B</span> Staphylococcus (+) vs Streptococcus (−)</button>
+      <button class="quiz-opt" onclick="checkQ('q9',this,false)"><span class="opt-letter">C</span> Mycobacterium vs Clostridium</button>
+      <button class="quiz-opt" onclick="checkQ('q9',this,false)"><span class="opt-letter">D</span> Neisseria vs Pseudomonas</button>
+    </div>
+    <div class="quiz-feedback" id="q9-fb">The catalase test produces bubbles (O₂ gas) when hydrogen peroxide is added. Staphylococcus is catalase-positive (bubbles); Streptococcus is catalase-negative (no bubbles). Both are Gram-positive cocci, so this test is crucial for telling them apart clinically.</div>
+  </div>
+</div>
+
+<!-- ══════════════════════════ §6 BACTERIA — CLASSIFICATION & DISEASE ══════════════════════════ -->
+<div class="section" id="sec6">
+  <div class="section-tag">§ 6 — Bacteria</div>
+  <h2>Classification &amp; Clinical Importance</h2>
+
+  <h3>Classification by Shape (Morphology)</h3>
+  <p>As described in §5 above — Cocci, Bacilli, Spirilli, Vibrios.</p>
+
+  <h3>Classification by Gram Reaction</h3>
+  <table class="styled-table">
+    <thead><tr><th>Feature</th><th>Gram-Positive</th><th>Gram-Negative</th></tr></thead>
+    <tbody>
+      <tr><td>Stain colour</td><td>Purple / Violet</td><td>Pink / Red</td></tr>
+      <tr><td>Peptidoglycan layer</td><td>Thick (20–80 nm)</td><td>Thin (8–10 nm)</td></tr>
+      <tr><td>Outer membrane</td><td>Absent</td><td>Present (LPS layer)</td></tr>
+      <tr><td>Teichoic acids</td><td>Present</td><td>Absent</td></tr>
+      <tr><td>Antibiotic sensitivity</td><td>More sensitive (penicillin)</td><td>Naturally resistant (outer membrane blocks entry)</td></tr>
+      <tr><td>Examples</td><td>Staphylococcus, Streptococcus, Bacillus, Clostridium</td><td>E. coli, Salmonella, Vibrio cholerae, Neisseria</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Classification by Oxygen Requirement</h3>
+  <div class="term-grid">
+    <div class="term-card"><div class="term-name">Aerobic Bacteria</div><div class="term-def">Require oxygen for survival and metabolism. Use oxygen as the final electron acceptor in cellular respiration.</div><div class="term-example">Mycobacterium tuberculosis, Pseudomonas aeruginosa</div></div>
+    <div class="term-card"><div class="term-name">Anaerobic Bacteria</div><div class="term-def">Cannot tolerate oxygen — it is toxic to them. Grow in environments devoid of oxygen such as deep wounds.</div><div class="term-example">Clostridium tetani (tetanus), C. perfringens (gangrene)</div></div>
+    <div class="term-card"><div class="term-name">Facultative Anaerobes</div><div class="term-def">Can grow with or without oxygen. Prefer oxygen but can switch to fermentation when oxygen is absent. Most important pathogens are facultative anaerobes.</div><div class="term-example">E. coli, Staphylococcus aureus, Salmonella</div></div>
+    <div class="term-card"><div class="term-name">Microaerophiles</div><div class="term-def">Require oxygen but at lower concentrations than atmospheric (21%). Damaged by normal oxygen levels.</div><div class="term-example">Helicobacter pylori, Campylobacter jejuni</div></div>
+  </div>
+
+  <h3>Classification by Temperature Range</h3>
+  <table class="styled-table">
+    <thead><tr><th>Category</th><th>Optimal Temperature</th><th>Habitat</th><th>Examples</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Psychrophiles</strong></td><td>0–15°C (cold-loving)</td><td>Arctic/Antarctic environments, refrigerators</td><td>Pseudomonas fluorescens, Arthrobacter</td></tr>
+      <tr><td><strong>Mesophiles</strong></td><td>25–40°C (moderate)</td><td>Human body, warm environments</td><td>Most human pathogens: E. coli, S. aureus, M. tuberculosis</td></tr>
+      <tr><td><strong>Thermophiles</strong></td><td>50–80°C (heat-loving)</td><td>Hot springs, compost heaps</td><td>Thermus aquaticus (source of Taq polymerase for PCR!)</td></tr>
+      <tr><td><strong>Hyperthermophiles</strong></td><td>&gt;80°C</td><td>Deep-sea hydrothermal vents</td><td>Pyrococcus, Archaeoglobus</td></tr>
+    </tbody>
+  </table>
+
+  <div class="warning"><strong>⚠ Exam Alert:</strong> <em>Most human pathogens are mesophiles</em> — optimally growing at body temperature (37°C). This is why refrigeration (psychrophilic range) slows food spoilage bacteria but does not kill them.</div>
+
+  <h3>Bacterial Diseases (Pathogenic Bacteria)</h3>
+  <table class="styled-table">
+    <thead><tr><th>Disease</th><th>Causative Organism</th><th>Gram Status</th><th>Key Notes</th></tr></thead>
+    <tbody>
+      <tr><td>Cholera</td><td><em>Vibrio cholerae</em></td><td>Gram−, Vibrio</td><td>Rice-water stools; spreads via contaminated water</td></tr>
+      <tr><td>Tuberculosis (TB)</td><td><em>Mycobacterium tuberculosis</em></td><td>Acid-fast</td><td>Acid-fast bacillus; airborne droplets; affects lungs primarily</td></tr>
+      <tr><td>Typhoid Fever</td><td><em>Salmonella typhi</em></td><td>Gram−, Bacillus</td><td>Rose spots rash; fecal-oral transmission</td></tr>
+      <tr><td>Tetanus</td><td><em>Clostridium tetani</em></td><td>Gram+, Bacillus</td><td>Anaerobe; produces tetanospasmin toxin → spastic paralysis</td></tr>
+      <tr><td>Whooping Cough</td><td><em>Bordetella pertussis</em></td><td>Gram−, Coccobacillus</td><td>"Whoop" inspiratory sound; vaccinated against with DTP</td></tr>
+      <tr><td>Pneumonia</td><td><em>Streptococcus pneumoniae</em></td><td>Gram+, Cocci</td><td>Alpha-haemolytic; lancet-shaped diplococci</td></tr>
+      <tr><td>Food Poisoning</td><td><em>Staphylococcus aureus</em></td><td>Gram+, Cocci</td><td>Pre-formed heat-stable toxin; rapid onset</td></tr>
+      <tr><td>Meningitis</td><td><em>Neisseria meningitidis</em></td><td>Gram−, Cocci</td><td>Kidney-shaped diplococci; non-blanching rash</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Useful Bacteria</h3>
+  <div class="term-grid">
+    <div class="term-card"><div class="term-name">Lactobacillus</div><div class="term-def">Found in milk and human gut. Used in making yoghurt and cheese. Produces lactic acid that aids digestion and inhibits pathogens.</div><div class="term-example">Lactobacillus acidophilus — probiotic supplements</div></div>
+    <div class="term-card"><div class="term-name">Rhizobium</div><div class="term-def">Found in root nodules of leguminous plants (beans, peas, clover). Fixes atmospheric nitrogen into ammonia (NH₃) — usable by plants. Improves soil fertility naturally.</div><div class="term-example">Legume-Rhizobium symbiosis is a model of nitrogen fixation</div></div>
+    <div class="term-card"><div class="term-name">Nitrosomonas</div><div class="term-def">Converts ammonia into nitrites (NO₂⁻) in the soil. Essential in the nitrogen cycle — nitrification step 1.</div></div>
+    <div class="term-card"><div class="term-name">Nitrobacter</div><div class="term-def">Converts nitrites into nitrates (NO₃⁻) — the form most useful to plants. Nitrification step 2 in the nitrogen cycle.</div></div>
+    <div class="term-card"><div class="term-name">Streptomyces</div><div class="term-def">Soil bacteria that naturally produce antibiotics. Major source of over 60% of clinically used antibiotics including streptomycin and tetracycline.</div></div>
+    <div class="term-card"><div class="term-name">E. coli K-12</div><div class="term-def">The most studied organism in biology. Laboratory strains are harmless and used extensively in genetic engineering, recombinant insulin production, and molecular biology research.</div></div>
+  </div>
+
+  <div class="quiz-box" id="q10">
+    <h4>✎ Quick Check 6.1</h4>
+    <p>Clostridium tetani causes tetanus. Which combination of features best describes this organism?</p>
+    <div class="quiz-options">
+      <button class="quiz-opt" onclick="checkQ('q10',this,false)"><span class="opt-letter">A</span> Gram-negative, aerobic, cocci</button>
+      <button class="quiz-opt" onclick="checkQ('q10',this,true)"><span class="opt-letter">B</span> Gram-positive, anaerobic, bacillus (rod)</button>
+      <button class="quiz-opt" onclick="checkQ('q10',this,false)"><span class="opt-letter">C</span> Acid-fast, aerobic, bacillus</button>
+      <button class="quiz-opt" onclick="checkQ('q10',this,false)"><span class="opt-letter">D</span> Gram-negative, facultative anaerobe, vibrio</button>
+    </div>
+    <div class="quiz-feedback" id="q10-fb">Clostridium tetani is Gram-positive, rod-shaped (bacillus), and strictly anaerobic. It thrives in deep puncture wounds devoid of oxygen. It produces the tetanospasmin toxin that causes the "lockjaw" spastic paralysis associated with tetanus.</div>
+  </div>
+
+  <div class="quiz-box" id="q11">
+    <h4>✎ Quick Check 6.2</h4>
+    <p>Which bacterium is responsible for nitrogen fixation in the root nodules of leguminous plants?</p>
+    <div class="quiz-options">
+      <button class="quiz-opt" onclick="checkQ('q11',this,false)"><span class="opt-letter">A</span> Nitrosomonas</button>
+      <button class="quiz-opt" onclick="checkQ('q11',this,false)"><span class="opt-letter">B</span> Nitrobacter</button>
+      <button class="quiz-opt" onclick="checkQ('q11',this,true)"><span class="opt-letter">C</span> Rhizobium</button>
+      <button class="quiz-opt" onclick="checkQ('q11',this,false)"><span class="opt-letter">D</span> Lactobacillus</button>
+    </div>
+    <div class="quiz-feedback" id="q11-fb">Rhizobium forms symbiotic relationships with leguminous plants and lives in root nodules, fixing atmospheric N₂ into ammonia (NH₃). Nitrosomonas converts NH₃ → NO₂⁻; Nitrobacter converts NO₂⁻ → NO₃⁻. These are separate, sequential steps in soil nitrification.</div>
+  </div>
+</div>
+
+<!-- ══════════════════════════ §7 FUNGI — CHARACTERISTICS ══════════════════════════ -->
+<div class="section" id="sec7">
+  <div class="section-tag">§ 7 — Fungi</div>
+  <h2>Characteristics of Fungi</h2>
+  <p>Fungi are a unique kingdom of <strong>non-green, eukaryotic organisms</strong> that obtain food by absorbing nutrients from organic matter — they are <kw>heterotrophic</kw> decomposers. Unlike plants, they have no chlorophyll and cannot photosynthesise. Unlike animals, they have rigid cell walls. The study of fungi is called <strong>mycology</strong>. Fungi include moulds, yeasts, and mushrooms — three very different-looking organisms that share the same fundamental biology.</p>
+
+  <div class="math-box green">
+    <div class="box-label">Core Definition</div>
+    Fungi are <strong>eukaryotic, heterotrophic, non-photosynthetic</strong> organisms with chitin cell walls. They are mostly multicellular (except yeast) and reproduce via spores. They obtain nutrition by absorption of organic matter (saprophytic or parasitic).
+  </div>
+
+  <h3>The 9 Key Characteristics</h3>
+  <div class="term-grid">
+    <div class="term-card">
+      <div class="term-name">1. <kw>Eukaryotic</kw></div>
+      <div class="term-def">Have a true membrane-bound nucleus and membrane-bound organelles (unlike bacteria). This is a fundamental distinction from bacteria.</div>
+    </div>
+    <div class="term-card">
+      <div class="term-name">2. Non-Photosynthetic</div>
+      <div class="term-def">Lack chlorophyll entirely. Cannot capture sunlight to make food — must obtain energy from organic sources.</div>
+    </div>
+    <div class="term-card">
+      <div class="term-name">3. Heterotrophic</div>
+      <div class="term-def">Obtain energy by breaking down and absorbing organic matter. Can be saprophytic (feed on dead matter) or parasitic (feed on living hosts).</div>
+    </div>
+    <div class="term-card">
+      <div class="term-name">4. <kw>Chitin</kw> Cell Wall</div>
+      <div class="term-def">The cell wall is made of chitin — a tough polysaccharide also found in insect exoskeletons. This distinguishes fungi from plants (cellulose) and bacteria (peptidoglycan).</div>
+    </div>
+    <div class="term-card">
+      <div class="term-name">5. <kw>Hyphae</kw> &amp; Mycelium</div>
+      <div class="term-def">The fungal body is made of thread-like structures called hyphae. A mass of hyphae forms a mycelium. Hyphae may be septate (with cross walls, e.g., Penicillium) or aseptate/coenocytic (without cross walls, e.g., Mucor).</div>
+    </div>
+    <div class="term-card">
+      <div class="term-name">6. Reproduction by <kw>Spores</kw></div>
+      <div class="term-def">Produced on spherical sporangia borne on long stalks called sporangiophores. Spores can be sexual or asexual. Highly resistant to harsh conditions.</div>
+    </div>
+    <div class="term-card">
+      <div class="term-name">7. Mostly Multicellular</div>
+      <div class="term-def">Multicellular except for yeasts, which are unicellular. Yeasts reproduce by budding, not hyphae.</div>
+    </div>
+    <div class="term-card">
+      <div class="term-name">8. Store Food as Glycogen</div>
+      <div class="term-def">Store reserve carbohydrates as glycogen — like animals. Plants store starch; bacteria store various forms. This biochemical fact points to the evolutionary link between fungi and animals.</div>
+    </div>
+    <div class="term-card">
+      <div class="term-name">9. Thrive in Warm, Damp Conditions</div>
+      <div class="term-def">Prefer warm, moist, dark environments. This explains why fungal infections (tinea, ringworm, thrush) are more common in humid regions and sweaty areas of the body.</div>
+    </div>
+  </div>
+
+  <div class="fun-fact">
+    <div class="fun-fact-label">🎉 Fun Fact</div>
+    <p>The largest living organism on Earth is a fungus! <strong>Armillaria ostoyae</strong> (honey fungus) in Oregon, USA, covers over <strong>2,385 acres (9.65 km²)</strong> of soil and is estimated to be 8,650 years old. Most of it is invisible — underground mycelium.</p>
+  </div>
+
+  <div class="quiz-box" id="q12">
+    <h4>✎ Quick Check 7.1</h4>
+    <p>Which of the following correctly distinguishes fungi from bacteria?</p>
+    <div class="quiz-options">
+      <button class="quiz-opt" onclick="checkQ('q12',this,false)"><span class="opt-letter">A</span> Fungi have a peptidoglycan cell wall; bacteria have a chitin cell wall</button>
+      <button class="quiz-opt" onclick="checkQ('q12',this,true)"><span class="opt-letter">B</span> Fungi are eukaryotic with a true nucleus; bacteria are prokaryotic with no true nucleus</button>
+      <button class="quiz-opt" onclick="checkQ('q12',this,false)"><span class="opt-letter">C</span> Fungi reproduce by binary fission; bacteria reproduce by spores</button>
+      <button class="quiz-opt" onclick="checkQ('q12',this,false)"><span class="opt-letter">D</span> Fungi contain chlorophyll; bacteria do not</button>
+    </div>
+    <div class="quiz-feedback" id="q12-fb">The key distinction: Fungi are EUKARYOTIC (true nucleus, membrane-bound organelles); Bacteria are PROKARYOTIC (no true nucleus). Also: Fungi have chitin cell walls; bacteria have peptidoglycan. Fungi store glycogen; neither have chlorophyll. Fungi reproduce by spores; bacteria by binary fission.</div>
+  </div>
+</div>
+
+<!-- ══════════════════════════ §8 FUNGI — CLASSIFICATION ══════════════════════════ -->
+<div class="section" id="sec8">
+  <div class="section-tag">§ 8 — Fungi</div>
+  <h2>Classification &amp; Types of Fungi</h2>
+  <p>Fungi are classified primarily based on their <strong>reproductive structures and spore types</strong>. The four main divisions (phyla) of fungi are:</p>
+
+  <table class="styled-table">
+    <thead><tr><th>Division</th><th>Common Name</th><th>Spore Type</th><th>Key Features</th><th>Examples</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Zygomycota</strong></td><td>Zygomycetes / Pin moulds</td><td>Zygospores (sexual); sporangiospores (asexual)</td><td>Aseptate hyphae; reproduce by forming a thick-walled zygospore during sexual reproduction</td><td>Rhizopus stolonifer (bread mould), Mucor</td></tr>
+      <tr><td><strong>Ascomycota</strong></td><td>Ascomycetes / Sac fungi</td><td>Ascospores (in a sac called an ascus)</td><td>Largest division of fungi. Septate hyphae. Many medically and economically important</td><td>Saccharomyces (yeast), Penicillium, Aspergillus, Candida, Neurospora</td></tr>
+      <tr><td><strong>Basidiomycota</strong></td><td>Basidiomycetes / Club fungi</td><td>Basidiospores (on club-shaped basidia)</td><td>Septate hyphae; includes most edible and poisonous mushrooms; major wood decomposers</td><td>Agaricus bisporus (button mushroom), Amanita muscaria, Cryptococcus neoformans</td></tr>
+      <tr><td><strong>Deuteromycota</strong></td><td>Imperfect fungi / Fungi imperfecti</td><td>Conidia (asexual only — no known sexual stage)</td><td>Artificial grouping; sexual reproduction not yet observed. When discovered, reclassified into other groups</td><td>Candida albicans, some Aspergillus, Coccidioides immitis</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Examples of Moulds (Filamentous Fungi)</h3>
+  <div class="term-grid">
+    <div class="term-card"><div class="term-name">Rhizopus stolonifer</div><div class="term-def">The common bread mould. Black spots on bread are its sporangia. Zygomycete with aseptate hyphae and horizontal stolons connecting upright sporangiophores.</div><div class="term-example">Division: Zygomycota · Spores: Sporangiospores</div></div>
+    <div class="term-card"><div class="term-name">Mucor</div><div class="term-def">Found in soil and decaying organic matter. Similar to Rhizopus but lacks stolons and rhizoids. Also aseptate. Can cause mucormycosis in immunocompromised patients.</div><div class="term-example">Division: Zygomycota</div></div>
+    <div class="term-card"><div class="term-name">Aspergillus niger</div><div class="term-def">Black mould. Used industrially to produce citric acid. Can cause aspergillosis lung infections in immunocompromised individuals. Common indoor contaminant.</div><div class="term-example">Division: Ascomycota · Spores: Conidia</div></div>
+    <div class="term-card"><div class="term-name">Penicillium notatum</div><div class="term-def">The source of the antibiotic penicillin — discovered by Alexander Fleming in 1928. Blue-green mould. Also used in cheese ripening (Brie, Camembert, Roquefort).</div><div class="term-example">Division: Ascomycota · Historical importance: First antibiotic</div></div>
+  </div>
+
+  <h3>Examples of Yeasts (Unicellular Fungi)</h3>
+  <div class="term-grid">
+    <div class="term-card"><div class="term-name">Saccharomyces cerevisiae</div><div class="term-def">Baker's yeast and brewer's yeast. Ferments glucose → ethanol + CO₂. Used in baking (bread rising), alcohol production (beer, wine), and as a model organism in genetics research.</div><div class="term-example">Division: Ascomycota · Reproduction: Budding</div></div>
+    <div class="term-card"><div class="term-name">Candida albicans</div><div class="term-def">Normally found in small amounts in the human gut and vagina. Overgrowth causes candidiasis (oral thrush, vaginal yeast infection). Particularly dangerous in immunocompromised patients (HIV/AIDS).</div><div class="term-example">Division: Deuteromycota · Clinical: Opportunistic pathogen</div></div>
+  </div>
+
+  <h3>Examples of Mushrooms (Macrofungi)</h3>
+  <div class="term-grid">
+    <div class="term-card"><div class="term-name">Agaricus bisporus</div><div class="term-def">The common button mushroom — the most widely cultivated edible mushroom worldwide. Also sold as cremini or portobello at different stages of maturity.</div><div class="term-example">Division: Basidiomycota · Edible</div></div>
+    <div class="term-card"><div class="term-name">Amanita muscaria</div><div class="term-def">The iconic red-and-white spotted toadstool. Highly poisonous — contains muscimol and ibotenic acid. Associated with fairy tales but should never be consumed.</div><div class="term-example">Division: Basidiomycota · Poisonous</div></div>
+    <div class="term-card"><div class="term-name">Termitomyces</div><div class="term-def">Symbiotic mushrooms common in tropical regions like Nigeria and West Africa. Cultivated by termites underground in their mounds. Important local food source and studied for biotechnology applications.</div><div class="term-example">Division: Basidiomycota · Tropical/West African</div></div>
+  </div>
+
+  <div class="timeline">
+    <div class="tl-item"><div class="tl-dot"></div><div class="tl-year">1928</div><div class="tl-content"><div class="tl-title">Fleming Discovers Penicillin</div><div class="tl-desc">Alexander Fleming observes that Penicillium notatum mould inhibits Staphylococcus growth — the beginning of the antibiotic era.</div></div></div>
+    <div class="tl-item"><div class="tl-dot"></div><div class="tl-year">1940s</div><div class="tl-content"><div class="tl-title">Penicillin Purified &amp; Deployed</div><div class="tl-desc">Florey and Chain purify penicillin; mass production saves thousands of WWII soldiers from bacterial infections.</div></div></div>
+    <div class="tl-item"><div class="tl-dot"></div><div class="tl-year">1970s</div><div class="tl-content"><div class="tl-title">Aspergillus in Industry</div><div class="tl-desc">Aspergillus niger used for industrial-scale citric acid production, replacing earlier fruit-based methods.</div></div></div>
+    <div class="tl-item"><div class="tl-dot"></div><div class="tl-year">1990s–Present</div><div class="tl-content"><div class="tl-title">Fungal Infections as Global Health Threats</div><div class="tl-desc">Candida and Aspergillus infections rise dramatically with HIV/AIDS epidemic and increased immunosuppressive therapies.</div></div></div>
+  </div>
+
+  <div class="quiz-box" id="q13">
+    <h4>✎ Quick Check 8.1</h4>
+    <p>Penicillin is derived from which fungus?</p>
+    <div class="quiz-options">
+      <button class="quiz-opt" onclick="checkQ('q13',this,false)"><span class="opt-letter">A</span> Aspergillus niger</button>
+      <button class="quiz-opt" onclick="checkQ('q13',this,true)"><span class="opt-letter">B</span> Penicillium notatum</button>
+      <button class="quiz-opt" onclick="checkQ('q13',this,false)"><span class="opt-letter">C</span> Saccharomyces cerevisiae</button>
+      <button class="quiz-opt" onclick="checkQ('q13',this,false)"><span class="opt-letter">D</span> Rhizopus stolonifer</button>
+    </div>
+    <div class="quiz-feedback" id="q13-fb">Alexander Fleming discovered in 1928 that Penicillium notatum mould secreted a substance (penicillin) that killed surrounding Staphylococcus bacteria. This accidental discovery revolutionised medicine. Aspergillus niger produces citric acid, not penicillin.</div>
+  </div>
+
+  <div class="quiz-box" id="q14">
+    <h4>✎ Quick Check 8.2</h4>
+    <p>Fungi classified as Deuteromycota (imperfect fungi) are characterised by:</p>
+    <div class="quiz-options">
+      <button class="quiz-opt" onclick="checkQ('q14',this,false)"><span class="opt-letter">A</span> Production of ascospores in a sac (ascus)</button>
+      <button class="quiz-opt" onclick="checkQ('q14',this,false)"><span class="opt-letter">B</span> Forming club-shaped basidia</button>
+      <button class="quiz-opt" onclick="checkQ('q14',this,true)"><span class="opt-letter">C</span> No known sexual reproductive stage — reproduce only asexually by conidia</button>
+      <button class="quiz-opt" onclick="checkQ('q14',this,false)"><span class="opt-letter">D</span> Thick-walled zygospore formation</button>
+    </div>
+    <div class="quiz-feedback" id="q14-fb">Deuteromycota = "imperfect fungi" because their sexual stage is unknown or absent. They reproduce only asexually by producing conidia. Once a sexual stage is discovered, they are reclassified into Ascomycota or Basidiomycota. Candida albicans is the most clinically important example.</div>
+  </div>
+</div>
+
+<!-- ══════════════════════════ §9 BIG PICTURE COMPARISON ══════════════════════════ -->
+<div class="section" id="sec9">
+  <div class="section-tag">§ 9 — The Big Picture</div>
+  <h2>Viruses vs. Bacteria vs. Fungi: The Master Comparison</h2>
+  <p>This is the most tested area in BIO 102 examinations. The ability to compare and contrast these three groups across multiple features is essential.</p>
+
+  <div class="compare-grid">
+    <div class="compare-card">
+      <div class="compare-header virus">🦠 Viruses</div>
+      <div class="compare-body">
+        <ul>
+          <li>Non-living, acellular</li>
+          <li>DNA or RNA (never both)</li>
+          <li>No cell wall</li>
+          <li>Capsid (+ envelope in some)</li>
+          <li>Obligate intracellular parasite</li>
+          <li>No independent metabolism</li>
+          <li>Replicate (not reproduce)</li>
+          <li>20–300 nm (ultramicroscopic)</li>
+          <li>Host specific</li>
+          <li>Treated with antivirals</li>
+        </ul>
+      </div>
+    </div>
+    <div class="compare-card">
+      <div class="compare-header bacteria">🔬 Bacteria</div>
+      <div class="compare-body">
+        <ul>
+          <li>Living, unicellular</li>
+          <li>Both DNA and RNA</li>
+          <li>Peptidoglycan cell wall</li>
+          <li>Prokaryotic (no true nucleus)</li>
+          <li>Independent reproduction</li>
+          <li>Binary fission</li>
+          <li>0.5–5 µm (microscopic)</li>
+          <li>Can be aerobic/anaerobic</li>
+          <li>Can be beneficial or pathogenic</li>
+          <li>Treated with antibiotics</li>
+        </ul>
+      </div>
+    </div>
+    <div class="compare-card">
+      <div class="compare-header fungi">🍄 Fungi</div>
+      <div class="compare-body">
+        <ul>
+          <li>Living, mostly multicellular</li>
+          <li>Both DNA and RNA</li>
+          <li>Chitin cell wall</li>
+          <li>Eukaryotic (true nucleus)</li>
+          <li>Independent reproduction</li>
+          <li>Spores (+ budding in yeast)</li>
+          <li>Macroscopic to microscopic</li>
+          <li>Heterotrophic (absorptive)</li>
+          <li>Can be beneficial or pathogenic</li>
+          <li>Treated with antifungals</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <h3>Master Comparison Table</h3>
+  <table class="styled-table">
+    <thead><tr><th>Feature</th><th>Viruses</th><th>Bacteria</th><th>Fungi</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Cell type</strong></td><td>Acellular</td><td>Prokaryotic</td><td>Eukaryotic</td></tr>
+      <tr><td><strong>Nucleus</strong></td><td>Absent</td><td>Nucleoid (no membrane)</td><td>True nucleus (membrane-bound)</td></tr>
+      <tr><td><strong>Genetic material</strong></td><td>DNA or RNA (not both)</td><td>DNA + RNA</td><td>DNA + RNA</td></tr>
+      <tr><td><strong>Cell wall</strong></td><td>None (capsid instead)</td><td>Peptidoglycan</td><td>Chitin</td></tr>
+      <tr><td><strong>Ribosomes</strong></td><td>None</td><td>70S (smaller)</td><td>80S (larger)</td></tr>
+      <tr><td><strong>Metabolism</strong></td><td>None</td><td>Independent</td><td>Independent</td></tr>
+      <tr><td><strong>Reproduction</strong></td><td>Replication (via host)</td><td>Binary fission</td><td>Spores, budding (yeast)</td></tr>
+      <tr><td><strong>Size</strong></td><td>20–300 nm</td><td>0.5–5 µm</td><td>Highly variable (µm–cm)</td></tr>
+      <tr><td><strong>Visibility</strong></td><td>Electron microscope only</td><td>Light microscope</td><td>Naked eye (most)</td></tr>
+      <tr><td><strong>Food storage</strong></td><td>N/A</td><td>Poly-β-hydroxybutyrate</td><td>Glycogen</td></tr>
+      <tr><td><strong>Treatment</strong></td><td>Antivirals, vaccines</td><td>Antibiotics</td><td>Antifungals (azoles, etc.)</td></tr>
+      <tr><td><strong>Key example diseases</strong></td><td>HIV, COVID-19, Influenza</td><td>TB, Cholera, Typhoid</td><td>Candidiasis, Aspergillosis</td></tr>
+    </tbody>
+  </table>
+
+  <div class="note">
+    <strong>🧠 Memory Trick — The Three Cell Walls:</strong><br>
+    <strong>Bacteria</strong> → <em>Peptidoglycan</em> (P for Prokaryote and Peptido)<br>
+    <strong>Fungi</strong> → <em>Chitin</em> (C for Chitin... same as insect exoskeletons — think creepy-crawly 🪲)<br>
+    <strong>Plants</strong> → <em>Cellulose</em> (C for Cellulose and Chlorophyll)<br>
+    <strong>Viruses</strong> → <em>No wall</em> — only a Capsid (C for Capsid, no Cell)
+  </div>
+
+  <div class="quiz-box" id="q15">
+    <h4>✎ Quick Check 9.1</h4>
+    <p>A patient's biopsy reveals a eukaryotic organism with chitin in its cell wall and septate hyphae. Which organism is this most likely?</p>
+    <div class="quiz-options">
+      <button class="quiz-opt" onclick="checkQ('q15',this,false)"><span class="opt-letter">A</span> A Gram-positive bacterium</button>
+      <button class="quiz-opt" onclick="checkQ('q15',this,false)"><span class="opt-letter">B</span> A virus</button>
+      <button class="quiz-opt" onclick="checkQ('q15',this,true)"><span class="opt-letter">C</span> A fungus (likely Ascomycota)</button>
+      <button class="quiz-opt" onclick="checkQ('q15',this,false)"><span class="opt-letter">D</span> A plant cell</button>
+    </div>
+    <div class="quiz-feedback" id="q15-fb">Eukaryotic + chitin cell wall + septate hyphae = FUNGUS. Specifically, septate hyphae (hyphae with cross walls between cells) are characteristic of Ascomycota (e.g., Penicillium, Aspergillus) and Basidiomycota. Aseptate hyphae characterise Zygomycota.</div>
+  </div>
+
+  <div class="quiz-box" id="q16">
+    <h4>✎ Quick Check 9.2</h4>
+    <p>Which statement correctly distinguishes viruses from bacteria?</p>
+    <div class="quiz-options">
+      <button class="quiz-opt" onclick="checkQ('q16',this,false)"><span class="opt-letter">A</span> Both can reproduce independently of a host cell</button>
+      <button class="quiz-opt" onclick="checkQ('q16',this,true)"><span class="opt-letter">B</span> Viruses contain either DNA or RNA; bacteria contain both DNA and RNA</button>
+      <button class="quiz-opt" onclick="checkQ('q16',this,false)"><span class="opt-letter">C</span> Bacteria are acellular; viruses are unicellular prokaryotes</button>
+      <button class="quiz-opt" onclick="checkQ('q16',this,false)"><span class="opt-letter">D</span> Both can be treated effectively with antibiotics</button>
+    </div>
+    <div class="quiz-feedback" id="q16-fb">A critical distinction: Viruses have EITHER DNA or RNA (not both); bacteria have both DNA and RNA. Antibiotics work on bacteria (target peptidoglycan synthesis, ribosome function) but NOT on viruses. Viruses cannot reproduce independently — they are obligate intracellular parasites.</div>
+  </div>
+</div>
+
+<!-- ══════════════════════════ FINAL QUIZ ══════════════════════════ -->
+<div class="section" id="finalquiz">
+  <div class="section-tag">§ 10 — Final Exam</div>
+  <h2>Final MCQ Examination</h2>
+  <p>Test your complete understanding of BIO 102. These exam-style questions cover all three topics — viruses, bacteria, and fungi — at the depth expected in university examinations.</p>
+
+  <div class="quiz-box" id="fq1">
+    <h4>✎ Final Q1</h4>
+    <p>The capsomere is best defined as:</p>
+    <div class="quiz-options">
+      <button class="quiz-opt" onclick="checkQ('fq1',this,false)"><span class="opt-letter">A</span> The viral genetic material</button>
+      <button class="quiz-opt" onclick="checkQ('fq1',this,false)"><span class="opt-letter">B</span> The lipid envelope surrounding some viruses</button>
+      <button class="quiz-opt" onclick="checkQ('fq1',this,true)"><span class="opt-letter">C</span> A protein subunit that makes up the viral capsid</button>
+      <button class="quiz-opt" onclick="checkQ('fq1',this,false)"><span class="opt-letter">D</span> A structural component of the bacterial cell wall</button>
+    </div>
+    <div class="quiz-feedback" id="fq1-fb">Capsomeres are individual protein subunits that assemble together to form the capsid (protein coat). Multiple capsomeres arranged in icosahedral or helical patterns create the characteristic capsid shapes.</div>
+  </div>
+
+  <div class="quiz-box" id="fq2">
+    <h4>✎ Final Q2</h4>
+    <p>A negative-sense (−) RNA virus needs which molecule to begin protein synthesis?</p>
+    <div class="quiz-options">
+      <button class="quiz-opt" onclick="checkQ('fq2',this,false)"><span class="opt-letter">A</span> DNA polymerase</button>
+      <button class="quiz-opt" onclick="checkQ('fq2',this,true)"><span class="opt-letter">B</span> RNA-dependent RNA polymerase (RdRp)</button>
+      <button class="quiz-opt" onclick="checkQ('fq2',this,false)"><span class="opt-letter">C</span> Reverse transcriptase</button>
+      <button class="quiz-opt" onclick="checkQ('fq2',this,false)"><span class="opt-letter">D</span> No extra molecule needed — it goes directly to ribosomes</button>
+    </div>
+    <div class="quiz-feedback" id="fq2-fb">Negative-sense (−) RNA cannot be directly translated. The virus must carry its own RNA-dependent RNA polymerase (RdRp) to convert (−) RNA → (+) RNA, which can then serve as mRNA. Reverse transcriptase converts RNA → DNA (retroviruses only).</div>
+  </div>
+
+  <div class="quiz-box" id="fq3">
+    <h4>✎ Final Q3</h4>
+    <p>Vibrio cholerae, the causative agent of cholera, is best classified as:</p>
+    <div class="quiz-options">
+      <button class="quiz-opt" onclick="checkQ('fq3',this,false)"><span class="opt-letter">A</span> Gram-positive, rod-shaped (bacillus)</button>
+      <button class="quiz-opt" onclick="checkQ('fq3',this,true)"><span class="opt-letter">B</span> Gram-negative, comma-shaped (vibrio)</button>
+      <button class="quiz-opt" onclick="checkQ('fq3',this,false)"><span class="opt-letter">C</span> Gram-positive, spherical (coccus)</button>
+      <button class="quiz-opt" onclick="checkQ('fq3',this,false)"><span class="opt-letter">D</span> Gram-negative, spiral (spirillum)</button>
+    </div>
+    <div class="quiz-feedback" id="fq3-fb">Vibrio cholerae is Gram-negative and comma-shaped (the "vibrio" shape is named after this organism). It causes cholera through the production of cholera toxin, leading to massive water and electrolyte loss (rice-water diarrhoea).</div>
+  </div>
+
+  <div class="quiz-box" id="fq4">
+    <h4>✎ Final Q4</h4>
+    <p>Which of the following is the study of fungi called?</p>
+    <div class="quiz-options">
+      <button class="quiz-opt" onclick="checkQ('fq4',this,false)"><span class="opt-letter">A</span> Bacteriology</button>
+      <button class="quiz-opt" onclick="checkQ('fq4',this,false)"><span class="opt-letter">B</span> Virology</button>
+      <button class="quiz-opt" onclick="checkQ('fq4',this,true)"><span class="opt-letter">C</span> Mycology</button>
+      <button class="quiz-opt" onclick="checkQ('fq4',this,false)"><span class="opt-letter">D</span> Parasitology</button>
+    </div>
+    <div class="quiz-feedback" id="fq4-fb">Mycology (from Greek: mykes = fungus) is the study of fungi. Bacteriology = bacteria; Virology = viruses; Parasitology = parasites; Epidemiology = disease patterns in populations.</div>
+  </div>
+
+  <div class="quiz-box" id="fq5">
+    <h4>✎ Final Q5</h4>
+    <p>Bacteriophages infect bacteria. What is their shape most accurately described as?</p>
+    <div class="quiz-options">
+      <button class="quiz-opt" onclick="checkQ('fq5',this,false)"><span class="opt-letter">A</span> Icosahedral only</button>
+      <button class="quiz-opt" onclick="checkQ('fq5',this,false)"><span class="opt-letter">B</span> Helical only</button>
+      <button class="quiz-opt" onclick="checkQ('fq5',this,true)"><span class="opt-letter">C</span> Complex (radial/bilateral symmetry — head + tail structure)</button>
+      <button class="quiz-opt" onclick="checkQ('fq5',this,false)"><span class="opt-letter">D</span> Spherical with an envelope</button>
+    </div>
+    <div class="quiz-feedback" id="fq5-fb">T4 bacteriophages (the classic phage) have a COMPLEX structure: an icosahedral head (containing DNA) attached to a helical tail with tail fibres. This combined/radial symmetry is categorised as complex morphology — making them the most architecturally sophisticated viruses.</div>
+  </div>
+
+  <div class="quiz-box" id="fq6">
+    <h4>✎ Final Q6</h4>
+    <p>A student observes aseptate hyphae with sporangiospores in a bread sample. Which fungus is this most likely?</p>
+    <div class="quiz-options">
+      <button class="quiz-opt" onclick="checkQ('fq6',this,false)"><span class="opt-letter">A</span> Penicillium notatum</button>
+      <button class="quiz-opt" onclick="checkQ('fq6',this,false)"><span class="opt-letter">B</span> Candida albicans</button>
+      <button class="quiz-opt" onclick="checkQ('fq6',this,true)"><span class="opt-letter">C</span> Rhizopus stolonifer</button>
+      <button class="quiz-opt" onclick="checkQ('fq6',this,false)"><span class="opt-letter">D</span> Agaricus bisporus</button>
+    </div>
+    <div class="quiz-feedback" id="fq6-fb">Rhizopus stolonifer (bread mould, Zygomycota) has aseptate hyphae (no cross walls) and produces sporangiospores in spherical sporangia. Penicillium has septate hyphae and produces conidia. Candida is a yeast (unicellular). Agaricus is a mushroom (macrofungus).</div>
+  </div>
+
+  <div class="quiz-box" id="fq7">
+    <h4>✎ Final Q7</h4>
+    <p>Which of the following correctly pairs a bacterial disease with its causative organism?</p>
+    <div class="quiz-options">
+      <button class="quiz-opt" onclick="checkQ('fq7',this,false)"><span class="opt-letter">A</span> Typhoid fever — Vibrio cholerae</button>
+      <button class="quiz-opt" onclick="checkQ('fq7',this,false)"><span class="opt-letter">B</span> Tuberculosis — Bordetella pertussis</button>
+      <button class="quiz-opt" onclick="checkQ('fq7',this,true)"><span class="opt-letter">C</span> Tetanus — Clostridium tetani</button>
+      <button class="quiz-opt" onclick="checkQ('fq7',this,false)"><span class="opt-letter">D</span> Cholera — Salmonella typhi</button>
+    </div>
+    <div class="quiz-feedback" id="fq7-fb">Tetanus IS caused by Clostridium tetani ✓. Correct pairings: Cholera → Vibrio cholerae; Tuberculosis → Mycobacterium tuberculosis; Typhoid fever → Salmonella typhi; Whooping cough → Bordetella pertussis.</div>
+  </div>
+
+  <div class="quiz-box" id="fq8">
+    <h4>✎ Final Q8</h4>
+    <p>Fungi store carbohydrates as:</p>
+    <div class="quiz-options">
+      <button class="quiz-opt" onclick="checkQ('fq8',this,false)"><span class="opt-letter">A</span> Starch (like plants)</button>
+      <button class="quiz-opt" onclick="checkQ('fq8',this,false)"><span class="opt-letter">B</span> Cellulose</button>
+      <button class="quiz-opt" onclick="checkQ('fq8',this,true)"><span class="opt-letter">C</span> Glycogen (like animals)</button>
+      <button class="quiz-opt" onclick="checkQ('fq8',this,false)"><span class="opt-letter">D</span> Peptidoglycan</button>
+    </div>
+    <div class="quiz-feedback" id="fq8-fb">Fungi store food as GLYCOGEN — the same storage carbohydrate used by animals! This is one of several features suggesting fungi and animals share a more recent common ancestor than fungi and plants. Plants store starch; bacteria store various forms including poly-β-hydroxybutyrate.</div>
+  </div>
+
+  <div class="quiz-box" id="fq9">
+    <h4>✎ Final Q9</h4>
+    <p>Which mode of viral transmission is associated with Rabies virus?</p>
+    <div class="quiz-options">
+      <button class="quiz-opt" onclick="checkQ('fq9',this,false)"><span class="opt-letter">A</span> Airborne respiratory droplets</button>
+      <button class="quiz-opt" onclick="checkQ('fq9',this,false)"><span class="opt-letter">B</span> Fecal-oral route</button>
+      <button class="quiz-opt" onclick="checkQ('fq9',this,true)"><span class="opt-letter">C</span> Zoonosis — via bite from an infected animal</button>
+      <button class="quiz-opt" onclick="checkQ('fq9',this,false)"><span class="opt-letter">D</span> Blood transfusion</button>
+    </div>
+    <div class="quiz-feedback" id="fq9-fb">Rabies is a zoonosis transmitted via the bite (or scratch) of an infected animal — classically a dog, bat, fox, or raccoon. The virus travels along peripheral nerves to the brain. Once symptoms appear, it is almost universally fatal — making post-exposure prophylaxis (PEP) critical.</div>
+  </div>
+
+  <div class="quiz-box" id="fq10">
+    <h4>✎ Final Q10</h4>
+    <p>Mycobacterium tuberculosis (TB) is identified using which staining technique?</p>
+    <div class="quiz-options">
+      <button class="quiz-opt" onclick="checkQ('fq10',this,false)"><span class="opt-letter">A</span> Gram staining — appears Gram-positive</button>
+      <button class="quiz-opt" onclick="checkQ('fq10',this,false)"><span class="opt-letter">B</span> Gram staining — appears Gram-negative</button>
+      <button class="quiz-opt" onclick="checkQ('fq10',this,true)"><span class="opt-letter">C</span> Acid-fast staining (Ziehl-Neelsen) — appears bright red</button>
+      <button class="quiz-opt" onclick="checkQ('fq10',this,false)"><span class="opt-letter">D</span> Endospore staining — appears green</button>
+    </div>
+    <div class="quiz-feedback" id="fq10-fb">M. tuberculosis is ACID-FAST because its cell wall contains large amounts of mycolic acid (a waxy lipid) that resists decolourisation by acid-alcohol. In the Ziehl-Neelsen stain, acid-fast bacteria appear bright red/pink against a blue background. It is neither Gram-positive nor Gram-negative by the classical Gram stain.</div>
+  </div>
+</div>
+
+<!-- ══════ FINAL SCORE ══════ -->
+<div id="final-section">
+  <h2>Course Complete!</h2>
+  <div class="big-score" id="final-score">–</div>
+  <div id="grade-display"></div>
+  <p id="final-message" style="color:rgba(255,210,210,.85);max-width:500px;margin:12px auto;font-size:.95rem;"></p>
+  <button id="restart-btn" onclick="restartAll()">↺ Restart Course</button>
+</div>
+
+</div><!-- end #main -->
+
+<!-- TOOLTIP DOM -->
+<div id="kw-tooltip">
+  <div class="tt-header">
+    <span class="tt-word" id="tt-word"></span>
+    <span class="tt-tag" id="tt-tag"></span>
+  </div>
+  <div class="tt-body">
+    <p class="tt-def" id="tt-def"></p>
+    <p class="tt-example" id="tt-example" style="display:none"></p>
+    <p class="tt-mnemonic" id="tt-mnemonic" style="display:none"></p>
+  </div>
+</div>
+
+<script>
+/* ══ QUIZ LOGIC ══ */
+let totalQ = 0, correctQ = 0;
+const answered = {};
+
+function checkQ(id, btn, isCorrect) {
+  if (answered[id]) return;
+  answered[id] = true;
+  totalQ++;
+  if (isCorrect) correctQ++;
+  const allBtns = btn.closest('.quiz-options').querySelectorAll('.quiz-opt');
+  allBtns.forEach(b => { b.disabled = true; });
+  if (isCorrect) {
+    btn.classList.add('correct');
+  } else {
+    btn.classList.add('wrong');
+    allBtns.forEach(b => {
+      if (b.onclick && b.onclick.toString().includes('true')) b.classList.add('correct');
+    });
+  }
+  const fb = document.getElementById(id + '-fb');
+  if (fb) {
+    fb.classList.add('show');
+    fb.classList.add(isCorrect ? 'ok' : 'bad');
+  }
+  updateScore();
+}
+
+function updateScore() {
+  document.getElementById('score-txt').textContent = correctQ + ' / ' + totalQ;
+  const total = document.querySelectorAll('.quiz-box').length;
+  const pct = totalQ / total;
+  document.getElementById('progress-fill').style.width = (pct * 100) + '%';
+  document.getElementById('progress-label').textContent = totalQ + ' of ' + total + ' answered';
+
+  if (totalQ === total) {
+    const score = Math.round((correctQ / totalQ) * 100);
+    document.getElementById('final-score').textContent = score + '%';
+    let grade, colour, msg;
+    if (score >= 80) { grade = 'Distinction'; colour = '#4caf50'; msg = 'Excellent work! You have a strong command of all three microorganism groups. You are well prepared for your BIO 102 examination.'; }
+    else if (score >= 65) { grade = 'Credit'; colour = var_gold(); msg = 'Good understanding overall. Review any questions you missed — particularly the comparison table and staining techniques.'; }
+    else if (score >= 50) { grade = 'Pass'; colour = '#ff9800'; msg = 'You have the basic concepts but need more revision, especially on bacterial classification and fungal divisions.'; }
+    else { grade = 'Needs Revision'; colour = '#f44336'; msg = 'Go back through each section carefully. Focus on the master comparison table and the specific examples for each organism.'; }
+    document.getElementById('grade-display').innerHTML = '<span class="grade-badge" style="background:' + colour + '33;border:1.5px solid ' + colour + ';color:' + colour + '">' + grade + '</span>';
+    document.getElementById('final-message').textContent = msg;
+  }
+}
+
+function var_gold() { return '#c0784a'; }
+
+function restartAll() {
+  Object.keys(answered).forEach(k => delete answered[k]);
+  totalQ = 0; correctQ = 0;
+  document.querySelectorAll('.quiz-opt').forEach(b => {
+    b.disabled = false;
+    b.classList.remove('correct','wrong');
+  });
+  document.querySelectorAll('.quiz-feedback').forEach(f => {
+    f.classList.remove('show','ok','bad');
+  });
+  document.getElementById('score-txt').textContent = '0 / 0';
+  document.getElementById('progress-fill').style.width = '0%';
+  document.getElementById('progress-label').textContent = '0 questions answered';
+  document.getElementById('final-score').textContent = '–';
+  document.getElementById('grade-display').innerHTML = '';
+  document.getElementById('final-message').textContent = '';
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+/* ══ ACCORDION ══ */
+function toggleAcc(id) {
+  const item = document.getElementById(id);
+  const body = item.querySelector('.acc-body');
+  const isOpen = item.classList.contains('open');
+  document.querySelectorAll('.acc-item').forEach(i => {
+    i.classList.remove('open');
+    i.querySelector('.acc-body').style.maxHeight = '0';
+  });
+  if (!isOpen) {
+    item.classList.add('open');
+    body.style.maxHeight = body.scrollHeight + 'px';
+  }
+}
+
+/* ══ SCROLL OBSERVER ══ */
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) e.target.classList.add('visible');
+  });
+}, { threshold: 0.08 });
+document.querySelectorAll('.section').forEach(s => observer.observe(s));
+
+/* ══ ACTIVE NAV ══ */
+const sections = document.querySelectorAll('.section');
+const navItems = document.querySelectorAll('.nav-item');
+window.addEventListener('scroll', () => {
+  let cur = '';
+  sections.forEach(s => {
+    if (window.scrollY >= s.offsetTop - 200) cur = s.id;
+  });
+  navItems.forEach(n => {
+    n.classList.toggle('active', n.getAttribute('href') === '#' + cur);
+  });
+}, { passive: true });
+
+/* ══ KEYWORD TOOLTIP DATA ══ */
+const KW_DATA = {
+  "Genetic Material": { cat: "Virology", def: "The nucleic acid (DNA or RNA, never both) that encodes the viral genome. Directs production of new viral particles inside the host cell.", example: "HIV: ssRNA(+) · Influenza: ssRNA(-), segmented" },
+  "capsid": { cat: "Virology", def: "The protein coat surrounding viral genetic material, assembled from protein subunits called capsomeres. Determines viral shape and protects the genome.", example: "Icosahedral capsid: Adenovirus · Helical capsid: TMV" },
+  "Capsid": { cat: "Virology", def: "The protein coat surrounding viral genetic material, assembled from protein subunits called capsomeres.", example: "Poliovirus: naked icosahedral capsid" },
+  "capsomeres": { cat: "Virology", def: "Individual protein subunits that assemble to form the viral capsid. Their arrangement determines the overall shape of the virus." },
+  "envelope": { cat: "Virology", def: "A lipoprotein bilayer surrounding the capsid of some viruses, derived from the host cell membrane. Contains viral glycoproteins (spikes) used for receptor binding.", example: "Enveloped: HIV, Influenza · Non-enveloped (naked): Poliovirus, Adenovirus" },
+  "Envelope": { cat: "Virology", def: "Lipoprotein layer around some viral capsids, derived from host cell membrane. Sensitive to detergents and drying.", example: "HIV envelope contains gp120 and gp41 glycoproteins" },
+  "binary fission": { cat: "Bacteriology", def: "Asexual reproduction in bacteria: the cell replicates its DNA, grows, and splits into two identical daughter cells. Under ideal conditions can occur every 20 minutes.", example: "E. coli generation time: ~20 min → 1 bacterium → 1 billion in ~10 hrs" },
+  "Binary fission": { cat: "Bacteriology", def: "Primary bacterial reproduction: cell grows → DNA replicates → septum forms → splits into 2 identical daughter cells.", example: "Basis of exponential bacterial growth" },
+  "Peptidoglycan": { cat: "Bacteriology", def: "The unique polymer making up bacterial cell walls. A mesh-like layer of sugars (NAG and NAM) cross-linked by short peptides. Target of penicillin-class antibiotics.", example: "Thick (Gram+) vs thin (Gram−) → determines Gram stain result" },
+  "Gram Staining": { cat: "Bacteriology", def: "4-step technique: Crystal violet → Iodine → Alcohol wash → Safranin. Gram+ = purple (thick peptidoglycan); Gram− = pink (thin peptidoglycan + outer membrane).", example: "Staphylococcus: Gram+ purple · E. coli: Gram− pink" },
+  "Prokaryotic": { cat: "Cell Biology", def: "Having no true membrane-bound nucleus. Genetic material lies in the cytoplasm in a region called the nucleoid. Bacteria and Archaea are prokaryotic.", example: "All bacteria are prokaryotes; fungi and humans are eukaryotes" },
+  "Eukaryotic": { cat: "Cell Biology", def: "Having a true membrane-bound nucleus and membrane-bound organelles (mitochondria, ER, Golgi). Includes fungi, plants, animals, and protists.", example: "Fungi: eukaryotic but NOT photosynthetic" },
+  "heterotrophic": { cat: "Nutrition", def: "Obtaining energy and carbon from pre-formed organic molecules — cannot produce own food. Opposite of autotrophic.", example: "Fungi, animals, most bacteria are heterotrophic" },
+  "Chitin": { cat: "Mycology", def: "Tough structural polysaccharide making up fungal cell walls (also found in insect exoskeletons). Target of antifungal drugs like nikkomycin. Absent in animals and plants.", example: "Chitin distinguishes fungi from plants (cellulose) and bacteria (peptidoglycan)" },
+  "Hyphae": { cat: "Mycology", def: "Long, thread-like filamentous structures that make up the body (thallus) of most fungi. Can be septate (with cross walls) or aseptate (coenocytic).", example: "Septate: Penicillium, Aspergillus · Aseptate: Rhizopus, Mucor" },
+  "Spores": { cat: "Mycology", def: "Reproductive units of fungi (and some bacteria). Can be sexual or asexual, and are adapted for long-distance dispersal and surviving harsh conditions.", example: "Sporangiospores (Rhizopus) · Ascospores (Penicillium) · Basidiospores (mushrooms)" },
+};
+
+/* ══ TOOLTIP LOGIC ══ */
+const tooltip = document.createElement('div');
+tooltip.id = 'kw-tooltip';
+tooltip.innerHTML = `<div class="tt-header"><span class="tt-word" id="tt-word"></span><span class="tt-tag" id="tt-tag"></span></div><div class="tt-body"><p class="tt-def" id="tt-def"></p><p class="tt-example" id="tt-example" style="display:none"></p><p class="tt-mnemonic" id="tt-mnemonic" style="display:none"></p></div>`;
+document.body.appendChild(tooltip);
+let hideTimer = null;
+
+function showTooltip(e, kwEl) {
+  clearTimeout(hideTimer);
+  const rawKey = (kwEl.dataset.kw || kwEl.textContent).trim();
+  let data = KW_DATA[rawKey];
+  if (!data) {
+    const lk = rawKey.toLowerCase();
+    const entry = Object.entries(KW_DATA).find(([k]) => k.toLowerCase() === lk);
+    if (entry) data = entry[1];
+  }
+  if (!data) {
+    const lk = rawKey.toLowerCase();
+    const entry = Object.entries(KW_DATA).find(([k]) => lk.startsWith(k.toLowerCase()) || k.toLowerCase().startsWith(lk));
+    if (entry) data = entry[1];
+  }
+  if (!data) return;
+  document.getElementById('tt-word').textContent = rawKey;
+  document.getElementById('tt-tag').textContent = data.cat || '';
+  document.getElementById('tt-def').innerHTML = data.def;
+  const exEl = document.getElementById('tt-example');
+  if (data.example) { exEl.textContent = '▶ ' + data.example; exEl.style.display = 'block'; }
+  else exEl.style.display = 'none';
+  const mnEl = document.getElementById('tt-mnemonic');
+  if (data.mnemonic) { mnEl.textContent = '💡 ' + data.mnemonic; mnEl.style.display = 'block'; }
+  else mnEl.style.display = 'none';
+  positionTooltip(e);
+  tooltip.classList.add('visible');
+}
+
+function positionTooltip(e) {
+  const tw = 340, margin = 12;
+  let x = e.clientX + margin, y = e.clientY + margin;
+  if (x + tw + margin > window.innerWidth) x = e.clientX - tw - margin;
+  if (y + tooltip.offsetHeight + margin > window.innerHeight) y = e.clientY - tooltip.offsetHeight - margin;
+  tooltip.style.left = Math.max(0, x) + 'px';
+  tooltip.style.top = Math.max(0, y) + 'px';
+}
+
+function hideTooltip() {
+  hideTimer = setTimeout(() => tooltip.classList.remove('visible'), 180);
+}
+
+document.addEventListener('mouseover', e => { const kw = e.target.closest('kw'); if (kw) showTooltip(e, kw); });
+document.addEventListener('mouseout', e => { if (e.target.closest('kw')) hideTooltip(); });
+document.addEventListener('mousemove', e => { if (tooltip.classList.contains('visible') && e.target.closest('kw')) positionTooltip(e); });
+</script>
+</body>
+</html>

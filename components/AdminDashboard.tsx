@@ -6,6 +6,7 @@ import { collection, addDoc, getDocs, getDoc, deleteDoc, doc, query, updateDoc, 
 import { GoogleGenAI } from '@google/genai';
 import ScientificText from './ScientificText';
 import AdminAnalytics from './AdminAnalytics';
+import AdminVideoManager from './AdminVideoManager';
 import logo from '../assets/logo.png';
 import { toast } from './ui/Toast';
 import { confirmDialog } from './ui/ConfirmDialog';
@@ -19,7 +20,7 @@ interface AdminDashboardProps {
   onOpenCourses?: () => void;
 }
 
-type AdminTab = 'questions' | 'create-test' | 'tests' | 'import' | 'analytics' | 'attendance' | 'license-keys';
+type AdminTab = 'questions' | 'create-test' | 'tests' | 'import' | 'analytics' | 'videos' | 'attendance' | 'license-keys';
 type StagedQuestion = Omit<Question, 'id' | 'createdAt' | 'createdBy'> & { selected?: boolean };
 type EditableCsvQuestion = StagedQuestion & { id: string };
 type EditableBrainstormWindow = { id: string; label: string; openTime: string; closeTime: string };
@@ -2145,6 +2146,7 @@ Rules:
 
       <nav className="flex bg-white px-6 border-b border-slate-100 shrink-0 overflow-x-auto no-scrollbar">
         <button onClick={() => setActiveTab('analytics')} className={`px-8 py-4 text-xs font-bold uppercase tracking-widest transition-all ${activeTab === 'analytics' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50' : 'text-slate-400'}`}>Analytics</button>
+        <button onClick={() => setActiveTab('videos')} className={`px-8 py-4 text-xs font-bold uppercase tracking-widest transition-all ${activeTab === 'videos' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50' : 'text-slate-400'}`}>Videos</button>
         <button onClick={() => setActiveTab('questions')} className={`px-8 py-4 text-xs font-bold uppercase tracking-widest transition-all ${activeTab === 'questions' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50' : 'text-slate-400'}`}>Question Bank</button>
         <button onClick={() => setActiveTab('create-test')} className={`px-8 py-4 text-xs font-bold uppercase tracking-widest transition-all ${activeTab === 'create-test' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50' : 'text-slate-400'}`}>Create Test</button>
         <button onClick={() => setActiveTab('tests')} className={`px-8 py-4 text-xs font-bold uppercase tracking-widest transition-all ${activeTab === 'tests' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50' : 'text-slate-400'}`}>Tests</button>
@@ -2164,6 +2166,8 @@ Rules:
         )}
 
         {activeTab === 'analytics' && <AdminAnalytics />}
+
+        {activeTab === 'videos' && <AdminVideoManager user={user} />}
 
         {activeTab === 'questions' && (
           <div className="space-y-6">
