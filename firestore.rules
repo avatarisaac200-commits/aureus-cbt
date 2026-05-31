@@ -29,6 +29,82 @@ service cloud.firestore {
       return request.resource.data.keys().hasOnly(allowed);
     }
 
+    function isValidPercent(value) {
+      return value is number && value >= 0 && value <= 100;
+    }
+
+    function validTestLeaderboardPublicRow() {
+      return hasOnly([
+          'userId',
+          'userName',
+          'testId',
+          'testName',
+          'score',
+          'maxScore',
+          'scorePercent',
+          'completedAt',
+          'status'
+        ]) &&
+        request.resource.data.keys().hasAll([
+          'userId',
+          'userName',
+          'testId',
+          'testName',
+          'score',
+          'maxScore',
+          'scorePercent',
+          'completedAt',
+          'status'
+        ]) &&
+        request.resource.data.userId == request.auth.uid &&
+        request.resource.data.userId is string &&
+        request.resource.data.userName is string &&
+        request.resource.data.testId is string &&
+        request.resource.data.testName is string &&
+        request.resource.data.score is number &&
+        request.resource.data.maxScore is number &&
+        request.resource.data.score >= 0 &&
+        request.resource.data.maxScore >= 0 &&
+        isValidPercent(request.resource.data.scorePercent) &&
+        request.resource.data.completedAt is string &&
+        request.resource.data.status in ['completed', 'abandoned', 'auto-submitted'];
+    }
+
+    function validOwnLeaderboardPublicRow(rowId) {
+      return rowId == request.auth.uid &&
+        hasOnly([
+          'userId',
+          'userName',
+          'attempts',
+          'averagePercent',
+          'bestPercent',
+          'lastCompletedAt',
+          'sortKey',
+          'updatedAt'
+        ]) &&
+        request.resource.data.keys().hasAll([
+          'userId',
+          'userName',
+          'attempts',
+          'averagePercent',
+          'bestPercent',
+          'lastCompletedAt',
+          'sortKey',
+          'updatedAt'
+        ]) &&
+        request.resource.data.userId == request.auth.uid &&
+        request.resource.data.userId is string &&
+        request.resource.data.userName is string &&
+        request.resource.data.attempts is number &&
+        request.resource.data.attempts >= 1 &&
+        request.resource.data.attempts <= 1000 &&
+        isValidPercent(request.resource.data.averagePercent) &&
+        isValidPercent(request.resource.data.bestPercent) &&
+        request.resource.data.lastCompletedAt is string &&
+        request.resource.data.sortKey is string &&
+        request.resource.data.updatedAt is string;
+    }
+
     match /users/{userId} {
       allow get: if isOwner(userId) || isAdmin();
       allow list: if isRootAdmin();
@@ -80,7 +156,18 @@ service cloud.firestore {
 
     match /leaderboardPublic/{rowId} {
       allow get, list: if signedIn();
-      allow create, update, delete: if isAdmin();
+      allow create, update: if isAdmin() || (signedIn() && validOwnLeaderboardPublicRow(rowId));
+      allow delete: if isAdmin();
+    }
+
+    match /testLeaderboardPublic/{rowId} {
+      allow get, list: if signedIn();
+      allow create: if
+        isAdmin() ||
+        (signedIn() && validTestLeaderboardPublicRow());
+      allow update: if isAdmin() ||
+        (signedIn() && resource.data.userId == request.auth.uid && validTestLeaderboardPublicRow());
+      allow delete: if isAdmin();
     }
 
     match /testAttempts/{attemptId} {

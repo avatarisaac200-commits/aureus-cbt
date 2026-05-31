@@ -63,6 +63,18 @@ interface RankRow {
   lastCompletedAt?: string;
 }
 
+interface TestLeaderboardRow {
+  id: string;
+  userId: string;
+  userName: string;
+  testId: string;
+  testName: string;
+  score: number;
+  maxScore: number;
+  scorePercent: number;
+  completedAt: string;
+}
+
 interface DailyFactEntry {
   id: string;
   text: string;
@@ -110,26 +122,26 @@ const getDailyFactDismissedKey = (userId: string, dateKey: string) => `${DAILY_F
 const getDailyFactNotifiedKey = (userId: string, dateKey: string) => `${DAILY_FACT_NOTIFIED_PREFIX}:${userId}:${dateKey}`;
 
 const LeaderboardModal: React.FC<{ test: MockTest, onClose: () => void }> = ({ test, onClose }) => {
-  const [topScores, setTopScores] = useState<ExamResult[]>([]);
+  const [topScores, setTopScores] = useState<TestLeaderboardRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     setLoading(true);
     setLoadError(null);
-    const q = query(collection(db, 'results'), where('testId', '==', test.id), limit(1000));
+    const q = query(collection(db, 'testLeaderboardPublic'), where('testId', '==', test.id), limit(1000));
     const unsub = onSnapshot(q, (snap) => {
       const results = snap.docs
-        .map(d => ({ ...d.data(), id: d.id } as ExamResult))
+        .map(d => ({ ...d.data(), id: d.id } as TestLeaderboardRow))
         .sort((a, b) => new Date(a.completedAt).getTime() - new Date(b.completedAt).getTime());
 
-      const firstAttempts: Record<string, ExamResult> = {};
+      const firstAttempts: Record<string, TestLeaderboardRow> = {};
       results.forEach(res => {
         if (!firstAttempts[res.userId]) firstAttempts[res.userId] = res;
       });
 
       const sorted = Object.values(firstAttempts)
-        .sort((a, b) => b.score - a.score)
+        .sort((a, b) => b.scorePercent - a.scorePercent)
         .slice(0, 10);
 
       setTopScores(sorted);
@@ -169,7 +181,7 @@ const LeaderboardModal: React.FC<{ test: MockTest, onClose: () => void }> = ({ t
                 <div key={res.id} className="flex items-center gap-4 p-5 rounded-2xl bg-slate-50 border border-slate-100 shadow-sm">
                   <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black ${i === 0 ? 'bg-amber-500 text-slate-950 shadow-md' : 'bg-slate-100 text-slate-400'}`}>{i + 1}</div>
                   <div className="flex-1 text-sm font-bold text-slate-900 truncate uppercase">{res.userName}</div>
-                  <div className="text-xl font-black text-slate-950">{Math.round((res.score / (res.maxScore || 1)) * 100)}%</div>
+                  <div className="text-xl font-black text-slate-950">{Math.round(res.scorePercent)}%</div>
                 </div>
               ))}
             </div>
@@ -640,10 +652,10 @@ const Dashboard: React.FC<DashboardProps> = ({
       const counts: Record<string, number> = {};
       for (const test of tests) {
         try {
-          const q = query(collection(db, 'results'), where('testId', '==', test.id), limit(1000));
+          const q = query(collection(db, 'testLeaderboardPublic'), where('testId', '==', test.id), limit(1000));
           const snap = await getDocs(q);
           const unique = new Set<string>();
-          snap.docs.forEach(d => unique.add((d.data() as ExamResult).userId));
+          snap.docs.forEach(d => unique.add((d.data() as TestLeaderboardRow).userId));
           counts[test.id] = unique.size;
         } catch (err: any) {
           console.error('Count error:', err);

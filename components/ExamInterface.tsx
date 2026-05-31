@@ -2,12 +2,13 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { MockTest, Question, ExamResult, User, TestSection } from '../types';
 import { db } from '../firebase';
-import { collection, getDocs, addDoc, query, where, documentId } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+import { collection, getDocs, addDoc, query, where, documentId, doc, setDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import Calculator from './Calculator';
 import ScientificText from './ScientificText';
 import logo from '../assets/logo.png';
 import { getOrCreateAiExplanation } from './aiExplanationService';
 import { confirmDialog } from './ui/ConfirmDialog';
+import { refreshOwnLeaderboardPublic, toPublicLeaderboardRow } from '../lib/leaderboard';
 
 interface ExamInterfaceProps {
   test: MockTest;
@@ -184,6 +185,8 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
 
     try {
       const docRef = await addDoc(collection(db, 'results'), result);
+      await setDoc(doc(db, 'testLeaderboardPublic', docRef.id), toPublicLeaderboardRow(result)).catch(() => undefined);
+      await refreshOwnLeaderboardPublic(user.id, { ...result, id: docRef.id }).catch(() => undefined);
       onFinish({ ...result, id: docRef.id } as ExamResult);
     } catch (e) {
       queuePendingResult(result);

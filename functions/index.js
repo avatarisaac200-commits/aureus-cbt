@@ -57,6 +57,22 @@ const toLeaderboardSortKey = ({ averagePercent, bestPercent, attempts, lastCompl
   ].join(':');
 };
 
+const toTestLeaderboardPublicRow = (row) => {
+  const score = Number(row?.score || 0);
+  const maxScore = Number(row?.maxScore || 0);
+  return {
+    userId: String(row?.userId || ''),
+    userName: typeof row?.userName === 'string' && row.userName.trim() ? row.userName.trim() : 'Unknown User',
+    testId: String(row?.testId || ''),
+    testName: typeof row?.testName === 'string' ? row.testName : '',
+    score,
+    maxScore,
+    scorePercent: maxScore > 0 ? toFixedTwo((score / maxScore) * 100) : 0,
+    completedAt: typeof row?.completedAt === 'string' ? row.completedAt : '',
+    status: typeof row?.status === 'string' ? row.status : 'completed'
+  };
+};
+
 const recomputeCourseAnalytics = async (courseId) => {
   if (!courseId || typeof courseId !== 'string') return;
 
@@ -160,11 +176,19 @@ exports.syncLeaderboardPublicOnResultWrite = onDocumentWritten('results/{resultI
     const before = event.data?.before?.data();
     const after = event.data?.after?.data();
     const affectedUserIds = new Set();
+    const testLeaderboardRef = db.collection('testLeaderboardPublic').doc(event.params.resultId);
 
     if (before?.userId) affectedUserIds.add(String(before.userId));
     if (after?.userId) affectedUserIds.add(String(after.userId));
 
-    await Promise.all(Array.from(affectedUserIds).map((uid) => recomputeUserLeaderboard(uid)));
+    const writes = Array.from(affectedUserIds).map((uid) => recomputeUserLeaderboard(uid));
+    if (after?.userId && after?.testId) {
+      writes.push(testLeaderboardRef.set(toTestLeaderboardPublicRow(after), { merge: true }));
+    } else {
+      writes.push(testLeaderboardRef.delete().catch(() => undefined));
+    }
+
+    await Promise.all(writes);
   } catch (err) {
     logger.error('syncLeaderboardPublicOnResultWrite failed', err);
   }

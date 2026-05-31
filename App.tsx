@@ -3,12 +3,13 @@ import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { User, MockTest, ExamResult, Question, TestSection, TestAttempt, DifficultyLevel, SharedQuiz, ViewState, BroadcastNotification, CustomThemeConfig, CommunityProfile } from './types';
 import { auth, db } from './firebase';
 import { onAuthStateChanged, sendEmailVerification } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
-import { doc, getDoc, getDocFromServer, collection, getDocs, query, where, limit, documentId, updateDoc, addDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+import { doc, getDoc, getDocFromServer, collection, getDocs, query, where, limit, documentId, updateDoc, addDoc, onSnapshot, setDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import logo from './assets/logo.png';
 import { AppTheme } from './theme';
 import { clearGlassAccent, syncGlassAccent } from './glassAccent';
 import { toast } from './components/ui/Toast';
 import { ATTENDANCE_ROUTE, BLACKLIST_ROUTE } from './brainstorm';
+import { refreshOwnLeaderboardPublic, toPublicLeaderboardRow } from './lib/leaderboard';
 
 const Auth = lazy(() => import('./components/Auth'));
 const Dashboard = lazy(() => import('./components/Dashboard'));
@@ -1203,7 +1204,9 @@ const App: React.FC = () => {
       const remaining: Array<{ payload: any; createdAt: string }> = [];
       for (const item of queue) {
         try {
-          await addDoc(collection(db, 'results'), item.payload);
+          const docRef = await addDoc(collection(db, 'results'), item.payload);
+          await setDoc(doc(db, 'testLeaderboardPublic', docRef.id), toPublicLeaderboardRow(item.payload)).catch(() => undefined);
+          await refreshOwnLeaderboardPublic(currentUser.id, { ...item.payload, id: docRef.id }).catch(() => undefined);
         } catch {
           remaining.push(item);
         }

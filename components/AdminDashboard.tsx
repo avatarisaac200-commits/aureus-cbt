@@ -906,11 +906,27 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
       });
 
       const existingSnap = await getDocs(query(collection(db, 'leaderboardPublic'), limit(3000)));
+      const existingTestLeaderboardSnap = await getDocs(query(collection(db, 'testLeaderboardPublic'), limit(3000)));
       let batch = writeBatch(db);
       let writes = 0;
 
       for (const d of existingSnap.docs) {
         batch.delete(doc(db, 'leaderboardPublic', d.id));
+        writes++;
+        if (writes >= 450) {
+          await batch.commit();
+          batch = writeBatch(db);
+          writes = 0;
+        }
+      }
+      if (writes > 0) {
+        await batch.commit();
+        batch = writeBatch(db);
+        writes = 0;
+      }
+
+      for (const d of existingTestLeaderboardSnap.docs) {
+        batch.delete(doc(db, 'testLeaderboardPublic', d.id));
         writes++;
         if (writes >= 450) {
           await batch.commit();
@@ -945,11 +961,35 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
         }
       }
 
+      for (const d of resultsSnap.docs) {
+        const row = d.data() as ExamResult;
+        const maxScore = Number(row.maxScore || 0);
+        const score = Number(row.score || 0);
+        if (!row.userId || !row.testId || maxScore <= 0) continue;
+        batch.set(doc(db, 'testLeaderboardPublic', d.id), {
+          userId: row.userId,
+          userName: row.userName || 'Unknown User',
+          testId: row.testId,
+          testName: row.testName || '',
+          score,
+          maxScore,
+          scorePercent: Number(clampPercent((score / maxScore) * 100).toFixed(2)),
+          completedAt: row.completedAt,
+          status: row.status
+        });
+        writes++;
+        if (writes >= 450) {
+          await batch.commit();
+          batch = writeBatch(db);
+          writes = 0;
+        }
+      }
+
       if (writes > 0) {
         await batch.commit();
       }
 
-      notify(`leaderboardPublic rebuilt for ${Object.keys(buckets).length} user(s).`);
+      notify(`Leaderboards rebuilt for ${Object.keys(buckets).length} user(s).`);
     } catch (err: any) {
       notify('Leaderboard rebuild failed. ' + (err?.message || ''));
     } finally {

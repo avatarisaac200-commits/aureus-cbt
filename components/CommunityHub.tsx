@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { User, CommunityProfile, DirectConversation, DirectMessage, ForumChannel, ForumReply, ForumThread, FriendRequest, Friendship } from '../types';
 import { db } from '../firebase';
-import { addDoc, collection, deleteDoc, doc, getDoc, increment, limit, onSnapshot, orderBy, query, setDoc, updateDoc, where } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+import { addDoc, collection, deleteDoc, doc, increment, limit, onSnapshot, orderBy, query, setDoc, updateDoc, where } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import { toast } from './ui/Toast';
 import { confirmDialog } from './ui/ConfirmDialog';
 
@@ -287,27 +287,28 @@ const CommunityHub: React.FC<CommunityHubProps> = ({ user, isReadOnly = false, o
   const ensureConversation = async (profile: CommunityProfile, friendship?: Friendship | null) => {
     const conversationId = buildPairId(user.id, profile.userId);
     const conversationRef = doc(db, 'directConversations', conversationId);
-    const existing = await getDoc(conversationRef);
-    if (!existing.exists()) {
-      const now = new Date().toISOString();
-      await setDoc(conversationRef, {
-        participantIds: [user.id, profile.userId],
-        participantNames: [user.name, profile.displayName],
-        participantTitles: [user.title || 'Student', profile.title || 'Student'],
-        participantAvatarUrls: [user.avatarUrl || '', profile.avatarUrl || ''],
-        participantProfileIds: [user.id, profile.userId],
-        friendshipId: friendship?.id || buildPairId(user.id, profile.userId),
-        createdAt: now,
-        updatedAt: now,
-        lastMessageText: '',
-        lastMessageAt: '',
-        lastMessageSenderId: '',
-        lastReadAtBy: {
-          [user.id]: now,
-          [profile.userId]: now
-        }
-      });
-    }
+    const now = new Date().toISOString();
+    const conversation: DirectConversation = {
+      id: conversationId,
+      participantIds: [user.id, profile.userId],
+      participantNames: [user.name, profile.displayName],
+      participantTitles: [user.title || 'Student', profile.title || 'Student'],
+      participantAvatarUrls: [user.avatarUrl || '', profile.avatarUrl || ''],
+      participantProfileIds: [user.id, profile.userId],
+      friendshipId: friendship?.id || buildPairId(user.id, profile.userId),
+      createdAt: now,
+      updatedAt: now,
+      lastReadAtBy: {
+        [user.id]: now,
+        [profile.userId]: now
+      }
+    };
+    await setDoc(conversationRef, conversation, { merge: true });
+    setConversations((current) => (
+      current.some((item) => item.id === conversationId)
+        ? current.map((item) => item.id === conversationId ? { ...conversation, ...item } : item)
+        : [conversation, ...current]
+    ));
     setMode('messages');
     setSelectedConversationId(conversationId);
   };
@@ -318,7 +319,11 @@ const CommunityHub: React.FC<CommunityHubProps> = ({ user, isReadOnly = false, o
       toast.warning('Friends only', 'Send or accept a friend request before starting a private chat.');
       return;
     }
-    await ensureConversation(profile, friendship);
+    try {
+      await ensureConversation(profile, friendship);
+    } catch (error: any) {
+      toast.error('Chat unavailable', error?.message || 'Could not open this conversation.');
+    }
   };
 
   const acceptFriendRequest = async (request: FriendRequest) => {
