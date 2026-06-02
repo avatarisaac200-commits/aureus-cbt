@@ -23,6 +23,10 @@ interface AdminDashboardProps {
 type AdminTab = 'questions' | 'create-test' | 'tests' | 'import' | 'analytics' | 'videos' | 'attendance' | 'license-keys';
 type StagedQuestion = Omit<Question, 'id' | 'createdAt' | 'createdBy'> & { selected?: boolean };
 type EditableCsvQuestion = StagedQuestion & { id: string };
+type EditingMediaTarget =
+  | { kind: 'question-form' }
+  | { kind: 'csv-test-question'; id: string }
+  | { kind: 'test-question'; id: string };
 type EditableBrainstormWindow = { id: string; label: string; openTime: string; closeTime: string };
 
 const normalizeText = (text: string) => text.toLowerCase().trim().replace(/\s+/g, ' ');
@@ -178,6 +182,25 @@ const buildCsvBundles = (
     });
   return bundles;
 };
+const toEditableQuestionRow = (q: Question): EditableCsvQuestion => ({
+  id: q.id,
+  subject: q.subject || 'General',
+  topic: q.topic || 'General',
+  text: q.text || '',
+  options: Array.isArray(q.options) ? q.options.slice(0, 4) : ['', '', '', ''],
+  correctAnswerIndex: Number.isFinite(Number(q.correctAnswerIndex)) ? Number(q.correctAnswerIndex) : 0,
+  explanation: q.explanation || '',
+  difficulty: normalizeDifficulty(String(q.difficulty || DEFAULT_DIFFICULTY)),
+  tags: Array.isArray(q.tags) ? q.tags : [],
+  source: q.source || '',
+  year: q.year ?? null,
+  examType: q.examType || '',
+  imageUrl: q.imageUrl || '',
+  imageAlt: q.imageAlt || '',
+  status: q.status || 'approved',
+  isActive: q.isActive !== false,
+  normalizedText: q.normalizedText || normalizeText(q.text || '')
+});
 const toBoolean = (value: string, fallback = true) => {
   const v = value.trim().toLowerCase();
   if (!v) return fallback;
@@ -550,6 +573,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
   const [editTestPasswordEnabled, setEditTestPasswordEnabled] = useState(false);
   const [editTestPassword, setEditTestPassword] = useState('');
   const [editTestArchived, setEditTestArchived] = useState(false);
+  const [editingTestQuestions, setEditingTestQuestions] = useState<EditableCsvQuestion[]>([]);
+  const [editingTestQuestionsLoading, setEditingTestQuestionsLoading] = useState(false);
   const [editingCsvQuestions, setEditingCsvQuestions] = useState<EditableCsvQuestion[]>([]);
   const [editingCsvLoading, setEditingCsvLoading] = useState(false);
   const [editingCsvQuestionCount, setEditingCsvQuestionCount] = useState(20);
@@ -601,6 +626,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
   const [qImageUrl, setQImageUrl] = useState('');
   const [qImageAlt, setQImageAlt] = useState('');
   const [qIsActive, setQIsActive] = useState(true);
+  const [editingMediaTarget, setEditingMediaTarget] = useState<EditingMediaTarget>({ kind: 'question-form' });
 
   // AI Import State
   const [importStatus, setImportStatus] = useState<'idle' | 'parsing' | 'review'>('idle');
@@ -627,14 +653,29 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
       if (data.type !== 'aureus-media-selected' || typeof data.url !== 'string') return;
       const imageUrl = sanitizeOptionalUrl(data.url);
       if (!imageUrl) return;
-      setQImageUrl(imageUrl);
-      setQImageAlt((prev) => prev || String(data.name || '').replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' '));
+      const imageAlt = String(data.name || '').replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ');
+      if (editingMediaTarget.kind === 'csv-test-question') {
+        setEditingCsvQuestions(prev => prev.map(item => item.id === editingMediaTarget.id ? {
+          ...item,
+          imageUrl,
+          imageAlt: item.imageAlt || imageAlt
+        } : item));
+      } else if (editingMediaTarget.kind === 'test-question') {
+        setEditingTestQuestions(prev => prev.map(item => item.id === editingMediaTarget.id ? {
+          ...item,
+          imageUrl,
+          imageAlt: item.imageAlt || imageAlt
+        } : item));
+      } else {
+        setQImageUrl(imageUrl);
+        setQImageAlt((prev) => prev || imageAlt);
+      }
       notify('Image selected.');
     };
 
     window.addEventListener('message', handleMediaPickerMessage);
     return () => window.removeEventListener('message', handleMediaPickerMessage);
-  }, []);
+  }, [editingMediaTarget]);
 
   const groupedQuestions = useMemo(() => {
     const groups: Record<string, Question[]> = {};
@@ -1354,7 +1395,8 @@ Rules:
     setQIsActive(true);
   };
 
-  const openMediaPicker = () => {
+  const openMediaPicker = (target: EditingMediaTarget = { kind: 'question-form' }) => {
+    setEditingMediaTarget(target);
     const popup = window.open(MEDIA_PICKER_URL, 'aureus-media-picker', 'width=1100,height=760,noopener=false,noreferrer=false');
     if (!popup) {
       notify('Allow popups to open the media picker.');
@@ -1744,9 +1786,37 @@ Rules:
     setEditingCsvBundleEnabled(Boolean((test as any).csvBundlesEnabled));
     setEditingCsvBundleCategoryField(((test as any).csvBundleCategoryField || 'subject') as CsvBundleCategoryField);
     setEditingCsvBundleSize(Math.max(1, Number((test as any).csvBundleSize || 100)));
+    setEditingTestQuestions([]);
 
     if ((test.generationMode || 'fixed') !== 'csv-dynamic') {
       setEditingCsvQuestions([]);
+      setEditingTestQuestionsLoading(true);
+      try {
+        const ids = Array.from(new Set((test.sections || []).flatMap(section => section.questionIds || [])));
+        if (ids.length === 0) {
+          setEditingTestQuestions([]);
+          return;
+        }
+        const map: Record<string, Question> = {};
+        for (const chunk of chunkArray(ids, 10)) {
+          const qSnap = await getDocs(query(collection(db, 'questions'), where(documentId(), 'in', chunk)));
+          qSnap.docs.forEach((d) => {
+            map[d.id] = { ...d.data(), id: d.id } as Question;
+          });
+        }
+
+        const rows = ids.map((id) => map[id]).filter(Boolean).map(toEditableQuestionRow);
+        const missing = ids.length - rows.length;
+        if (missing > 0) {
+          notify(`Loaded ${rows.length} test question(s). ${missing} question(s) were missing from the bank.`);
+        }
+        setEditingTestQuestions(rows);
+      } catch (err: any) {
+        notify('Could not load test questions for image editing. ' + (err?.message || ''));
+        setEditingTestQuestions([]);
+      } finally {
+        setEditingTestQuestionsLoading(false);
+      }
       return;
     }
 
@@ -1766,28 +1836,7 @@ Rules:
         });
       }
 
-      const rows: EditableCsvQuestion[] = ids
-        .map((id) => map[id])
-        .filter(Boolean)
-        .map((q) => ({
-          id: q.id,
-          subject: q.subject || 'General',
-          topic: q.topic || 'General',
-          text: q.text || '',
-          options: Array.isArray(q.options) ? q.options.slice(0, 4) : ['', '', '', ''],
-          correctAnswerIndex: Number.isFinite(Number(q.correctAnswerIndex)) ? Number(q.correctAnswerIndex) : 0,
-          explanation: q.explanation || '',
-          difficulty: normalizeDifficulty(String(q.difficulty || DEFAULT_DIFFICULTY)),
-          tags: Array.isArray(q.tags) ? q.tags : [],
-          source: q.source || '',
-          year: q.year ?? null,
-          examType: q.examType || '',
-          imageUrl: q.imageUrl || '',
-          imageAlt: q.imageAlt || '',
-          status: q.status || 'approved',
-          isActive: q.isActive !== false,
-          normalizedText: q.normalizedText || normalizeText(q.text || '')
-        }));
+      const rows: EditableCsvQuestion[] = ids.map((id) => map[id]).filter(Boolean).map(toEditableQuestionRow);
 
       const missing = ids.length - rows.length;
       if (missing > 0) {
@@ -1811,6 +1860,8 @@ Rules:
     setEditTestPasswordEnabled(false);
     setEditTestPassword('');
     setEditTestArchived(false);
+    setEditingTestQuestions([]);
+    setEditingTestQuestionsLoading(false);
     setEditingCsvQuestions([]);
     setEditingCsvLoading(false);
     setEditingCsvQuestionCount(20);
@@ -1861,6 +1912,10 @@ Rules:
           const answerIndex = Number(row.correctAnswerIndex);
           if (!Number.isFinite(answerIndex) || answerIndex < 0 || answerIndex > 3) {
             notify(`Question ${i + 1} has an invalid correct answer index.`);
+            return;
+          }
+          if (String(row.imageUrl || '').trim() && !sanitizeOptionalUrl(String(row.imageUrl || ''))) {
+            notify(`Question ${i + 1} has an invalid image URL.`);
             return;
           }
         }
@@ -1944,6 +1999,33 @@ Rules:
         const changedResults = await recalculateResultsForTests([{ ...activeEditTest, sections: nextSections }]);
         notify(`Test updated. Recalculated ${changedResults} result(s).`);
       } else {
+        const invalidImageRow = editingTestQuestions.find(q => String(q.imageUrl || '').trim() && !sanitizeOptionalUrl(String(q.imageUrl || '')));
+        if (invalidImageRow) {
+          const rowNumber = editingTestQuestions.findIndex(q => q.id === invalidImageRow.id) + 1;
+          notify(`Question ${rowNumber || ''} has an invalid image URL.`);
+          return;
+        }
+        if (editingTestQuestions.length > 0) {
+          let batch = writeBatch(db);
+          let writes = 0;
+          const nowIso = new Date().toISOString();
+          for (const row of editingTestQuestions) {
+            batch.update(doc(db, 'questions', row.id), {
+              imageUrl: sanitizeOptionalUrl(String(row.imageUrl || '')),
+              imageAlt: String(row.imageAlt || '').trim(),
+              updatedAt: nowIso
+            });
+            writes++;
+            if (writes >= 450) {
+              await batch.commit();
+              batch = writeBatch(db);
+              writes = 0;
+            }
+          }
+          if (writes > 0) {
+            await batch.commit();
+          }
+        }
         await updateDoc(doc(db, 'tests', testId), {
           name: editTestName.trim(),
           description: editTestDesc.trim(),
@@ -2936,6 +3018,83 @@ Rules:
                             {editTestArchived ? 'Archived' : 'Active'}
                           </button>
                         </div>
+                        {(test.generationMode || 'fixed') !== 'csv-dynamic' && (
+                          <div className="space-y-4 rounded-2xl border border-slate-100 p-4 bg-slate-50/50">
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <p className="text-xs font-bold uppercase tracking-widest text-slate-500">Question Images</p>
+                                <p className="text-xs text-slate-400 mt-1">
+                                  Add or change images for questions currently available in this test.
+                                </p>
+                              </div>
+                              <span className="px-3 py-1.5 rounded-lg bg-white border border-slate-100 text-xs font-black uppercase text-slate-500">
+                                {editingTestQuestions.length}
+                              </span>
+                            </div>
+                            {editingTestQuestionsLoading ? (
+                              <div className="text-xs font-bold uppercase tracking-widest text-slate-400 py-3">Loading test questions...</div>
+                            ) : editingTestQuestions.length === 0 ? (
+                              <div className="text-xs font-bold uppercase tracking-widest text-slate-400 py-3">No questions loaded for this test.</div>
+                            ) : (
+                              <div className="space-y-3 max-h-[55vh] overflow-y-auto pr-1">
+                                {editingTestQuestions.map((q, idx) => (
+                                  <div key={q.id} className="rounded-xl border border-slate-100 bg-white p-4 space-y-3">
+                                    <div className="flex items-start justify-between gap-3">
+                                      <div className="min-w-0">
+                                        <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Question {idx + 1}</p>
+                                        <p className="text-xs font-bold text-slate-800 mt-1 line-clamp-2"><ScientificText text={q.text || 'Untitled question'} /></p>
+                                      </div>
+                                      {q.imageUrl && (
+                                        <span className="shrink-0 px-2 py-1 rounded-lg bg-sky-50 border border-sky-100 text-[10px] font-black uppercase text-sky-700">
+                                          Image
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="space-y-3 rounded-xl border border-slate-100 bg-slate-50 p-3">
+                                      <div className="flex flex-col md:flex-row gap-2">
+                                        <input
+                                          value={q.imageUrl || ''}
+                                          onChange={(e) => setEditingTestQuestions(prev => prev.map((item, i) => i === idx ? { ...item, imageUrl: e.target.value } : item))}
+                                          className="flex-1 p-3 bg-white border border-slate-100 rounded-xl text-xs font-bold"
+                                          placeholder="Image URL (optional)"
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={() => openMediaPicker({ kind: 'test-question', id: q.id })}
+                                          className="px-4 py-3 bg-slate-950 text-amber-500 rounded-xl text-xs font-bold uppercase tracking-widest"
+                                        >
+                                          Browse Media
+                                        </button>
+                                      </div>
+                                      <div className="flex flex-col md:flex-row gap-2">
+                                        <input
+                                          value={q.imageAlt || ''}
+                                          onChange={(e) => setEditingTestQuestions(prev => prev.map((item, i) => i === idx ? { ...item, imageAlt: e.target.value } : item))}
+                                          className="flex-1 p-3 bg-white border border-slate-100 rounded-xl text-xs font-bold"
+                                          placeholder="Image alt text (optional)"
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={() => setEditingTestQuestions(prev => prev.map((item, i) => i === idx ? { ...item, imageUrl: '', imageAlt: '' } : item))}
+                                          className="px-4 py-3 bg-white border border-slate-200 text-slate-600 rounded-xl text-xs font-bold uppercase tracking-widest"
+                                        >
+                                          Remove
+                                        </button>
+                                      </div>
+                                      {sanitizeOptionalUrl(q.imageUrl || '') && (
+                                        <img
+                                          src={sanitizeOptionalUrl(q.imageUrl || '')}
+                                          alt={q.imageAlt || 'Question diagram preview'}
+                                          className="max-h-52 w-full object-contain rounded-xl bg-white border border-slate-100"
+                                        />
+                                      )}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
                         {(test.generationMode || 'fixed') === 'csv-dynamic' && (
                           <div className="space-y-4 rounded-2xl border border-slate-100 p-4 bg-slate-50/50">
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -3044,6 +3203,45 @@ Rules:
                                       className="w-full p-3 bg-slate-50 border rounded-xl text-xs h-24"
                                       placeholder="Question text"
                                     />
+                                    <div className="space-y-3 rounded-xl border border-slate-100 bg-slate-50 p-3">
+                                      <div className="flex flex-col md:flex-row gap-2">
+                                        <input
+                                          value={q.imageUrl || ''}
+                                          onChange={(e) => setEditingCsvQuestions(prev => prev.map((item, i) => i === idx ? { ...item, imageUrl: e.target.value } : item))}
+                                          className="flex-1 p-3 bg-white border border-slate-100 rounded-xl text-xs font-bold"
+                                          placeholder="Image URL (optional)"
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={() => openMediaPicker({ kind: 'csv-test-question', id: q.id })}
+                                          className="px-4 py-3 bg-slate-950 text-amber-500 rounded-xl text-xs font-bold uppercase tracking-widest"
+                                        >
+                                          Browse Media
+                                        </button>
+                                      </div>
+                                      <div className="flex flex-col md:flex-row gap-2">
+                                        <input
+                                          value={q.imageAlt || ''}
+                                          onChange={(e) => setEditingCsvQuestions(prev => prev.map((item, i) => i === idx ? { ...item, imageAlt: e.target.value } : item))}
+                                          className="flex-1 p-3 bg-white border border-slate-100 rounded-xl text-xs font-bold"
+                                          placeholder="Image alt text (optional)"
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={() => setEditingCsvQuestions(prev => prev.map((item, i) => i === idx ? { ...item, imageUrl: '', imageAlt: '' } : item))}
+                                          className="px-4 py-3 bg-white border border-slate-200 text-slate-600 rounded-xl text-xs font-bold uppercase tracking-widest"
+                                        >
+                                          Remove
+                                        </button>
+                                      </div>
+                                      {sanitizeOptionalUrl(q.imageUrl || '') && (
+                                        <img
+                                          src={sanitizeOptionalUrl(q.imageUrl || '')}
+                                          alt={q.imageAlt || 'Question diagram preview'}
+                                          className="max-h-52 w-full object-contain rounded-xl bg-white border border-slate-100"
+                                        />
+                                      )}
+                                    </div>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                                       {[0, 1, 2, 3].map((optIdx) => (
                                         <input
@@ -3100,7 +3298,7 @@ Rules:
                           </div>
                         )}
                         <div className="flex gap-2">
-                          <button disabled={loading || editingCsvLoading} onClick={() => saveEditedTest(test.id)} className="px-6 py-3 bg-slate-950 text-amber-500 rounded-xl text-xs font-bold uppercase tracking-widest disabled:opacity-40">Save</button>
+                          <button disabled={loading || editingCsvLoading || editingTestQuestionsLoading} onClick={() => saveEditedTest(test.id)} className="px-6 py-3 bg-slate-950 text-amber-500 rounded-xl text-xs font-bold uppercase tracking-widest disabled:opacity-40">Save</button>
                           <button disabled={loading} onClick={cancelEditTest} className="px-6 py-3 bg-slate-100 text-slate-700 rounded-xl text-xs font-bold uppercase tracking-widest disabled:opacity-40">Cancel</button>
                         </div>
                       </div>
@@ -3523,7 +3721,7 @@ Rules:
                   />
                   <button
                     type="button"
-                    onClick={openMediaPicker}
+                    onClick={() => openMediaPicker()}
                     className="px-5 py-4 bg-slate-950 text-amber-500 rounded-2xl text-xs font-bold uppercase tracking-widest"
                   >
                     Browse Media
