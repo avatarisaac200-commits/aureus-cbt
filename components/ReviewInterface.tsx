@@ -399,9 +399,20 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
                </div>
             </div>
 
-            <div className="question-text text-[17px] md:text-3xl font-bold text-slate-900 mb-16 leading-tight tracking-tight">
+            <div className="question-text text-[17px] md:text-3xl font-bold text-slate-900 mb-8 leading-tight tracking-tight">
               <ScientificText text={activeReviewedQuestion?.text || "Question unavailable for this attempt."} />
             </div>
+
+            {activeReviewedQuestion?.imageUrl && (
+              <div className="mb-12 rounded-2xl border border-slate-100 bg-slate-50 p-3 md:p-4">
+                <img
+                  src={activeReviewedQuestion.imageUrl}
+                  alt={activeReviewedQuestion.imageAlt || 'Question diagram'}
+                  loading="lazy"
+                  className="mx-auto max-h-[48vh] w-full object-contain rounded-xl bg-white"
+                />
+              </div>
+            )}
 
             {isReviewedQuestionMissing && (
               <div className="mb-8 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-xs font-bold text-red-700">

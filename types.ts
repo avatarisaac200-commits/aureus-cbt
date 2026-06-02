@@ -37,6 +37,9 @@ export interface Question {
   source?: string;
   year?: number | null;
   examType?: string;
+  imageUrl?: string;
+  imageKey?: string;
+  imageAlt?: string;
   status?: QuestionStatus;
   isActive?: boolean;
   createdBy: string;

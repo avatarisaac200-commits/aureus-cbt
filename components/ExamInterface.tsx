@@ -486,7 +486,17 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
                  <span className="text-xs font-bold text-amber-600 bg-amber-50 px-3 py-1 rounded-full uppercase tracking-widest">{activeSection.name}</span>
                </div>
             </div>
-            <div className="question-text text-[17px] md:text-2xl font-bold text-slate-900 mb-12 leading-tight text-center md:text-left"><ScientificText text={currentQuestion?.text || "Loading..."} /></div>
+            <div className="question-text text-[17px] md:text-2xl font-bold text-slate-900 mb-8 leading-tight text-center md:text-left"><ScientificText text={currentQuestion?.text || "Loading..."} /></div>
+            {currentQuestion?.imageUrl && (
+              <div className="mb-10 rounded-2xl border border-slate-100 bg-slate-50 p-3 md:p-4">
+                <img
+                  src={currentQuestion.imageUrl}
+                  alt={currentQuestion.imageAlt || 'Question diagram'}
+                  loading="lazy"
+                  className="mx-auto max-h-[48vh] w-full object-contain rounded-xl bg-white"
+                />
+              </div>
+            )}
             <div className="space-y-4">
               {currentQuestion?.options.map((option, idx) => (
                 <button

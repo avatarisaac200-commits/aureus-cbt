@@ -97,6 +97,8 @@ const makeLicenseKey = () => {
 
 const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 const DEFAULT_DIFFICULTY: DifficultyLevel = 'medium';
+const MEDIA_PICKER_ORIGIN = 'https://aureus-cbt-question-media.pages.dev';
+const MEDIA_PICKER_URL = `${MEDIA_PICKER_ORIGIN}/picker.html`;
 const CSV_IMPORT_HEADERS = [
   'subject',
   'topic',
@@ -112,12 +114,25 @@ const CSV_IMPORT_HEADERS = [
   'source',
   'year',
   'examType',
+  'imageUrl',
+  'imageAlt',
   'status',
   'isActive'
 ] as const;
 const CSV_IMPORT_HEADER_LINE = CSV_IMPORT_HEADERS.join(',');
 
 const parseList = (value: string) => value.split(',').map(item => item.trim()).filter(Boolean);
+const sanitizeOptionalUrl = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol === 'https:' || parsed.protocol === 'http:') return parsed.toString();
+  } catch {
+    return '';
+  }
+  return '';
+};
 const CSV_BUNDLE_CATEGORY_OPTIONS: CsvBundleCategoryField[] = ['subject', 'topic', 'difficulty', 'examType'];
 const normalizeDifficulty = (value: string): DifficultyLevel => {
   const normalized = value.trim().toLowerCase();
@@ -286,6 +301,8 @@ const mapCsvRowsToStagedQuestions = (rows: Array<Record<string, string>>) => {
       source: (row.source || '').trim(),
       year: row.year ? (Number.isFinite(Number(row.year)) ? Number(row.year) : null) : null,
       examType: (row.examtype || '').trim(),
+      imageUrl: sanitizeOptionalUrl(row.imageurl || ''),
+      imageAlt: (row.imagealt || '').trim(),
       status: (row.status || 'approved').trim().toLowerCase() === 'draft' ? 'draft' : 'approved',
       isActive: toBoolean(row.isactive || 'true', true),
       selected: true
@@ -312,7 +329,7 @@ const toAnswerLetter = (index: unknown) => {
   return 'A';
 };
 
-const buildQuestionsCsv = (rows: Array<Pick<Question, 'subject' | 'topic' | 'text' | 'options' | 'correctAnswerIndex' | 'explanation' | 'difficulty' | 'tags' | 'source' | 'year' | 'examType' | 'status' | 'isActive'>>) => {
+const buildQuestionsCsv = (rows: Array<Pick<Question, 'subject' | 'topic' | 'text' | 'options' | 'correctAnswerIndex' | 'explanation' | 'difficulty' | 'tags' | 'source' | 'year' | 'examType' | 'imageUrl' | 'imageAlt' | 'status' | 'isActive'>>) => {
   const lines = [
     CSV_IMPORT_HEADER_LINE,
     ...rows.map((q) => {
@@ -333,6 +350,8 @@ const buildQuestionsCsv = (rows: Array<Pick<Question, 'subject' | 'topic' | 'tex
         q.source || '',
         q.year ?? '',
         q.examType || '',
+        q.imageUrl || '',
+        q.imageAlt || '',
         q.status === 'draft' ? 'draft' : 'approved',
         q.isActive === false ? 'false' : 'true'
       ];
@@ -579,6 +598,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
   const [qExplanation, setQExplanation] = useState('');
   const [qDifficulty, setQDifficulty] = useState<DifficultyLevel>(DEFAULT_DIFFICULTY);
   const [qTags, setQTags] = useState('');
+  const [qImageUrl, setQImageUrl] = useState('');
+  const [qImageAlt, setQImageAlt] = useState('');
   const [qIsActive, setQIsActive] = useState(true);
 
   // AI Import State
@@ -598,6 +619,22 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
   const [deadlineSaving, setDeadlineSaving] = useState(false);
   const [attendanceWindows, setAttendanceWindows] = useState<EditableBrainstormWindow[]>(toEditableBrainstormWindows(DEFAULT_BRAINSTORM_WINDOWS));
   const [attendanceSaving, setAttendanceSaving] = useState(false);
+
+  useEffect(() => {
+    const handleMediaPickerMessage = (event: MessageEvent) => {
+      if (event.origin !== MEDIA_PICKER_ORIGIN) return;
+      const data = event.data || {};
+      if (data.type !== 'aureus-media-selected' || typeof data.url !== 'string') return;
+      const imageUrl = sanitizeOptionalUrl(data.url);
+      if (!imageUrl) return;
+      setQImageUrl(imageUrl);
+      setQImageAlt((prev) => prev || String(data.name || '').replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' '));
+      notify('Image selected.');
+    };
+
+    window.addEventListener('message', handleMediaPickerMessage);
+    return () => window.removeEventListener('message', handleMediaPickerMessage);
+  }, []);
 
   const groupedQuestions = useMemo(() => {
     const groups: Record<string, Question[]> = {};
@@ -1247,6 +1284,12 @@ Rules:
   const handleSaveQuestion = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    const imageUrl = sanitizeOptionalUrl(qImageUrl);
+    if (qImageUrl.trim() && !imageUrl) {
+      notify('Image URL must be a valid http or https URL.');
+      setLoading(false);
+      return;
+    }
     const data = {
       subject: qSubject || 'General',
       topic: qTopic || 'General',
@@ -1256,6 +1299,8 @@ Rules:
       explanation: qExplanation.trim(),
       difficulty: qDifficulty,
       tags: parseList(qTags),
+      imageUrl,
+      imageAlt: qImageAlt.trim(),
       status: 'approved' as const,
       isActive: qIsActive,
       normalizedText: normalizeText(qText)
@@ -1304,7 +1349,16 @@ Rules:
     setQExplanation('');
     setQDifficulty(DEFAULT_DIFFICULTY);
     setQTags('');
+    setQImageUrl('');
+    setQImageAlt('');
     setQIsActive(true);
+  };
+
+  const openMediaPicker = () => {
+    const popup = window.open(MEDIA_PICKER_URL, 'aureus-media-picker', 'width=1100,height=760,noopener=false,noreferrer=false');
+    if (!popup) {
+      notify('Allow popups to open the media picker.');
+    }
   };
 
   const buildDynamicSectionsWithPools = async (baseSections: TestSection[]) => {
@@ -1380,6 +1434,8 @@ Rules:
             source: q.source || csvDynamicFileName || 'csv-dynamic',
             year: q.year ?? null,
             examType: q.examType || '',
+            imageUrl: q.imageUrl || '',
+            imageAlt: q.imageAlt || '',
             status: 'approved',
             isActive: q.isActive !== false,
             normalizedText: normalizeText(q.text),
@@ -1538,6 +1594,8 @@ Rules:
     setQExplanation(q.explanation || '');
     setQDifficulty((q.difficulty as DifficultyLevel) || DEFAULT_DIFFICULTY);
     setQTags((q.tags || []).join(', '));
+    setQImageUrl(q.imageUrl || '');
+    setQImageAlt(q.imageAlt || '');
     setQIsActive(q.isActive !== false);
     setIsQuestionModalOpen(true);
   };
@@ -1625,6 +1683,13 @@ Rules:
         return;
       }
 
+      const invalidImageRow = finalList.find(q => String(q.imageUrl || '').trim() && !sanitizeOptionalUrl(String(q.imageUrl || '')));
+      if (invalidImageRow) {
+        notify('One selected question has an invalid image URL.');
+        setLoading(false);
+        return;
+      }
+
       const batch = writeBatch(db);
       finalList.forEach(q => {
         const persistable = { ...q } as any;
@@ -1634,6 +1699,8 @@ Rules:
           ...persistable,
           difficulty: persistable.difficulty || DEFAULT_DIFFICULTY,
           tags: Array.isArray(persistable.tags) ? persistable.tags : [],
+          imageUrl: sanitizeOptionalUrl(String(persistable.imageUrl || '')),
+          imageAlt: String(persistable.imageAlt || '').trim(),
           status: persistable.status || 'approved',
           isActive: persistable.isActive !== false,
           normalizedText: normalizeText(persistable.text),
@@ -1715,6 +1782,8 @@ Rules:
           source: q.source || '',
           year: q.year ?? null,
           examType: q.examType || '',
+          imageUrl: q.imageUrl || '',
+          imageAlt: q.imageAlt || '',
           status: q.status || 'approved',
           isActive: q.isActive !== false,
           normalizedText: q.normalizedText || normalizeText(q.text || '')
@@ -1814,6 +1883,8 @@ Rules:
             source: String(row.source || (activeEditTest as any).csvPoolSourceFile || 'csv-dynamic').trim() || 'csv-dynamic',
             year: row.year ?? null,
             examType: String(row.examType || '').trim(),
+            imageUrl: sanitizeOptionalUrl(String(row.imageUrl || '')),
+            imageAlt: String(row.imageAlt || '').trim(),
             status: 'approved',
             isActive: row.isActive !== false,
             normalizedText: normalizeText(cleanedText),
@@ -2331,6 +2402,9 @@ Rules:
                             <div className="flex-1">
                               <p className="text-xs font-bold text-amber-600 mb-2 uppercase tracking-widest">{q.topic || 'General'}</p>
                               <p className="text-sm font-bold text-slate-800"><ScientificText text={q.text} /></p>
+                              {q.imageUrl && (
+                                <p className="mt-2 text-[11px] font-bold uppercase tracking-widest text-sky-600">Image attached</p>
+                              )}
                             </div>
                             <div className="flex gap-2 shrink-0">
                               <button onClick={() => openEditModal(q)} className="p-3 bg-white rounded-xl border border-slate-100 hover:bg-slate-100"><svg className="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg></button>
@@ -3169,6 +3243,36 @@ Rules:
                           placeholder="Question text"
                         />
 
+                        <div className="space-y-3 rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                          <input
+                            value={q.imageUrl || ''}
+                            onChange={(e) => {
+                              const next = [...stagedQuestions];
+                              next[i].imageUrl = e.target.value;
+                              setStagedQuestions(next);
+                            }}
+                            className="w-full p-3 bg-white border border-slate-100 rounded-xl text-xs"
+                            placeholder="Image URL (optional)"
+                          />
+                          <input
+                            value={q.imageAlt || ''}
+                            onChange={(e) => {
+                              const next = [...stagedQuestions];
+                              next[i].imageAlt = e.target.value;
+                              setStagedQuestions(next);
+                            }}
+                            className="w-full p-3 bg-white border border-slate-100 rounded-xl text-xs"
+                            placeholder="Image alt text (optional)"
+                          />
+                          {sanitizeOptionalUrl(q.imageUrl || '') && (
+                            <img
+                              src={sanitizeOptionalUrl(q.imageUrl || '')}
+                              alt={q.imageAlt || 'Question diagram preview'}
+                              className="max-h-52 w-full object-contain rounded-xl bg-white border border-slate-100"
+                            />
+                          )}
+                        </div>
+
                         <div className="space-y-2">
                           {q.options.map((opt, idx) => (
                             <div key={idx} className="flex gap-2 items-center">
@@ -3409,6 +3513,34 @@ Rules:
                 <input placeholder="Topic" className="w-full p-4 bg-slate-50 border rounded-2xl text-xs font-bold outline-none" value={qTopic} onChange={e => setQTopic(e.target.value)} />
               </div>
               <textarea placeholder="Question text" className="w-full p-5 bg-slate-50 border rounded-2xl text-sm h-32 outline-none" value={qText} onChange={e => setQText(e.target.value)} required />
+              <div className="space-y-3 rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                <div className="flex flex-col md:flex-row gap-2">
+                  <input
+                    placeholder="Image URL (optional)"
+                    className="flex-1 p-4 bg-white border border-slate-100 rounded-2xl text-xs font-bold outline-none"
+                    value={qImageUrl}
+                    onChange={e => setQImageUrl(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    onClick={openMediaPicker}
+                    className="px-5 py-4 bg-slate-950 text-amber-500 rounded-2xl text-xs font-bold uppercase tracking-widest"
+                  >
+                    Browse Media
+                  </button>
+                </div>
+                <input
+                  placeholder="Image alt text (optional)"
+                  className="w-full p-4 bg-white border border-slate-100 rounded-2xl text-xs font-bold outline-none"
+                  value={qImageAlt}
+                  onChange={e => setQImageAlt(e.target.value)}
+                />
+                {sanitizeOptionalUrl(qImageUrl) && (
+                  <div className="rounded-2xl bg-white border border-slate-100 p-3">
+                    <img src={sanitizeOptionalUrl(qImageUrl)} alt={qImageAlt || 'Question diagram preview'} className="max-h-64 w-full object-contain rounded-xl" />
+                  </div>
+                )}
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <select value={qDifficulty} onChange={e => setQDifficulty(normalizeDifficulty(e.target.value))} className="w-full p-4 bg-slate-50 border rounded-2xl text-xs font-bold outline-none">
                   <option value="easy">easy</option>
