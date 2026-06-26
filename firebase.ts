@@ -1,6 +1,6 @@
 
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
-import { getAuth } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+import { browserLocalPersistence, getAuth, setPersistence } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 import { getFirestore, enableIndexedDbPersistence } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 
 /**
@@ -22,6 +22,13 @@ const app = initializeApp(firebaseConfig);
 // Export instances to be used throughout the app
 export const auth = getAuth(app);
 export const db = getFirestore(app);
+
+// Universal auth session rule: persist signed-in users in browser/device storage.
+// This prevents idle tabs or browser restarts from falling back to a short-lived in-memory session.
+export const AUTH_PERSISTENCE_RULE = 'local';
+export const authPersistenceReady = setPersistence(auth, browserLocalPersistence).catch((err) => {
+    console.warn('Auth persistence: Falling back to Firebase default persistence.', err);
+});
 
 // Enable Offline Persistence
 enableIndexedDbPersistence(db).catch((err) => {

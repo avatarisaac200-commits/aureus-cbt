@@ -1,7 +1,7 @@
 ﻿
 import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { User, MockTest, ExamResult, Question, TestSection, TestAttempt, DifficultyLevel, SharedQuiz, ViewState, BroadcastNotification, CustomThemeConfig, CommunityProfile } from './types';
-import { auth, db } from './firebase';
+import { auth, authPersistenceReady, db } from './firebase';
 import { onAuthStateChanged, sendEmailVerification } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 import { doc, getDoc, getDocFromServer, collection, getDocs, query, where, limit, documentId, updateDoc, addDoc, onSnapshot, setDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import logo from './assets/logo.png';
@@ -43,6 +43,13 @@ const BROADCAST_NOTIFICATIONS_SEEN_AT_PREFIX = 'broadcastSeenAt';
 const SOCIAL_PROFILE_PROMPT_DISMISSED_PREFIX = 'socialProfilePromptDismissed';
 
 type MonetizationMode = 'pre-deadline' | 'post-deadline';
+type OfflineTestPackage = {
+  signature: string;
+  questions: Record<string, Question>;
+  sections?: TestSection[];
+  generationMode?: MockTest['generationMode'];
+  createdAt?: number;
+};
 
 const DEFAULT_CUSTOM_THEME: CustomThemeConfig = {
   bgStart: '#f8fafc',
@@ -597,6 +604,20 @@ const App: React.FC = () => {
     return `${ids.length}:${ids.join('|')}`;
   };
 
+  const getOfflinePackage = (test: MockTest, sections?: TestSection[]): OfflineTestPackage | null => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const offlineRaw = window.localStorage.getItem(`${OFFLINE_PACKAGE_KEY_PREFIX}${test.id}`);
+      if (!offlineRaw) return null;
+      const offlineParsed = JSON.parse(offlineRaw) as OfflineTestPackage;
+      const effectiveSections = sections || offlineParsed.sections || test.sections;
+      if (offlineParsed.signature !== getPackageSignature(test, effectiveSections)) return null;
+      return offlineParsed;
+    } catch {
+      return null;
+    }
+  };
+
   const getCachedPackage = (test: MockTest, sections: TestSection[]): Record<string, Question> | null => {
     if (typeof window === 'undefined') return null;
     try {
@@ -607,11 +628,8 @@ const App: React.FC = () => {
           return parsed.questions || null;
         }
       }
-      const offlineRaw = window.localStorage.getItem(`${OFFLINE_PACKAGE_KEY_PREFIX}${test.id}`);
-      if (!offlineRaw) return null;
-      const offlineParsed = JSON.parse(offlineRaw) as { signature: string; questions: Record<string, Question> };
-      if (offlineParsed.signature !== getPackageSignature(test, sections)) return null;
-      return offlineParsed.questions || null;
+      const offlineParsed = getOfflinePackage(test, sections);
+      return offlineParsed?.questions || null;
     } catch {
       return null;
     }
@@ -634,7 +652,13 @@ const App: React.FC = () => {
     try {
       window.localStorage.setItem(
         `${OFFLINE_PACKAGE_KEY_PREFIX}${test.id}`,
-        JSON.stringify({ signature: getPackageSignature(test, sections), questions, createdAt: Date.now() })
+        JSON.stringify({
+          signature: getPackageSignature(test, sections),
+          questions,
+          sections,
+          generationMode: test.generationMode || 'fixed',
+          createdAt: Date.now()
+        } satisfies OfflineTestPackage)
       );
     } catch {
       toast.error('Offline save failed', 'Could not save this test for offline use on this device.');
@@ -785,12 +809,7 @@ const App: React.FC = () => {
     return final;
   };
 
-  const generateDynamicAttempt = async (test: MockTest, userObj: User) => {
-    const attemptsSnap = await getDocs(
-      query(collection(db, 'results'), where('userId', '==', userObj.id), where('testId', '==', test.id), limit(200))
-    );
-    const attemptNo = attemptsSnap.size + 1;
-    const seed = hashStringToSeed(`${userObj.id}:${test.id}:${attemptNo}`);
+  const buildDynamicSections = async (test: MockTest, seed: number) => {
     const rng = createSeededRng(seed);
 
     setPackagingState({ message: 'Building your personalized test...', progress: 15 });
@@ -824,6 +843,16 @@ const App: React.FC = () => {
     });
 
     const allIds = getSectionQuestionIds(resolvedSections);
+    return { resolvedSections, allIds };
+  };
+
+  const generateDynamicAttempt = async (test: MockTest, userObj: User) => {
+    const attemptsSnap = await getDocs(
+      query(collection(db, 'results'), where('userId', '==', userObj.id), where('testId', '==', test.id), limit(200))
+    );
+    const attemptNo = attemptsSnap.size + 1;
+    const seed = hashStringToSeed(`${userObj.id}:${test.id}:${attemptNo}`);
+    const { resolvedSections, allIds } = await buildDynamicSections(test, seed);
     const attemptPayload: Omit<TestAttempt, 'id'> = {
       testId: test.id,
       userId: userObj.id,
@@ -855,13 +884,22 @@ const App: React.FC = () => {
     try {
       let sectionsToUse = test.sections;
       let attemptId: string | null = null;
+      let offlineQuestions: Record<string, Question> | null = null;
       if (isDynamicGenerationMode(test.generationMode)) {
-        const generated = await generateDynamicAttempt(test, userObj);
-        sectionsToUse = generated.sections;
-        attemptId = generated.attemptId;
+        const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+        const offlinePackage = isOffline ? getOfflinePackage(test) : null;
+        if (offlinePackage?.sections?.length && offlinePackage.questions) {
+          sectionsToUse = offlinePackage.sections;
+          offlineQuestions = offlinePackage.questions;
+          toast.info('Offline test loaded', 'Using the saved version on this device.');
+        } else {
+          const generated = await generateDynamicAttempt(test, userObj);
+          sectionsToUse = generated.sections;
+          attemptId = generated.attemptId;
+        }
       }
 
-      const pkg = await packageQuestionsForTest(test, sectionsToUse);
+      const pkg = offlineQuestions || await packageQuestionsForTest(test, sectionsToUse);
       setPackagedQuestions(pkg);
       setActiveResolvedSections(sectionsToUse);
       setActiveAttemptId(attemptId);
@@ -873,16 +911,27 @@ const App: React.FC = () => {
   };
 
   const saveTestForOffline = async (test: MockTest) => {
-    if (isDynamicGenerationMode(test.generationMode)) {
-      toast.warning('Unavailable', 'Dynamic tests are generated per attempt and cannot be saved offline as a single fixed package.');
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      toast.warning('Offline unavailable', 'Connect to the internet once to save this test for offline use.');
       return;
     }
     try {
+      if (isDynamicGenerationMode(test.generationMode)) {
+        const seed = hashStringToSeed(`${currentUser?.id || 'offline'}:${test.id}:offline:${Date.now()}`);
+        const generated = await buildDynamicSections(test, seed);
+        const pkg = await packageQuestionsForTest(test, generated.resolvedSections);
+        setOfflinePackage(test, generated.resolvedSections, pkg);
+        toast.success('Saved offline', `"${test.name}" saved as a generated offline version on this device.`);
+        return;
+      }
+
       const pkg = await packageQuestionsForTest(test, test.sections);
       setOfflinePackage(test, test.sections, pkg);
       toast.success('Saved offline', `"${test.name}" saved for offline use on this device.`);
     } catch (err: any) {
       toast.error('Offline save failed', err?.message || 'Could not save this test offline right now.');
+    } finally {
+      setPackagingState(null);
     }
   };
 
@@ -1132,7 +1181,12 @@ const App: React.FC = () => {
   };
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+    let unsubscribe: (() => void) | null = null;
+    let cancelled = false;
+
+    authPersistenceReady.finally(() => {
+      if (cancelled) return;
+      unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         await checkUserStatus(firebaseUser);
         try {
@@ -1160,7 +1214,12 @@ const App: React.FC = () => {
         setFreeAccessEndsAtIso(DEFAULT_FREE_ACCESS_ENDS_AT_ISO);
       }
     });
-    return () => unsubscribe();
+    });
+
+    return () => {
+      cancelled = true;
+      if (unsubscribe) unsubscribe();
+    };
   }, []);
 
   useEffect(() => {

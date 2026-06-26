@@ -28,6 +28,26 @@ type EditingMediaTarget =
   | { kind: 'csv-test-question'; id: string }
   | { kind: 'test-question'; id: string };
 type EditableBrainstormWindow = { id: string; label: string; openTime: string; closeTime: string };
+type TestEditAutosaveDraft = {
+  version: 1;
+  testId: string;
+  userId: string;
+  generationMode: TestGenerationMode;
+  updatedAt: string;
+  name: string;
+  description: string;
+  durationMinutes: number;
+  passwordEnabled: boolean;
+  password: string;
+  isArchived: boolean;
+  csvQuestionCount: number;
+  csvMarksPerQuestion: number;
+  csvBundleEnabled: boolean;
+  csvBundleCategoryField: CsvBundleCategoryField;
+  csvBundleSize: number;
+  testQuestions: EditableCsvQuestion[];
+  csvQuestions: EditableCsvQuestion[];
+};
 
 const normalizeText = (text: string) => text.toLowerCase().trim().replace(/\s+/g, ' ');
 const normalizeOptions = (options: string[]) => options.map(opt => opt.trim());
@@ -101,6 +121,8 @@ const makeLicenseKey = () => {
 
 const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 const DEFAULT_DIFFICULTY: DifficultyLevel = 'medium';
+const TEST_EDIT_AUTOSAVE_PREFIX = 'adminTestEditAutosave';
+const TEST_EDIT_ACTIVE_AUTOSAVE_PREFIX = 'adminTestEditAutosaveActive';
 const MEDIA_PICKER_ORIGIN = 'https://aureus-cbt-question-media.pages.dev';
 const MEDIA_PICKER_URL = `${MEDIA_PICKER_ORIGIN}/picker.html`;
 const CSV_IMPORT_HEADERS = [
@@ -582,6 +604,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
   const [editingCsvBundleEnabled, setEditingCsvBundleEnabled] = useState(false);
   const [editingCsvBundleCategoryField, setEditingCsvBundleCategoryField] = useState<CsvBundleCategoryField>('subject');
   const [editingCsvBundleSize, setEditingCsvBundleSize] = useState(100);
+  const [editAutosaveStatus, setEditAutosaveStatus] = useState('');
+  const editAutosaveReadyRef = useRef(false);
+  const editAutosaveTimerRef = useRef<number | null>(null);
+  const pendingAutosaveRestoreRef = useRef<string | null>(null);
+  const restoringAutosaveRef = useRef(false);
   
   // Test Builder State
   const [testName, setTestName] = useState('');
@@ -709,11 +736,145 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
     return buildCsvBundles(staged, editingCsvBundleCategoryField, editingCsvBundleSize);
   }, [editingCsvBundleEnabled, editingCsvQuestions, editingCsvBundleCategoryField, editingCsvBundleSize]);
 
+  const getTestEditAutosaveKey = (testId: string) => `${TEST_EDIT_AUTOSAVE_PREFIX}:${user.id}:${testId}`;
+  const getActiveTestEditAutosaveKey = () => `${TEST_EDIT_ACTIVE_AUTOSAVE_PREFIX}:${user.id}`;
+
+  const readTestEditAutosaveDraft = (testId: string): TestEditAutosaveDraft | null => {
+    try {
+      const raw = window.localStorage.getItem(getTestEditAutosaveKey(testId));
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as TestEditAutosaveDraft;
+      if (parsed?.version !== 1 || parsed.testId !== testId || parsed.userId !== user.id) return null;
+      return parsed;
+    } catch {
+      return null;
+    }
+  };
+
+  const clearTestEditAutosaveDraft = (testId: string) => {
+    try {
+      window.localStorage.removeItem(getTestEditAutosaveKey(testId));
+      if (window.localStorage.getItem(getActiveTestEditAutosaveKey()) === testId) {
+        window.localStorage.removeItem(getActiveTestEditAutosaveKey());
+      }
+    } catch {
+      // Ignore storage failures; the manual save path still works.
+    }
+  };
+
+  const applyTestEditAutosaveDraft = (draft: TestEditAutosaveDraft) => {
+    setEditTestName(draft.name || '');
+    setEditTestDesc(draft.description || '');
+    setEditTestDuration(Math.max(1, Number(draft.durationMinutes) || 1));
+    setEditTestPasswordEnabled(Boolean(draft.passwordEnabled));
+    setEditTestPassword(draft.password || '');
+    setEditTestArchived(Boolean(draft.isArchived));
+    setEditingCsvQuestionCount(Math.max(1, Number(draft.csvQuestionCount) || 1));
+    setEditingCsvMarksPerQuestion(Math.max(1, Number(draft.csvMarksPerQuestion) || 1));
+    setEditingCsvBundleEnabled(Boolean(draft.csvBundleEnabled));
+    setEditingCsvBundleCategoryField((draft.csvBundleCategoryField || 'subject') as CsvBundleCategoryField);
+    setEditingCsvBundleSize(Math.max(1, Number(draft.csvBundleSize) || 1));
+    if ((draft.generationMode || 'fixed') === 'csv-dynamic') {
+      setEditingCsvQuestions(Array.isArray(draft.csvQuestions) ? draft.csvQuestions : []);
+    } else {
+      setEditingTestQuestions(Array.isArray(draft.testQuestions) ? draft.testQuestions : []);
+    }
+    setEditAutosaveStatus(`Restored autosave from ${new Date(draft.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`);
+  };
+
   useEffect(() => {
     if (activeTab === 'tests') {
       loadManagedTests();
     }
   }, [activeTab]);
+
+  useEffect(() => {
+    try {
+      const activeDraftTestId = window.localStorage.getItem(getActiveTestEditAutosaveKey());
+      if (activeDraftTestId) {
+        pendingAutosaveRestoreRef.current = activeDraftTestId;
+        setActiveTab('tests');
+      }
+    } catch {
+      // Storage may be unavailable in private browsing; autosave simply stays inactive.
+    }
+  }, []);
+
+  useEffect(() => {
+    const pendingTestId = pendingAutosaveRestoreRef.current;
+    if (!pendingTestId || activeTab !== 'tests' || editingTestId || managedTestsLoading) return;
+    const test = managedTests.find(item => item.id === pendingTestId);
+    if (!test) return;
+    pendingAutosaveRestoreRef.current = null;
+    restoringAutosaveRef.current = true;
+    startEditTest(test).finally(() => {
+      restoringAutosaveRef.current = false;
+    });
+  }, [activeTab, editingTestId, managedTests, managedTestsLoading]);
+
+  useEffect(() => {
+    if (!editingTestId || !editAutosaveReadyRef.current || restoringAutosaveRef.current) return;
+    if (editAutosaveTimerRef.current) {
+      window.clearTimeout(editAutosaveTimerRef.current);
+    }
+    setEditAutosaveStatus('Autosave pending...');
+    editAutosaveTimerRef.current = window.setTimeout(() => {
+      const activeEditTest = managedTests.find((test) => test.id === editingTestId) || editingTest;
+      if (!activeEditTest) return;
+      const draft: TestEditAutosaveDraft = {
+        version: 1,
+        testId: editingTestId,
+        userId: user.id,
+        generationMode: (activeEditTest.generationMode || 'fixed') as TestGenerationMode,
+        updatedAt: new Date().toISOString(),
+        name: editTestName,
+        description: editTestDesc,
+        durationMinutes: Math.max(1, Number(editTestDuration) || 1),
+        passwordEnabled: editTestPasswordEnabled,
+        password: editTestPassword,
+        isArchived: editTestArchived,
+        csvQuestionCount: Math.max(1, Number(editingCsvQuestionCount) || 1),
+        csvMarksPerQuestion: Math.max(1, Number(editingCsvMarksPerQuestion) || 1),
+        csvBundleEnabled: editingCsvBundleEnabled,
+        csvBundleCategoryField: editingCsvBundleCategoryField,
+        csvBundleSize: Math.max(1, Number(editingCsvBundleSize) || 1),
+        testQuestions: editingTestQuestions,
+        csvQuestions: editingCsvQuestions
+      };
+      try {
+        window.localStorage.setItem(getTestEditAutosaveKey(editingTestId), JSON.stringify(draft));
+        window.localStorage.setItem(getActiveTestEditAutosaveKey(), editingTestId);
+        setEditAutosaveStatus(`Autosaved ${new Date(draft.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`);
+      } catch {
+        setEditAutosaveStatus('Autosave unavailable');
+      }
+    }, 1200);
+
+    return () => {
+      if (editAutosaveTimerRef.current) {
+        window.clearTimeout(editAutosaveTimerRef.current);
+        editAutosaveTimerRef.current = null;
+      }
+    };
+  }, [
+    editingTestId,
+    editingTest,
+    managedTests,
+    user.id,
+    editTestName,
+    editTestDesc,
+    editTestDuration,
+    editTestPasswordEnabled,
+    editTestPassword,
+    editTestArchived,
+    editingTestQuestions,
+    editingCsvQuestions,
+    editingCsvQuestionCount,
+    editingCsvMarksPerQuestion,
+    editingCsvBundleEnabled,
+    editingCsvBundleCategoryField,
+    editingCsvBundleSize
+  ]);
 
   useEffect(() => {
     if (!canManageKeys && activeTab === 'license-keys') {
@@ -1769,6 +1930,12 @@ Rules:
   };
 
   const startEditTest = async (test: MockTest) => {
+    editAutosaveReadyRef.current = false;
+    if (editAutosaveTimerRef.current) {
+      window.clearTimeout(editAutosaveTimerRef.current);
+      editAutosaveTimerRef.current = null;
+    }
+    const autosaveDraft = readTestEditAutosaveDraft(test.id);
     setEditingTestId(test.id);
     setEditingTest(test);
     setEditTestName(test.name || '');
@@ -1786,6 +1953,7 @@ Rules:
     setEditingCsvBundleEnabled(Boolean((test as any).csvBundlesEnabled));
     setEditingCsvBundleCategoryField(((test as any).csvBundleCategoryField || 'subject') as CsvBundleCategoryField);
     setEditingCsvBundleSize(Math.max(1, Number((test as any).csvBundleSize || 100)));
+    setEditAutosaveStatus(autosaveDraft ? 'Restoring autosave...' : 'Autosave ready');
     setEditingTestQuestions([]);
 
     if ((test.generationMode || 'fixed') !== 'csv-dynamic') {
@@ -1795,28 +1963,32 @@ Rules:
         const ids = Array.from(new Set((test.sections || []).flatMap(section => section.questionIds || [])));
         if (ids.length === 0) {
           setEditingTestQuestions([]);
-          return;
-        }
-        const map: Record<string, Question> = {};
-        for (const chunk of chunkArray(ids, 10)) {
-          const qSnap = await getDocs(query(collection(db, 'questions'), where(documentId(), 'in', chunk)));
-          qSnap.docs.forEach((d) => {
-            map[d.id] = { ...d.data(), id: d.id } as Question;
-          });
-        }
+        } else {
+          const map: Record<string, Question> = {};
+          for (const chunk of chunkArray(ids, 10)) {
+            const qSnap = await getDocs(query(collection(db, 'questions'), where(documentId(), 'in', chunk)));
+            qSnap.docs.forEach((d) => {
+              map[d.id] = { ...d.data(), id: d.id } as Question;
+            });
+          }
 
-        const rows = ids.map((id) => map[id]).filter(Boolean).map(toEditableQuestionRow);
-        const missing = ids.length - rows.length;
-        if (missing > 0) {
-          notify(`Loaded ${rows.length} test question(s). ${missing} question(s) were missing from the bank.`);
+          const rows = ids.map((id) => map[id]).filter(Boolean).map(toEditableQuestionRow);
+          const missing = ids.length - rows.length;
+          if (missing > 0) {
+            notify(`Loaded ${rows.length} test question(s). ${missing} question(s) were missing from the bank.`);
+          }
+          setEditingTestQuestions(rows);
         }
-        setEditingTestQuestions(rows);
       } catch (err: any) {
         notify('Could not load test questions for image editing. ' + (err?.message || ''));
         setEditingTestQuestions([]);
       } finally {
         setEditingTestQuestionsLoading(false);
       }
+      if (autosaveDraft) {
+        applyTestEditAutosaveDraft(autosaveDraft);
+      }
+      editAutosaveReadyRef.current = true;
       return;
     }
 
@@ -1826,32 +1998,44 @@ Rules:
       const ids = Array.from(new Set((test.sections || []).flatMap(section => section.questionIds || [])));
       if (ids.length === 0) {
         setEditingCsvQuestions([]);
-        return;
-      }
-      const map: Record<string, Question> = {};
-      for (const chunk of chunkArray(ids, 10)) {
-        const qSnap = await getDocs(query(collection(db, 'questions'), where(documentId(), 'in', chunk)));
-        qSnap.docs.forEach((d) => {
-          map[d.id] = { ...d.data(), id: d.id } as Question;
-        });
-      }
+      } else {
+        const map: Record<string, Question> = {};
+        for (const chunk of chunkArray(ids, 10)) {
+          const qSnap = await getDocs(query(collection(db, 'questions'), where(documentId(), 'in', chunk)));
+          qSnap.docs.forEach((d) => {
+            map[d.id] = { ...d.data(), id: d.id } as Question;
+          });
+        }
 
-      const rows: EditableCsvQuestion[] = ids.map((id) => map[id]).filter(Boolean).map(toEditableQuestionRow);
+        const rows: EditableCsvQuestion[] = ids.map((id) => map[id]).filter(Boolean).map(toEditableQuestionRow);
 
-      const missing = ids.length - rows.length;
-      if (missing > 0) {
-        notify(`Loaded ${rows.length} CSV question(s). ${missing} question(s) were missing from the bank.`);
+        const missing = ids.length - rows.length;
+        if (missing > 0) {
+          notify(`Loaded ${rows.length} CSV question(s). ${missing} question(s) were missing from the bank.`);
+        }
+        setEditingCsvQuestions(rows);
       }
-      setEditingCsvQuestions(rows);
     } catch (err: any) {
       notify('Could not load CSV question pool for editing. ' + (err?.message || ''));
       setEditingCsvQuestions([]);
     } finally {
       setEditingCsvLoading(false);
     }
+    if (autosaveDraft) {
+      applyTestEditAutosaveDraft(autosaveDraft);
+    }
+    editAutosaveReadyRef.current = true;
   };
 
   const cancelEditTest = () => {
+    if (editingTestId) {
+      clearTestEditAutosaveDraft(editingTestId);
+    }
+    editAutosaveReadyRef.current = false;
+    if (editAutosaveTimerRef.current) {
+      window.clearTimeout(editAutosaveTimerRef.current);
+      editAutosaveTimerRef.current = null;
+    }
     setEditingTestId(null);
     setEditingTest(null);
     setEditTestName('');
@@ -1869,6 +2053,7 @@ Rules:
     setEditingCsvBundleEnabled(false);
     setEditingCsvBundleCategoryField('subject');
     setEditingCsvBundleSize(100);
+    setEditAutosaveStatus('');
   };
 
   const saveEditedTest = async (testId: string) => {
@@ -3300,6 +3485,11 @@ Rules:
                         <div className="flex gap-2">
                           <button disabled={loading || editingCsvLoading || editingTestQuestionsLoading} onClick={() => saveEditedTest(test.id)} className="px-6 py-3 bg-slate-950 text-amber-500 rounded-xl text-xs font-bold uppercase tracking-widest disabled:opacity-40">Save</button>
                           <button disabled={loading} onClick={cancelEditTest} className="px-6 py-3 bg-slate-100 text-slate-700 rounded-xl text-xs font-bold uppercase tracking-widest disabled:opacity-40">Cancel</button>
+                          {editAutosaveStatus && (
+                            <span className="self-center text-[10px] font-black uppercase tracking-widest text-slate-400">
+                              {editAutosaveStatus}
+                            </span>
+                          )}
                         </div>
                       </div>
                     )}

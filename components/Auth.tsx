@@ -1,7 +1,7 @@
 ﻿
 import React, { useState } from 'react';
 import { User } from '../types';
-import { auth, db } from '../firebase';
+import { auth, authPersistenceReady, db } from '../firebase';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 import { doc, setDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import logo from '../assets/logo.png';
@@ -24,6 +24,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
     e.preventDefault();
     setLoading(true);
     try {
+      await authPersistenceReady;
       if (isLogin) {
         const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password);
         onLogin(userCredential.user);
@@ -72,6 +73,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
     }
     setIsSendingReset(true);
     try {
+      await authPersistenceReady;
       await sendPasswordResetEmail(auth, targetEmail);
       toast.success('Reset link sent', 'Check your inbox/spam folder.');
     } catch (error: any) {
