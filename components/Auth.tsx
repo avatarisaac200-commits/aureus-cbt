@@ -200,10 +200,6 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
           </div>
         </div>
       </div>
-      <p className="mt-6 sm:mt-8 mb-6 sm:mb-0 text-slate-400 text-xs font-bold uppercase tracking-widest text-center px-6 leading-relaxed">
-        Email verification is required.<br/>
-        Staff can sign in with approved staff accounts.
-      </p>
     </div>
   );
 };
