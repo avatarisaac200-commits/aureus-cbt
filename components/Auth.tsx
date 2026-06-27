@@ -6,6 +6,7 @@ import { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVe
 import { doc, getDoc, setDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import logo from '../assets/scholar-main.png';
 import PartnershipLogos from './PartnershipLogos';
+import { DEFAULT_PREP_MODE } from '../lib/prepModes';
 import { toast } from './ui/Toast';
 
 interface AuthProps {
@@ -36,6 +37,8 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
       email: userEmail,
       role: assignedRole,
       emailVerified: Boolean(firebaseUser.emailVerified || isOfficialEmail),
+      lastPrepMode: DEFAULT_PREP_MODE,
+      licenses: {},
       subscriptionStatus: 'inactive'
     };
 
@@ -64,6 +67,8 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
           email: trimmedEmail, 
           role: assignedRole,
           emailVerified: isOfficialEmail,
+          lastPrepMode: DEFAULT_PREP_MODE,
+          licenses: {},
           subscriptionStatus: 'inactive'
         };
         await setDoc(doc(db, 'users', userCredential.user.uid), newUser);

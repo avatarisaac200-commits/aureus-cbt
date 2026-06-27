@@ -9,6 +9,7 @@ import logo from '../assets/scholar-main.png';
 import { getOrCreateAiExplanation } from './aiExplanationService';
 import { confirmDialog } from './ui/ConfirmDialog';
 import { refreshOwnLeaderboardPublic, toPublicLeaderboardRow } from '../lib/leaderboard';
+import { DEFAULT_PREP_MODE, getTestPrepMode } from '../lib/prepModes';
 
 interface ExamInterfaceProps {
   test: MockTest;
@@ -167,6 +168,7 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
       userName: user.name,
       testId: test.id,
       testName: test.name,
+      prepMode: getTestPrepMode(test) || DEFAULT_PREP_MODE,
       score: totalScore,
       maxScore: maxScore,
       correctAnsweredCount,

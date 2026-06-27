@@ -13,6 +13,7 @@ import {
   ForumThread,
   MockTest,
   NotificationPreference,
+  PrepMode,
   Question,
   TestSection,
   User,
@@ -21,10 +22,15 @@ import {
 } from '../types';
 import { db } from '../firebase';
 import { collection, getDocs, limit, orderBy, query } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+import { DEFAULT_PREP_MODE, PREP_MODE_LABELS, hasActivePrepLicense } from '../lib/prepModes';
 
 type RangeFilter = '7d' | '30d' | '90d' | 'all';
 type StatusFilter = 'all' | ExamResult['status'];
 type QualityFilter = 'all' | 'passed' | 'failed' | 'incomplete';
+
+interface AdminAnalyticsProps {
+  prepModeFilter?: PrepMode | 'all';
+}
 
 type ResultMetric = ExamResult & {
   percent: number;
@@ -176,7 +182,7 @@ const getRangeWindow = (range: RangeFilter, now = Date.now()) => {
   };
 };
 
-const AdminAnalytics: React.FC = () => {
+const AdminAnalytics: React.FC<AdminAnalyticsProps> = ({ prepModeFilter = 'all' }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -331,26 +337,55 @@ const AdminAnalytics: React.FC = () => {
     return map;
   }, [questions]);
 
-  const resultMetrics = useMemo(() => results.map(getMetric), [results]);
+  const filteredTestsForPrep = useMemo(() => {
+    if (prepModeFilter === 'all') return tests;
+    return tests.filter(test => ((test.prepMode as PrepMode) || DEFAULT_PREP_MODE) === prepModeFilter);
+  }, [tests, prepModeFilter]);
+
+  const filteredQuestionsForPrep = useMemo(() => {
+    if (prepModeFilter === 'all') return questions;
+    return questions.filter(question => ((question.prepMode as PrepMode) || DEFAULT_PREP_MODE) === prepModeFilter);
+  }, [questions, prepModeFilter]);
+
+  const filteredResultsForPrep = useMemo(() => {
+    if (prepModeFilter === 'all') return results;
+    return results.filter(result => {
+      const resultPrepMode = (result.prepMode as PrepMode) || ((testsById[result.testId]?.prepMode as PrepMode) || DEFAULT_PREP_MODE);
+      return resultPrepMode === prepModeFilter;
+    });
+  }, [results, testsById, prepModeFilter]);
+
+  const filteredLicenseKeysForPrep = useMemo(() => {
+    if (prepModeFilter === 'all') return licenseKeys;
+    return licenseKeys.filter(key => ((key as any).prepMode || DEFAULT_PREP_MODE) === prepModeFilter);
+  }, [licenseKeys, prepModeFilter]);
+
+  useEffect(() => {
+    if (testFilter === 'all') return;
+    if (filteredTestsForPrep.some(test => test.id === testFilter)) return;
+    setTestFilter('all');
+  }, [filteredTestsForPrep, testFilter]);
+
+  const resultMetrics = useMemo(() => filteredResultsForPrep.map(getMetric), [filteredResultsForPrep]);
 
   const userOptions = useMemo(() => {
     const map = new Map<string, string>();
-    results.forEach(result => {
+    filteredResultsForPrep.forEach(result => {
       if (!map.has(result.userId)) map.set(result.userId, result.userName || 'Unknown');
     });
     return Array.from(map.entries())
       .map(([id, name]) => ({ id, name }))
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [results]);
+  }, [filteredResultsForPrep]);
 
   const subjectOptions = useMemo(() => {
     const subjects = new Set<string>();
-    questions.forEach(q => subjects.add(normalizeLabel(q.subject)));
-    results.forEach(result => {
+    filteredQuestionsForPrep.forEach(q => subjects.add(normalizeLabel(q.subject)));
+    filteredResultsForPrep.forEach(result => {
       Object.values(result.questionSnapshot || {}).forEach(q => subjects.add(normalizeLabel(q.subject)));
     });
     return Array.from(subjects).sort((a, b) => a.localeCompare(b));
-  }, [questions, results]);
+  }, [filteredQuestionsForPrep, filteredResultsForPrep]);
 
   const filteredResults = useMemo(() => {
     const { currentStart } = getRangeWindow(rangeFilter);
@@ -642,15 +677,15 @@ const AdminAnalytics: React.FC = () => {
   const atRiskStudents = useMemo(() => studentRows.filter(row => row.attempts >= 2).slice(0, 10), [studentRows]);
 
   const operational = useMemo(() => {
-    const activeTests = tests.filter(test => !(test as any).isPaused && !(test as any).isArchived).length;
-    const pausedTests = tests.filter(test => Boolean((test as any).isPaused)).length;
-    const archivedTests = tests.filter(test => Boolean((test as any).isArchived)).length;
-    const approvedTests = tests.filter(test => test.isApproved).length;
-    const dynamicTests = tests.filter(test => test.generationMode && test.generationMode !== 'fixed').length;
+    const activeTests = filteredTestsForPrep.filter(test => !(test as any).isPaused && !(test as any).isArchived).length;
+    const pausedTests = filteredTestsForPrep.filter(test => Boolean((test as any).isPaused)).length;
+    const archivedTests = filteredTestsForPrep.filter(test => Boolean((test as any).isArchived)).length;
+    const approvedTests = filteredTestsForPrep.filter(test => test.isApproved).length;
+    const dynamicTests = filteredTestsForPrep.filter(test => test.generationMode && test.generationMode !== 'fixed').length;
 
     const questionBySubject: Record<string, number> = {};
     const questionByTopic: Record<string, number> = {};
-    questions.forEach(question => {
+    filteredQuestionsForPrep.forEach(question => {
       const subject = normalizeLabel(question.subject);
       const topic = normalizeLabel(question.topic);
       questionBySubject[subject] = (questionBySubject[subject] || 0) + 1;
@@ -667,8 +702,8 @@ const AdminAnalytics: React.FC = () => {
       .sort((a, b) => b.count - a.count)
       .slice(0, 6);
 
-    const recalculated = results.filter(item => Boolean((item as any).scoreRecalculatedAt)).length;
-    const questionsLast30d = questions.filter(question => {
+    const recalculated = filteredResultsForPrep.filter(item => Boolean((item as any).scoreRecalculatedAt)).length;
+    const questionsLast30d = filteredQuestionsForPrep.filter(question => {
       const ms = getMs(question.createdAt);
       return ms !== null && ms >= Date.now() - (30 * MS_PER_DAY);
     }).length;
@@ -684,7 +719,7 @@ const AdminAnalytics: React.FC = () => {
       recalculated,
       questionsLast30d
     };
-  }, [questions, results, tests]);
+  }, [filteredQuestionsForPrep, filteredResultsForPrep, filteredTestsForPrep]);
 
   const ecosystem = useMemo(() => {
     const { currentStart } = getRangeWindow(rangeFilter);
@@ -696,7 +731,7 @@ const AdminAnalytics: React.FC = () => {
     const rangeNotifications = notifications.filter(row => inRange(row.createdAt, currentStart));
     const rangeForumThreads = forumThreads.filter(row => inRange(row.latestActivityAt || row.createdAt, currentStart));
     const rangeFriendRequests = friendRequests.filter(row => inRange(row.createdAt, currentStart));
-    const rangeLicenseKeys = licenseKeys.filter(row => inRange(row.createdAt || row.redeemedAt, currentStart));
+    const rangeLicenseKeys = filteredLicenseKeysForPrep.filter(row => inRange(row.createdAt || row.redeemedAt, currentStart));
 
     const activeLearners = new Set([
       ...filteredResults.map(row => row.userId),
@@ -714,9 +749,13 @@ const AdminAnalytics: React.FC = () => {
     const attendanceWindowsChecked = rangeCheckins.reduce((sum, row) => sum + (row.checkedWindowIds || []).length, 0);
     const attendanceWindowsMissed = rangeCheckins.reduce((sum, row) => sum + (row.missedWindowIds || []).length, 0);
     const dailyStrikes = rangeCheckins.filter(row => row.dailyStrikeApplied).length;
-    const activeSubscriptions = users.filter(user => user.subscriptionStatus === 'active').length;
-    const expiredSubscriptions = users.filter(user => user.subscriptionStatus === 'expired').length;
-    const inactiveSubscriptions = users.filter(user => user.subscriptionStatus === 'inactive' || !user.subscriptionStatus).length;
+    const activeSubscriptions = prepModeFilter === 'all'
+      ? users.filter(user => ['utme', 'oau', 'putme'].some(mode => hasActivePrepLicense(user, mode as PrepMode))).length
+      : users.filter(user => hasActivePrepLicense(user, prepModeFilter)).length;
+    const expiredSubscriptions = prepModeFilter === 'all'
+      ? users.filter(user => user.subscriptionStatus === 'expired').length
+      : users.filter(user => user.licenses?.[prepModeFilter]?.status === 'expired').length;
+    const inactiveSubscriptions = Math.max(0, users.length - activeSubscriptions - expiredSubscriptions);
     const unreadNotifications = rangeNotifications.filter(row => !row.isRead).length;
     const pushEnabledPrefs = notificationPreferences.filter(row => row.push).length;
     const emailEnabledPrefs = notificationPreferences.filter(row => row.email).length;
@@ -724,7 +763,7 @@ const AdminAnalytics: React.FC = () => {
     const publishedAnnouncements = announcements.filter(row => row.published !== false).length;
     const activeClassSessions = rangeClassSessions.filter(row => !row.isCancelled).length;
     const cancelledClassSessions = rangeClassSessions.filter(row => row.isCancelled).length;
-    const redeemedKeys = licenseKeys.filter(row => row.redeemedBy || row.redeemedAt || row.status === 'redeemed').length;
+    const redeemedKeys = filteredLicenseKeysForPrep.filter(row => row.redeemedBy || row.redeemedAt || row.status === 'redeemed').length;
     const keysCreated = rangeLicenseKeys.length;
     const rangeRedeemedKeys = rangeLicenseKeys.filter(row => row.redeemedBy || row.redeemedAt || row.status === 'redeemed').length;
 
@@ -776,11 +815,11 @@ const AdminAnalytics: React.FC = () => {
       forumReplies: forumThreads.reduce((sum, thread) => sum + Number(thread.replyCount || 0), 0),
       friendRequests: rangeFriendRequests.length,
       friendships: friendships.length,
-      licenseKeys: licenseKeys.length,
+      licenseKeys: filteredLicenseKeysForPrep.length,
       redeemedKeys,
       keysCreated,
       keysRedeemed: rangeRedeemedKeys,
-      keyRedemptionRate: safePct(redeemedKeys, licenseKeys.length)
+      keyRedemptionRate: safePct(redeemedKeys, filteredLicenseKeysForPrep.length)
     };
   }, [
     announcements,
@@ -796,11 +835,12 @@ const AdminAnalytics: React.FC = () => {
     forumThreads,
     friendRequests,
     friendships,
-    licenseKeys,
+    filteredLicenseKeysForPrep,
     notificationPreferences,
     notifications,
     pushSubscriptions,
     rangeFilter,
+    prepModeFilter,
     users,
     videoLessons,
     videoProgress
@@ -872,7 +912,8 @@ const AdminAnalytics: React.FC = () => {
 
   const maxTrendAttempts = Math.max(...trendRows.map(row => row.attempts), 1);
   const maxDistributionCount = Math.max(...scoreDistribution.map(row => row.count), 1);
-  const loadedSummary = `${fmtNumber(results.length)} result(s), ${fmtNumber(tests.length)} test(s), ${fmtNumber(questions.length)} question(s), ${fmtNumber(users.length)} user(s), ${fmtNumber(courses.length)} course(s), ${fmtNumber(videoLessons.length)} video(s)`;
+  const prepSummaryPrefix = prepModeFilter === 'all' ? 'all prep modes' : PREP_MODE_LABELS[prepModeFilter];
+  const loadedSummary = `${prepSummaryPrefix}: ${fmtNumber(filteredResultsForPrep.length)} result(s), ${fmtNumber(filteredTestsForPrep.length)} test(s), ${fmtNumber(filteredQuestionsForPrep.length)} question(s), ${fmtNumber(users.length)} user(s), ${fmtNumber(courses.length)} course(s), ${fmtNumber(videoLessons.length)} video(s)`;
 
   const KpiCard = ({ label, value, delta, suffix }: { label: string; value: string; delta?: number; suffix?: string }) => (
     <div className="bg-white border border-slate-100 rounded-2xl p-5">
@@ -945,7 +986,7 @@ const AdminAnalytics: React.FC = () => {
               <span className="sr-only">Test</span>
               <select className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold" value={testFilter} onChange={(e) => setTestFilter(e.target.value)}>
                 <option value="all">All tests</option>
-                {tests.map(test => (
+                {filteredTestsForPrep.map(test => (
                   <option key={test.id} value={test.id}>{test.name}</option>
                 ))}
               </select>

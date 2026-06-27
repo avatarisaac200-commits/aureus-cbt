@@ -1,9 +1,10 @@
 ﻿import React, { useState, useEffect } from 'react';
-import { User, MockTest, ExamResult, QuizQuestion, SharedQuiz, CsvQuestionBundle, CustomThemeConfig, Announcement, AnnouncementRead, AppNotification, ClassSession, Course, NotificationPreference, NotificationType } from '../types';
+import { User, MockTest, ExamResult, QuizQuestion, SharedQuiz, CsvQuestionBundle, CustomThemeConfig, Announcement, AnnouncementRead, AppNotification, ClassSession, Course, NotificationPreference, NotificationType, PrepMode } from '../types';
 import { db } from '../firebase';
 import { collection, query, where, onSnapshot, getDocs, getDocsFromServer, limit, addDoc, updateDoc, deleteDoc, doc, orderBy, setDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import logo from '../assets/scholar-main.png';
 import PartnershipLogos from './PartnershipLogos';
+import { PREP_MODE_FEATURES, PREP_MODE_LABELS, getTestPrepMode, hasActivePrepLicense } from '../lib/prepModes';
 import factsJson from '../data/facts.json';
 import { AppTheme, THEMES } from '../theme';
 import { toast } from './ui/Toast';
@@ -21,6 +22,8 @@ import { usePushNotifications } from '../lib/usePushNotifications';
 
 interface DashboardProps {
   user: User;
+  prepMode: PrepMode;
+  onSwitchPrepMode: () => void;
   onLogout: () => void;
   onStartTest: (test: MockTest, options?: { quizMode?: boolean }) => void;
   onReviewResult: (result: ExamResult) => void;
@@ -195,6 +198,8 @@ const LeaderboardModal: React.FC<{ test: MockTest, onClose: () => void }> = ({ t
 
 const Dashboard: React.FC<DashboardProps> = ({
   user,
+  prepMode,
+  onSwitchPrepMode,
   onLogout,
   onStartTest,
   onReviewResult,
@@ -217,6 +222,7 @@ const Dashboard: React.FC<DashboardProps> = ({
   onUserProfileUpdate,
   onOpenSocialProfileSetup
 }) => {
+  const prepFeatures = PREP_MODE_FEATURES[prepMode];
   const parseIsoDate = (value?: string) => {
     const ms = Date.parse(value || '');
     return Number.isFinite(ms) ? ms : 0;
@@ -225,6 +231,7 @@ const Dashboard: React.FC<DashboardProps> = ({
   const normalizeTestsForDisplay = (rows: MockTest[], maxRows: number) => {
     return rows
       .filter((t) => !(t as any).isPaused)
+      .filter((t) => getTestPrepMode(t) === prepMode)
       .sort((a, b) => parseIsoDate((b as any).updatedAt || b.createdAt) - parseIsoDate((a as any).updatedAt || a.createdAt))
       .slice(0, maxRows);
   };
@@ -296,13 +303,15 @@ const Dashboard: React.FC<DashboardProps> = ({
   const [showSessionModal, setShowSessionModal] = useState(false);
   const isStudent = user.role === 'student';
   const isTeacher = isTeacherRole(user);
-  const licenseEndsMs = Date.parse(user.subscriptionEndsAt || '');
+  const activePrepLicense = user.licenses?.[prepMode];
+  const legacyOauActive = prepMode === 'oau' && user.subscriptionStatus === 'active';
+  const licenseEndsMs = Date.parse(activePrepLicense?.endsAt || (legacyOauActive ? user.subscriptionEndsAt || '' : ''));
   const licenseEndsLabel = Number.isFinite(licenseEndsMs)
     ? new Date(licenseEndsMs).toLocaleDateString()
     : null;
-  const licenseStatusLabel = user.subscriptionStatus === 'active'
-    ? `Active${licenseEndsLabel ? ` (until: ${licenseEndsLabel})` : ''}`
-    : (user.subscriptionStatus || 'inactive');
+  const licenseStatusLabel = hasActivePrepLicense(user, prepMode)
+    ? `${PREP_MODE_LABELS[prepMode]} active${licenseEndsLabel ? ` (until: ${licenseEndsLabel})` : ''}`
+    : `${PREP_MODE_LABELS[prepMode]} inactive`;
   const dailyFactDateKey = getUtcDateKey();
   const dailyFact = getDailyFact();
   const dailyFactBadge = dailyFact?.category?.replace(/-/g, ' ') || 'daily fact';
@@ -628,6 +637,7 @@ const Dashboard: React.FC<DashboardProps> = ({
       (snap) => {
         const sorted = snap.docs
           .map(d => ({ ...d.data(), id: d.id } as ExamResult))
+          .filter((result) => ((result.prepMode as PrepMode) || 'oau') === prepMode)
           .sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime())
           .slice(0, lowDataMode ? 20 : 50);
         setHistory(sorted);
@@ -638,7 +648,7 @@ const Dashboard: React.FC<DashboardProps> = ({
       }
     );
     return () => { unsubTests(); unsubHistory(); };
-  }, [user.id, lowDataMode]);
+  }, [user.id, lowDataMode, prepMode]);
 
   useEffect(() => {
     const fetchCounts = async () => {
@@ -722,6 +732,10 @@ const Dashboard: React.FC<DashboardProps> = ({
   }, [activeTab]);
 
   useEffect(() => {
+    if (!prepFeatures.courses && !prepFeatures.attendance && !prepFeatures.community) {
+      setClassOptions([]);
+      return;
+    }
     const coursesQuery = isTeacher
       ? query(collection(db, 'courses'), orderBy('updatedAt', 'desc'), limit(200))
       : query(collection(db, 'courses'), where('isPublished', '==', true), orderBy('updatedAt', 'desc'), limit(200));
@@ -732,9 +746,13 @@ const Dashboard: React.FC<DashboardProps> = ({
       setClassOptions([]);
     });
     return () => unsub();
-  }, [isTeacher]);
+  }, [isTeacher, prepFeatures.courses, prepFeatures.attendance, prepFeatures.community]);
 
   useEffect(() => {
+    if (!prepFeatures.attendance && !prepFeatures.community) {
+      setClassEnrollments([]);
+      return;
+    }
     const unsub = onSnapshot(query(collection(db, 'courseEnrollmentsPublic'), limit(5000)), (snap) => {
       const baseRows = snap.docs.map((d) => {
         const data = d.data() as any;
@@ -750,9 +768,13 @@ const Dashboard: React.FC<DashboardProps> = ({
       setClassEnrollments([]);
     });
     return () => unsub();
-  }, []);
+  }, [prepFeatures.attendance, prepFeatures.community]);
 
   useEffect(() => {
+    if (!prepFeatures.attendance) {
+      setAnnouncements([]);
+      return;
+    }
     if (visibleClassIds.length === 0 && !isTeacher) {
       setAnnouncements([]);
       return;
@@ -772,9 +794,13 @@ const Dashboard: React.FC<DashboardProps> = ({
       setAnnouncements([]);
     });
     return () => unsub();
-  }, [isTeacher, user.id, visibleClassIds.join('|')]);
+  }, [isTeacher, user.id, visibleClassIds.join('|'), prepFeatures.attendance]);
 
   useEffect(() => {
+    if (!prepFeatures.attendance) {
+      setAnnouncementReads([]);
+      return;
+    }
     const unsub = onSnapshot(query(collection(db, 'announcementReads'), limit(5000)), (snap) => {
       const rows = snap.docs.map((d) => ({ ...d.data(), id: d.id } as AnnouncementRead));
       setAnnouncementReads(rows);
@@ -782,9 +808,13 @@ const Dashboard: React.FC<DashboardProps> = ({
       setAnnouncementReads([]);
     });
     return () => unsub();
-  }, []);
+  }, [prepFeatures.attendance]);
 
   useEffect(() => {
+    if (!prepFeatures.attendance) {
+      setScheduleSessions([]);
+      return;
+    }
     if (visibleClassIds.length === 0 && !isTeacher) {
       setScheduleSessions([]);
       return;
@@ -798,7 +828,7 @@ const Dashboard: React.FC<DashboardProps> = ({
       setScheduleSessions([]);
     });
     return () => unsub();
-  }, [isTeacher, visibleClassIds.join('|')]);
+  }, [isTeacher, visibleClassIds.join('|'), prepFeatures.attendance]);
 
   useEffect(() => {
     const unsub = onSnapshot(
@@ -1261,16 +1291,22 @@ const Dashboard: React.FC<DashboardProps> = ({
 
   const navTabs: Array<{ id: MainTab; label: string }> = [
     { id: 'home', label: 'Home' },
-    { id: 'announcements', label: 'Announcements' },
-    { id: 'schedule', label: 'Schedule' },
-    { id: 'community', label: 'Community' },
-    { id: 'videos', label: 'Videos' },
+    ...(prepFeatures.attendance ? [{ id: 'announcements' as MainTab, label: 'Announcements' }] : []),
+    ...(prepFeatures.attendance ? [{ id: 'schedule' as MainTab, label: 'Schedule' }] : []),
+    ...(prepFeatures.community ? [{ id: 'community' as MainTab, label: 'Community' }] : []),
+    ...(prepFeatures.videos ? [{ id: 'videos' as MainTab, label: 'Videos' }] : []),
     { id: 'ranks', label: 'Ranks' },
     { id: 'create', label: 'Create' },
     { id: 'reviews', label: 'Reviews' },
     { id: 'profile', label: 'Profile' }
   ];
   const mobileNavTabs = navTabs.filter((tab) => tab.id !== 'ranks');
+
+  useEffect(() => {
+    if (!navTabs.some((tab) => tab.id === activeTab)) {
+      setActiveTab('home');
+    }
+  }, [activeTab, navTabs]);
 
   const renderTabIcon = (tabId: MainTab) => {
     if (tabId === 'home') {
@@ -1473,10 +1509,16 @@ const Dashboard: React.FC<DashboardProps> = ({
               <img src={logo} alt="Scholar! logo" className="w-16 h-16" />
               <div>
                 <h1 className="text-2xl font-bold text-slate-950 uppercase tracking-tight leading-none">Student Dashboard</h1>
-                <p className="text-amber-600 text-xs font-black uppercase mt-1">Scholar!</p>
+                <p className="text-amber-600 text-xs font-black uppercase mt-1">{PREP_MODE_LABELS[prepMode]}</p>
                 <PartnershipLogos className="mt-2 items-start" size="compact" />
               </div>
             </div>
+            <button
+              onClick={onSwitchPrepMode}
+              className="px-6 py-3 text-xs font-black text-slate-700 bg-slate-50 border border-slate-200 rounded-2xl hover:bg-slate-100 uppercase tracking-widest shadow-sm"
+            >
+              Switch Prep
+            </button>
             {(user.role === 'admin' || user.role === 'root-admin') && onReturnToAdmin && (
               <button onClick={onReturnToAdmin} className="px-10 py-4 text-xs font-black text-amber-600 bg-amber-50 border border-amber-100 rounded-2xl hover:bg-amber-100 uppercase tracking-widest shadow-sm">Staff Settings</button>
             )}
@@ -1486,7 +1528,7 @@ const Dashboard: React.FC<DashboardProps> = ({
             >
               Open Reviews
             </button>
-            {onOpenCourses && (
+            {onOpenCourses && prepFeatures.courses && (
               <button
                 onClick={onOpenCourses}
                 className="px-6 py-3 text-xs font-black text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-2xl hover:bg-emerald-100 uppercase tracking-widest shadow-sm"
@@ -1494,7 +1536,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                 Open Courses
               </button>
             )}
-            {onOpenVideos && (
+            {onOpenVideos && prepFeatures.videos && (
               <button
                 onClick={onOpenVideos}
                 className="px-6 py-3 text-xs font-black text-violet-700 bg-violet-50 border border-violet-100 rounded-2xl hover:bg-violet-100 uppercase tracking-widest shadow-sm"
@@ -1505,60 +1547,15 @@ const Dashboard: React.FC<DashboardProps> = ({
           </div>
 
           <div className="mb-8 bg-white rounded-2xl border border-slate-100 p-2 hidden md:inline-flex gap-2">
-            <button
-              onClick={() => setActiveTab('home')}
-              className={`px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest ${activeTab === 'home' ? 'bg-slate-950 text-amber-500' : 'text-slate-500 bg-slate-50'}`}
-            >
-              Home
-            </button>
-            <button
-              onClick={() => setActiveTab('announcements')}
-              className={`px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest ${activeTab === 'announcements' ? 'bg-slate-950 text-amber-500' : 'text-slate-500 bg-slate-50'}`}
-            >
-              Announcements
-            </button>
-            <button
-              onClick={() => setActiveTab('schedule')}
-              className={`px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest ${activeTab === 'schedule' ? 'bg-slate-950 text-amber-500' : 'text-slate-500 bg-slate-50'}`}
-            >
-              Schedule
-            </button>
-            <button
-              onClick={() => setActiveTab('ranks')}
-              className={`px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest ${activeTab === 'ranks' ? 'bg-slate-950 text-amber-500' : 'text-slate-500 bg-slate-50'}`}
-            >
-              Ranks
-            </button>
-            <button
-              onClick={() => setActiveTab('community')}
-              className={`px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest ${activeTab === 'community' ? 'bg-slate-950 text-amber-500' : 'text-slate-500 bg-slate-50'}`}
-            >
-              Community
-            </button>
-            <button
-              onClick={() => setActiveTab('videos')}
-              className={`px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest ${activeTab === 'videos' ? 'bg-slate-950 text-amber-500' : 'text-slate-500 bg-slate-50'}`}
-            >
-              Videos
-            </button>
-            <button
-              onClick={() => setActiveTab('reviews')}
-              className={`px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest ${activeTab === 'reviews' ? 'bg-slate-950 text-amber-500' : 'text-slate-500 bg-slate-50'}`}
-            >
-              Reviews
-            </button>
-            <button
-              onClick={() => setActiveTab('create')}
-              className={`px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest ${activeTab === 'create' ? 'bg-slate-950 text-amber-500' : 'text-slate-500 bg-slate-50'}`}
-            >
-              Create
-            </button>
-            <button
-              onClick={() => setActiveTab('profile')}
-              className={`px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest ${activeTab === 'profile' ? 'bg-slate-950 text-amber-500' : 'text-slate-500 bg-slate-50'}`}
-            >
-              Profile
-            </button>
+            {navTabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest ${activeTab === tab.id ? 'bg-slate-950 text-amber-500' : 'text-slate-500 bg-slate-50'}`}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
 
           {activeTab === 'home' && (
@@ -1807,7 +1804,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                   >
                     Edit Profile
                   </button>
-                  {onOpenCourses && (
+                  {onOpenCourses && prepFeatures.courses && (
                     <button
                       onClick={onOpenCourses}
                       className="w-full py-4 bg-emerald-50 border border-emerald-100 text-emerald-700 rounded-2xl text-xs font-black uppercase tracking-widest"
@@ -1815,7 +1812,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                       Open Courses
                     </button>
                   )}
-                  {onOpenVideos && (
+                  {onOpenVideos && prepFeatures.videos && (
                     <button
                       onClick={onOpenVideos}
                       className="w-full py-4 bg-violet-50 border border-violet-100 text-violet-700 rounded-2xl text-xs font-black uppercase tracking-widest"
@@ -2185,7 +2182,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                   <div className="flex justify-between"><span className="text-slate-400">Role</span><span className="font-bold uppercase text-slate-900">{user.role}</span></div>
                   <div className="flex justify-between"><span className="text-slate-400">License</span><span className="font-bold text-slate-900">{licenseStatusLabel}</span></div>
                 </div>
-                {onOpenSocialProfileSetup ? (
+                {onOpenSocialProfileSetup && prepFeatures.community ? (
                   <button onClick={onOpenSocialProfileSetup} className="mt-4 w-full py-4 bg-sky-50 border border-sky-100 text-sky-700 rounded-2xl text-xs font-black uppercase tracking-widest">
                     Edit Social Profile
                   </button>

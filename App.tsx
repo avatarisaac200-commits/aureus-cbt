@@ -1,6 +1,6 @@
 ﻿
 import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
-import { User, MockTest, ExamResult, Question, TestSection, TestAttempt, DifficultyLevel, SharedQuiz, ViewState, BroadcastNotification, CustomThemeConfig, CommunityProfile } from './types';
+import { User, MockTest, ExamResult, Question, TestSection, TestAttempt, DifficultyLevel, SharedQuiz, ViewState, BroadcastNotification, CustomThemeConfig, CommunityProfile, PrepMode } from './types';
 import { auth, authPersistenceReady, db } from './firebase';
 import { onAuthStateChanged, sendEmailVerification } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 import { doc, getDoc, getDocFromServer, collection, getDocs, query, where, limit, documentId, updateDoc, addDoc, onSnapshot, setDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
@@ -12,8 +12,10 @@ import { ATTENDANCE_ROUTE, BLACKLIST_ROUTE } from './brainstorm';
 import { refreshOwnLeaderboardPublic, toPublicLeaderboardRow } from './lib/leaderboard';
 import SplashScreen from './components/SplashScreen';
 import PartnershipLogos from './components/PartnershipLogos';
+import { DEFAULT_PREP_MODE, PREP_MODE_FEATURES, PREP_MODE_LABELS, getTestPrepMode, hasActivePrepLicense, isPrepFeatureEnabled, normalizePrepMode } from './lib/prepModes';
 
 const Auth = lazy(() => import('./components/Auth'));
+const PrepSelector = lazy(() => import('./components/PrepSelector'));
 const Dashboard = lazy(() => import('./components/Dashboard'));
 const AdminDashboard = lazy(() => import('./components/AdminDashboard'));
 const RootAdminDashboard = lazy(() => import('./components/RootAdminDashboard'));
@@ -122,6 +124,7 @@ const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number, label: st
 const viewToPath = (view: ViewState) => {
   if (view === 'auth') return '/auth';
   if (view === 'verify-email') return '/verify-email';
+  if (view === 'prep-selector') return '/prep';
   if (view === 'dashboard') return '/dashboard';
   if (view === 'courses') return '/courses';
   if (view === 'videos') return '/videos';
@@ -137,6 +140,7 @@ const pathToView = (path: string): ViewState | null => {
   const normalized = path.toLowerCase();
   if (normalized === '/auth') return 'auth';
   if (normalized === '/verify-email') return 'verify-email';
+  if (normalized === '/prep') return 'prep-selector';
   if (normalized === '/dashboard' || normalized === '/') return 'dashboard';
   if (normalized === '/courses') return 'courses';
   if (normalized === '/videos') return 'videos';
@@ -151,6 +155,7 @@ const pathToView = (path: string): ViewState | null => {
 interface MonetizationModalProps {
   mode: MonetizationMode;
   isLocked: boolean;
+  productLabel: string;
   deadlineLabel: string;
   activationKey: string;
   onActivationKeyChange: (value: string) => void;
@@ -165,6 +170,7 @@ interface MonetizationModalProps {
 const MonetizationModal: React.FC<MonetizationModalProps> = ({
   mode,
   isLocked,
+  productLabel,
   deadlineLabel,
   activationKey,
   onActivationKeyChange,
@@ -191,13 +197,13 @@ const MonetizationModal: React.FC<MonetizationModalProps> = ({
         <div className="v2-scroll p-6 sm:p-8 space-y-5">
           {isPreDeadline ? (
             <p className="text-slate-600 text-sm leading-relaxed">
-              Scholar has been running on free resources. To keep service stable for growing usage, free access
+              {productLabel} has been running on free resources. To keep service stable for growing usage, free access
               ends on <strong>{deadlineLabel}</strong>. Buy your annual activation key before this date to
               avoid interruption.
             </p>
           ) : (
             <p className="text-slate-600 text-sm leading-relaxed">
-              Free access ended on <strong>{deadlineLabel}</strong>. To continue using Scholar,
+              To continue using <strong>{productLabel}</strong>,
               activate your annual license key.
             </p>
           )}
@@ -313,6 +319,7 @@ const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentView, setCurrentView] = useState<ViewState>('auth');
   const [lastMainView, setLastMainView] = useState<ViewState>('dashboard');
+  const [selectedPrepMode, setSelectedPrepMode] = useState<PrepMode>(DEFAULT_PREP_MODE);
   const [adminDefaultTab, setAdminDefaultTab] = useState<string>('questions');
   const [activeTest, setActiveTest] = useState<MockTest | null>(null);
   const [activeResolvedSections, setActiveResolvedSections] = useState<TestSection[] | null>(null);
@@ -343,7 +350,13 @@ const App: React.FC = () => {
   const getDefaultViewForRole = (role: User['role']) => {
     if (role === 'root-admin') return 'root-admin';
     if (role === 'admin') return 'admin';
-    return 'dashboard';
+    return 'prep-selector';
+  };
+
+  const getPostAuthViewForUser = (user: User): ViewState => {
+    if (user.role === 'root-admin') return 'root-admin';
+    if (user.role === 'admin') return 'admin';
+    return user.lastPrepMode ? 'dashboard' : 'prep-selector';
   };
 
   const getBroadcastSeenStorageKey = (userId: string) => `${BROADCAST_NOTIFICATIONS_SEEN_AT_PREFIX}:${userId}`;
@@ -409,9 +422,10 @@ const App: React.FC = () => {
     return Number.isFinite(endsAt) && endsAt > Date.now();
   };
 
-  const isReadOnlyForUnactivatedUser = (user: User | null) => {
+  const isReadOnlyForUnactivatedUser = (user: User | null, prepMode: PrepMode = selectedPrepMode) => {
     if (!user) return false;
-    if (isStaffUser(user) || hasActiveSubscription(user)) return false;
+    if (isStaffUser(user) || hasActivePrepLicense(user, prepMode)) return false;
+    if (prepMode !== DEFAULT_PREP_MODE) return true;
     const deadlineMs = Date.parse(freeAccessEndsAtIso);
     return Number.isFinite(deadlineMs) && Date.now() > deadlineMs;
   };
@@ -939,12 +953,6 @@ const App: React.FC = () => {
   };
 
   const tryStartTestFromLink = async (userObj: User, testId: string): Promise<boolean> => {
-    if (isReadOnlyForUnactivatedUser(userObj)) {
-      toast.warning('Activation required', 'Activate your license key to open shared tests.');
-      setShowMonetizationModal(true);
-      clearLinkedTestId();
-      return false;
-    }
     try {
       const testDoc = await getDocFromServer(doc(db, 'tests', testId));
       if (!testDoc.exists()) {
@@ -954,6 +962,14 @@ const App: React.FC = () => {
       }
 
       const test = { ...testDoc.data(), id: testDoc.id } as MockTest & { isPaused?: boolean };
+      const testPrepMode = getTestPrepMode(test);
+      setSelectedPrepMode(testPrepMode);
+      if (isReadOnlyForUnactivatedUser(userObj, testPrepMode)) {
+        toast.warning('Activation required', `Activate your ${PREP_MODE_LABELS[testPrepMode]} license key to open shared tests.`);
+        setShowMonetizationModal(true);
+        clearLinkedTestId();
+        return false;
+      }
       if (!test.isApproved || test.isPaused) {
         toast.warning('Test unavailable', 'This test is currently unavailable.');
         clearLinkedTestId();
@@ -1055,6 +1071,7 @@ const App: React.FC = () => {
         totalDurationSeconds: quiz.totalDurationSeconds,
         allowRetake: quiz.allowRetake,
         maxAttempts: quiz.maxAttempts ?? null,
+        prepMode: selectedPrepMode,
         createdBy: quiz.createdBy,
         creatorName: quiz.creatorName,
         isApproved: true,
@@ -1071,6 +1088,7 @@ const App: React.FC = () => {
           options: q.options,
           correctAnswerIndex: q.correctAnswerIndex,
           explanation: q.explanation || '',
+          prepMode: selectedPrepMode,
           createdBy: quiz.createdBy,
           createdAt: quiz.createdAt
         } as Question;
@@ -1103,6 +1121,8 @@ const App: React.FC = () => {
       const userDoc = await withTimeout(getDoc(doc(db, 'users', updatedUser.uid)), 12000, 'User profile load');
       if (userDoc.exists()) {
         const userData = userDoc.data() as User;
+        const userPrepMode = normalizePrepMode(userData.lastPrepMode);
+        setSelectedPrepMode(userPrepMode);
         const isOfficialEmail = updatedUser.email?.toLowerCase().endsWith('@aureusmedicos.com');
         const isManuallyVerified = userData.emailVerified === true;
         const isVerifiedForAccess = updatedUser.emailVerified || isOfficialEmail || isManuallyVerified;
@@ -1121,7 +1141,7 @@ const App: React.FC = () => {
           return;
         }
 
-        const userObj = { ...userData, id: updatedUser.uid, emailVerified: isVerifiedForAccess };
+        const userObj = { ...userData, id: updatedUser.uid, emailVerified: isVerifiedForAccess, lastPrepMode: userPrepMode };
         setCurrentUser(userObj);
 
         const linkedTestId = getLinkedTestId();
@@ -1129,12 +1149,12 @@ const App: React.FC = () => {
         if (linkedTestId) {
           const started = await tryStartTestFromLink(userObj, linkedTestId);
           if (!started) {
-            setCurrentView(getDefaultViewForRole(userData.role));
+            setCurrentView(getPostAuthViewForUser(userObj));
           }
         } else if (linkedQuizId) {
           const started = await tryStartQuizFromLink(userObj, linkedQuizId);
           if (!started) {
-            setCurrentView(getDefaultViewForRole(userData.role));
+            setCurrentView(getPostAuthViewForUser(userObj));
           }
         } else {
           const requestedView = typeof window !== 'undefined' ? pathToView(window.location.pathname) : null;
@@ -1152,9 +1172,9 @@ const App: React.FC = () => {
             setCurrentView('root-admin');
           } else if (requestedView === 'verify-email') {
             // If account is already verified, never route back to verify-email.
-            setCurrentView(getDefaultViewForRole(userData.role));
+            setCurrentView(getPostAuthViewForUser(userObj));
           } else {
-            setCurrentView(getDefaultViewForRole(userData.role));
+            setCurrentView(getPostAuthViewForUser(userObj));
           }
         }
       } else {
@@ -1359,12 +1379,31 @@ const App: React.FC = () => {
       setIsMonetizationLocked(false);
       return;
     }
+    if (!['dashboard', 'courses', 'videos'].includes(currentView)) {
+      setShowMonetizationModal(false);
+      setIsMonetizationLocked(false);
+      return;
+    }
+
+    const staff = isStaffUser(currentUser);
+    const paidForMode = hasActivePrepLicense(currentUser, selectedPrepMode);
+
+    if (selectedPrepMode !== DEFAULT_PREP_MODE) {
+      setMonetizationMode('post-deadline');
+      if (!staff && !paidForMode) {
+        setIsMonetizationLocked(false);
+        setShowMonetizationModal(true);
+      } else {
+        setIsMonetizationLocked(false);
+        setShowMonetizationModal(false);
+      }
+      return;
+    }
 
     const now = Date.now();
     const deadlineMs = Date.parse(freeAccessEndsAtIso);
     const isAfterDeadline = Number.isFinite(deadlineMs) && now > deadlineMs;
-    const staff = isStaffUser(currentUser);
-    const paid = hasActiveSubscription(currentUser);
+    const paid = paidForMode;
 
     if (isAfterDeadline) {
       setMonetizationMode('post-deadline');
@@ -1394,11 +1433,47 @@ const App: React.FC = () => {
 
     setIsMonetizationLocked(false);
     setShowMonetizationModal(true);
-  }, [currentUser, isLoading, freeAccessEndsAtIso]);
+  }, [currentUser, currentView, isLoading, freeAccessEndsAtIso, selectedPrepMode]);
 
   const handleOpenWhatsApp = () => {
     window.open(WHATSAPP_URL, '_blank', 'noopener,noreferrer');
   };
+
+  const handleSelectPrepMode = async (mode: PrepMode) => {
+    const normalizedMode = normalizePrepMode(mode);
+    setSelectedPrepMode(normalizedMode);
+    setCurrentUser((prev) => prev ? { ...prev, lastPrepMode: normalizedMode } : prev);
+    setCurrentView('dashboard');
+
+    if (!currentUser?.id) return;
+    try {
+      await updateDoc(doc(db, 'users', currentUser.id), { lastPrepMode: normalizedMode });
+    } catch (err) {
+      console.error('Prep mode save error:', err);
+      toast.warning('Prep mode not saved', 'You can continue, but this choice may not be remembered next time.');
+    }
+  };
+
+  const openPrepFeatureView = (view: 'courses' | 'videos' | 'attendance') => {
+    const feature = view === 'courses' ? 'courses' : view === 'videos' ? 'videos' : 'attendance';
+    if (!isPrepFeatureEnabled(selectedPrepMode, feature)) {
+      toast.info('OAU Prep only', 'Courses, forums, chats, and learning extras are available in OAU Prep.');
+      setCurrentView('dashboard');
+      return;
+    }
+    setCurrentView(view);
+  };
+
+  useEffect(() => {
+    if (!currentUser) return;
+    const blocked =
+      (currentView === 'courses' && !PREP_MODE_FEATURES[selectedPrepMode].courses)
+      || (currentView === 'videos' && !PREP_MODE_FEATURES[selectedPrepMode].videos)
+      || (currentView === 'attendance' && !PREP_MODE_FEATURES[selectedPrepMode].attendance);
+    if (!blocked) return;
+    toast.info('OAU Prep only', 'Courses, forums, chats, and learning extras are available in OAU Prep.');
+    setCurrentView('dashboard');
+  }, [currentUser, currentView, selectedPrepMode]);
 
   const handleContinueFree = () => {
     if (typeof window !== 'undefined') {
@@ -1443,30 +1518,57 @@ const App: React.FC = () => {
       }
 
       const durationDays = Number(keyData?.durationDays) > 0 ? Number(keyData.durationDays) : 365;
-      const currentEndsMs = Date.parse(currentUser.subscriptionEndsAt || '');
+      const targetPrepMode = normalizePrepMode(keyData?.prepMode || selectedPrepMode);
+      const existingLicense = currentUser.licenses?.[targetPrepMode];
+      const currentEndsMs = Date.parse(existingLicense?.endsAt || (targetPrepMode === DEFAULT_PREP_MODE ? currentUser.subscriptionEndsAt || '' : ''));
       const baseMs = Number.isFinite(currentEndsMs) && currentEndsMs > Date.now() ? currentEndsMs : Date.now();
       const nextEndsAt = new Date(baseMs + durationDays * 24 * 60 * 60 * 1000).toISOString();
       const nowIso = new Date().toISOString();
+      const licensePatch = {
+        status: 'active' as const,
+        activatedAt: nowIso,
+        endsAt: nextEndsAt,
+        key
+      };
+      const userPatch: Record<string, any> = {
+        [`licenses.${targetPrepMode}`]: licensePatch,
+        lastPrepMode: targetPrepMode
+      };
 
-      await updateDoc(doc(db, 'users', currentUser.id), {
-        subscriptionStatus: 'active',
-        subscriptionEndsAt: nextEndsAt,
-        activatedKey: key,
-        activatedAt: nowIso
-      });
+      if (targetPrepMode === DEFAULT_PREP_MODE) {
+        userPatch.subscriptionStatus = 'active';
+        userPatch.subscriptionEndsAt = nextEndsAt;
+        userPatch.activatedKey = key;
+        userPatch.activatedAt = nowIso;
+      }
+
+      await updateDoc(doc(db, 'users', currentUser.id), userPatch);
 
       await updateDoc(keyDocRef, {
         isUsed: true,
         status: 'used',
+        prepMode: targetPrepMode,
         redeemedBy: currentUser.id,
         redeemedByEmail: currentUser.email,
         redeemedAt: nowIso
       });
 
-      setCurrentUser(prev => (prev ? { ...prev, subscriptionStatus: 'active', subscriptionEndsAt: nextEndsAt } : prev));
+      setSelectedPrepMode(targetPrepMode);
+      setCurrentUser(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          lastPrepMode: targetPrepMode,
+          licenses: {
+            ...(prev.licenses || {}),
+            [targetPrepMode]: licensePatch
+          },
+          ...(targetPrepMode === DEFAULT_PREP_MODE ? { subscriptionStatus: 'active' as const, subscriptionEndsAt: nextEndsAt } : {})
+        };
+      });
       setShowMonetizationModal(false);
       setIsMonetizationLocked(false);
-      toast.success('Activated', 'License activated successfully.');
+      toast.success('Activated', `${PREP_MODE_LABELS[targetPrepMode]} license activated successfully.`);
       return true;
     } catch (err) {
       console.error('Activation failed:', err);
@@ -1517,6 +1619,7 @@ const App: React.FC = () => {
 
   const needsSocialOnboarding = Boolean(
     currentUser &&
+    PREP_MODE_FEATURES[selectedPrepMode].community &&
     isSocialProfileReady &&
     (!currentUser.socialOnboardingCompletedAt || !communityProfile?.onboardingCompletedAt)
   );
@@ -1600,6 +1703,13 @@ const App: React.FC = () => {
         }
       >
       {(currentView === 'auth' || (currentView === 'attendance' && !currentUser)) && <Auth onLogin={checkUserStatus} />}
+      {currentView === 'prep-selector' && currentUser && (
+        <PrepSelector
+          selectedPrepMode={selectedPrepMode}
+          onSelect={handleSelectPrepMode}
+          userName={currentUser.name}
+        />
+      )}
       {currentView === 'blacklist' && (
         <BlacklistPage
           onOpenAttendance={() => setCurrentView('attendance')}
@@ -1609,6 +1719,8 @@ const App: React.FC = () => {
       {currentView === 'dashboard' && currentUser && (
         <Dashboard 
           user={currentUser} 
+          prepMode={selectedPrepMode}
+          onSwitchPrepMode={() => setCurrentView('prep-selector')}
           onLogout={() => auth.signOut()} 
           onStartTest={async (test, options) => {
             if (isReadOnlyForUnactivatedUser(currentUser)) {
@@ -1642,8 +1754,8 @@ const App: React.FC = () => {
             setCurrentView('review');
           }}
           onReturnToAdmin={() => setCurrentView(currentUser.role === 'root-admin' ? 'root-admin' : 'admin')}
-          onOpenCourses={() => setCurrentView('courses')}
-          onOpenVideos={() => setCurrentView('videos')}
+          onOpenCourses={() => openPrepFeatureView('courses')}
+          onOpenVideos={() => openPrepFeatureView('videos')}
           onSaveOfflineTest={saveTestForOffline}
           isReadOnly={isReadOnlyForUnactivatedUser(currentUser)}
           deadlineLabel={deadlineLabel}
@@ -1694,7 +1806,7 @@ const App: React.FC = () => {
           initialTab={adminDefaultTab as any}
           onLogout={() => auth.signOut()} 
           onSwitchToStudent={() => setCurrentView('dashboard')}
-          onOpenCourses={() => setCurrentView('courses')}
+          onOpenCourses={() => openPrepFeatureView('courses')}
         />
       )}
       {currentView === 'root-admin' && currentUser && (
@@ -1732,6 +1844,7 @@ const App: React.FC = () => {
         <MonetizationModal
           mode={monetizationMode}
           isLocked={isMonetizationLocked}
+          productLabel={PREP_MODE_LABELS[selectedPrepMode]}
           deadlineLabel={deadlineLabel}
           activationKey={activationKey}
           onActivationKeyChange={setActivationKey}
