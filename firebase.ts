@@ -4,7 +4,7 @@ import { browserLocalPersistence, getAuth, setPersistence } from 'https://www.gs
 import { getFirestore, enableIndexedDbPersistence } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 
 /**
- * Firebase configuration for Aureus Medicos CBT.
+ * Firebase configuration for Scholar.
  */
 export const firebaseConfig = {
   apiKey: "AIzaSyCw9TAxS-fsJSpyXUI7z3GiuU_EGP24cus",

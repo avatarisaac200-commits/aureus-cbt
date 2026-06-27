@@ -2,7 +2,7 @@
 import { User, MockTest, ExamResult, QuizQuestion, SharedQuiz, CsvQuestionBundle, CustomThemeConfig, Announcement, AnnouncementRead, AppNotification, ClassSession, Course, NotificationPreference, NotificationType } from '../types';
 import { db } from '../firebase';
 import { collection, query, where, onSnapshot, getDocs, getDocsFromServer, limit, addDoc, updateDoc, deleteDoc, doc, orderBy, setDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
-import logo from '../assets/logo.png';
+import logo from '../assets/scholar-main.png';
 import factsJson from '../data/facts.json';
 import { AppTheme, THEMES } from '../theme';
 import { toast } from './ui/Toast';
@@ -1384,7 +1384,7 @@ const Dashboard: React.FC<DashboardProps> = ({
       <div className="flex flex-col min-h-0 overflow-hidden">
       <div className="v2-shell v3-topbar topbar bg-slate-950 py-[14px] px-[18px] md:px-8 flex justify-between items-center shrink-0 border-b border-slate-900 shadow-xl z-50 safe-top sticky top-0">
          <div>
-           <p className="text-xs text-amber-500 uppercase tracking-widest font-semibold">Exam Practice Portal</p>
+           <p className="text-xs text-amber-500 uppercase tracking-widest font-semibold">Learning Portal</p>
            <h1 className="font-display text-lg font-bold text-slate-100">{isTeacher ? 'Classboard Dashboard' : 'Student Dashboard'}</h1>
          </div>
          <div className="flex items-center gap-3">
@@ -1469,10 +1469,10 @@ const Dashboard: React.FC<DashboardProps> = ({
         <div className="max-w-6xl mx-auto">
           <div className="v3-hero-strip flex flex-col lg:flex-row justify-between items-center mb-6 gap-4 bg-white p-5 md:p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
             <div className="flex items-center gap-6">
-              <img src={logo} alt="Logo" className="w-16 h-16" />
+              <img src={logo} alt="Scholar! logo" className="w-16 h-16" />
               <div>
                 <h1 className="text-2xl font-bold text-slate-950 uppercase tracking-tight leading-none">Student Dashboard</h1>
-                <p className="text-amber-600 text-xs font-black uppercase mt-1">Aureus Medicos CBT</p>
+                <p className="text-amber-600 text-xs font-black uppercase mt-1">Scholar!</p>
               </div>
             </div>
             {(user.role === 'admin' || user.role === 'root-admin') && onReturnToAdmin && (

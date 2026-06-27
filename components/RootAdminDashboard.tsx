@@ -5,7 +5,7 @@ import { db, firebaseConfig } from '../firebase';
 import { collection, getDocs, doc, deleteDoc, setDoc, updateDoc, query, where, limit, writeBatch } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import { createUserWithEmailAndPassword, getAuth, sendEmailVerification } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
-import logo from '../assets/logo.png';
+import logo from '../assets/scholar-main.png';
 import { toast } from './ui/Toast';
 import { confirmDialog } from './ui/ConfirmDialog';
 
@@ -174,7 +174,7 @@ const RootAdminDashboard: React.FC<RootAdminDashboardProps> = ({ user, onLogout,
     <div className="v2-page flex-1 w-full bg-slate-50 flex flex-col overflow-hidden min-h-0">
       <div className="v2-shell bg-white border-b border-slate-100 p-6 flex flex-col md:flex-row justify-between items-center gap-4 shrink-0 safe-top">
         <div className="flex items-center gap-4">
-          <img src={logo} className="w-14 h-14" alt="Logo" />
+          <img src={logo} className="w-14 h-14" alt="Scholar! logo" />
           <div>
             <h1 className="text-xl font-bold text-slate-900 uppercase tracking-tight leading-none">Root Admin</h1>
             <p className="text-xs font-bold text-amber-600 uppercase tracking-widest mt-1">Full System Access</p>

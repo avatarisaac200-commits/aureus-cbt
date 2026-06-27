@@ -4,7 +4,7 @@ import { ExamResult, MockTest, Question, TestAttempt, TestSection } from '../typ
 import { db } from '../firebase';
 import { collection, getDocs, doc, getDoc, query, where, documentId, addDoc, updateDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import ScientificText from './ScientificText';
-import logo from '../assets/logo.png';
+import logo from '../assets/scholar-main.png';
 import { getOrCreateAiExplanation } from './aiExplanationService';
 import { toast } from './ui/Toast';
 
@@ -278,7 +278,7 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
   if (loading) {
     return (
       <div className="v2-page h-full w-full flex flex-col items-center justify-center bg-slate-950 safe-top safe-bottom">
-        <img src={logo} className="w-16 h-16 animate-spin mb-6" alt="Aureus Medicos CBT Logo" />
+        <img src={logo} className="w-16 h-16 animate-spin mb-6" alt="Scholar! logo" />
         <p className="text-[11px] font-black uppercase tracking-[0.4em] text-amber-500">Loading Review...</p>
       </div>
     );
@@ -287,7 +287,7 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
   if (!test) {
     return (
       <div className="v2-page h-full w-full flex flex-col items-center justify-center bg-slate-50 p-6 text-center safe-top safe-bottom">
-        <img src={logo} className="w-16 h-16 mb-6" alt="Aureus Medicos CBT Logo" />
+        <img src={logo} className="w-16 h-16 mb-6" alt="Scholar! logo" />
         <h2 className="text-xl font-bold text-slate-900 mb-2 uppercase">Review Unavailable</h2>
         <p className="text-slate-500 text-sm mb-6">We could not load this test.</p>
         <button onClick={onExit} className="px-8 py-3 bg-slate-950 text-amber-500 rounded-xl font-bold uppercase tracking-widest text-xs">Back</button>
@@ -298,7 +298,7 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
   if (reviewedSections.length === 0) {
     return (
       <div className="v2-page h-full w-full flex flex-col items-center justify-center bg-slate-50 p-6 text-center safe-top safe-bottom">
-        <img src={logo} className="w-16 h-16 mb-6" alt="Aureus Medicos CBT Logo" />
+        <img src={logo} className="w-16 h-16 mb-6" alt="Scholar! logo" />
         <h2 className="text-xl font-bold text-slate-900 mb-2 uppercase">Nothing To Review</h2>
         <p className="text-slate-500 text-sm mb-6">Only answered questions appear in review. This attempt has no answered questions.</p>
         <button onClick={onExit} className="px-8 py-3 bg-slate-950 text-amber-500 rounded-xl font-bold uppercase tracking-widest text-xs">Back</button>
@@ -310,7 +310,7 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
     <div className="v2-page flex flex-col h-full bg-slate-50 overflow-hidden min-h-0 safe-top">
       <header className="v2-shell bg-slate-950 text-white px-6 py-5 flex justify-between items-center border-b-4 border-amber-500 z-30 shrink-0">
         <div className="flex items-center gap-4">
-          <img src={logo} className="w-10 h-10" alt="Aureus Medicos CBT Logo" />
+          <img src={logo} className="w-10 h-10" alt="Scholar! logo" />
           <div>
             <h1 className="text-[11px] font-black uppercase tracking-[0.4em] text-amber-500 leading-none">Review Mode</h1>
             <p className="text-xs text-slate-400 font-bold uppercase truncate max-w-[200px] mt-1">{test.name}</p>
@@ -483,7 +483,7 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
 
       <footer className="v2-shell bg-white border-t border-slate-100 p-6 md:p-10 px-10 md:px-20 flex justify-between items-center z-20 shrink-0 safe-bottom">
         <div className="hidden sm:block text-xs font-black text-slate-400 uppercase tracking-[0.4em]">
-           Aureus Medicos CBT Review
+           Scholar Review
          </div>
          
          <div className="flex gap-4 w-full sm:w-auto">

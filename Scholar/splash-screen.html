@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Scholar! — Loading</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #f0f0f0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+
+    @keyframes bgFade     { from { opacity: 0 } to { opacity: 1 } }
+    @keyframes logoBlur   { 0%   { opacity: 0; filter: blur(24px); transform: scale(0.88) translateY(18px) }
+                            60%  { opacity: 1; filter: blur(2px);  transform: scale(1.01) translateY(-2px) }
+                            100% { opacity: 1; filter: blur(0);    transform: scale(1)    translateY(0)    } }
+    @keyframes glowPulse  { 0%, 100% { opacity: 0.35 } 50% { opacity: 0.6 } }
+    @keyframes textFadeUp { from { opacity: 0; transform: translateY(10px) } to { opacity: 1; transform: translateY(0) } }
+    @keyframes p1FadeIn   { from { opacity: 0; transform: translateY(8px)  } to { opacity: 1; transform: translateY(0) } }
+    @keyframes p2FadeIn   { from { opacity: 0; transform: translateY(8px)  } to { opacity: 1; transform: translateY(0) } }
+    @keyframes barGrow    { from { width: 0 }   to { width: 100% } }
+    @keyframes barShimmer { 0% { left: -100% }  100% { left: 200% } }
+    @keyframes fadeOut    { 0%  { opacity: 1; pointer-events: auto }
+                            90% { opacity: 0 }
+                            100%{ opacity: 0; pointer-events: none } }
+    @keyframes floatA     { 0%, 100% { transform: translate(0,0) scale(1) }
+                            50%       { transform: translate(12px,-18px) scale(1.04) } }
+    @keyframes floatB     { 0%, 100% { transform: translate(0,0) scale(1) }
+                            50%       { transform: translate(-10px,14px) scale(0.97) } }
+    @keyframes floatC     { 0%, 100% { transform: translate(0,0) }
+                            50%       { transform: translate(8px,10px) } }
+
+    @media (prefers-reduced-motion: reduce) {
+      * { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+    }
+
+    #splash {
+      position: relative;
+      width: min(680px, 100vw);
+      height: min(720px, 90vh);
+      background: #ffffff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      border-radius: 16px;
+      box-shadow: 0 4px 40px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04);
+      animation: bgFade 0.6s ease both;
+    }
+
+    /* ── Full-page variant (uncomment for real app) ──
+    #splash { width: 100vw; height: 100vh; border-radius: 0; box-shadow: none; } */
+
+    .orbs { position: absolute; inset: 0; pointer-events: none; }
+    .orb  { position: absolute; border-radius: 50%; filter: blur(90px); }
+    .orb-a {
+      width: 55%; height: 55%; top: -15%; left: -10%;
+      background: radial-gradient(circle, #ede9fe 0%, transparent 70%);
+      animation: floatA 9s ease-in-out infinite;
+    }
+    .orb-b {
+      width: 45%; height: 45%; bottom: -10%; right: -5%;
+      background: radial-gradient(circle, #dbeafe 0%, transparent 70%);
+      animation: floatB 11s ease-in-out infinite;
+    }
+    .orb-c {
+      width: 30%; height: 30%; top: 30%; left: 40%;
+      background: radial-gradient(circle, #f3e8ff 0%, transparent 70%);
+      animation: floatC 13s ease-in-out infinite;
+    }
+
+    .content {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 100%;
+      padding: 0 24px;
+    }
+
+    .logo-wrap {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-bottom: 40px;
+      animation: logoBlur 1.4s cubic-bezier(0.22,1,0.36,1) 0.3s both;
+    }
+
+    .logo-glow {
+      position: absolute;
+      width: 200px; height: 200px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(139,92,246,0.15) 0%, transparent 70%);
+      animation: glowPulse 3s ease-in-out 1.8s infinite;
+      pointer-events: none;
+    }
+
+    .logo-img {
+      width: 100px;
+      height: 100px;
+      object-fit: contain;
+      position: relative;
+    }
+
+    .wordmark {
+      margin-top: 18px;
+      font-size: clamp(26px, 5vw, 38px);
+      font-weight: 700;
+      letter-spacing: -0.04em;
+      color: #1a1030;
+      animation: logoBlur 1.4s cubic-bezier(0.22,1,0.36,1) 0.45s both;
+      text-align: center;
+    }
+
+    .tagline {
+      margin-top: 8px;
+      font-size: clamp(11px, 1.8vw, 13px);
+      font-weight: 400;
+      letter-spacing: 0.06em;
+      color: rgba(90,75,130,0.55);
+      animation: logoBlur 1.4s cubic-bezier(0.22,1,0.36,1) 0.55s both;
+      text-align: center;
+      max-width: 300px;
+      line-height: 1.5;
+    }
+
+    .divider {
+      width: 1px; height: 28px;
+      background: linear-gradient(to bottom, transparent, rgba(139,92,246,0.2), transparent);
+      margin: 28px auto 22px;
+      animation: textFadeUp 0.7s ease 1.7s both;
+    }
+
+    .partner-label {
+      font-size: 10px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: rgba(100,85,140,0.38);
+      animation: textFadeUp 0.7s ease 1.85s both;
+      text-align: center;
+      margin-bottom: 16px;
+    }
+
+    .partners {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: clamp(24px, 5vw, 44px);
+    }
+
+    .partner {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0.45;
+      transition: opacity 0.2s ease;
+    }
+    .partner:hover { opacity: 0.7; }
+
+    .p1 { animation: p1FadeIn 0.6s ease 2.05s both; }
+    .p2 { animation: p2FadeIn 0.6s ease 2.25s both; }
+
+    .partner-sep {
+      width: 1px; height: 28px;
+      background: rgba(139,92,246,0.1);
+      animation: textFadeUp 0.5s ease 2.15s both;
+    }
+
+    .partner-img {
+      height: 32px;
+      width: auto;
+      max-width: 100px;
+      object-fit: contain;
+    }
+
+    .progress-track {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 2px;
+      background: rgba(139,92,246,0.07);
+      overflow: hidden;
+      border-radius: 0 0 16px 16px;
+    }
+    .progress-bar {
+      height: 100%;
+      width: 0;
+      background: linear-gradient(90deg, #7c3aed, #a78bfa, #c084fc);
+      border-radius: 0 2px 2px 0;
+      animation: barGrow 3.2s cubic-bezier(0.4,0,0.2,1) 0.8s forwards;
+      position: relative;
+      overflow: hidden;
+    }
+    .progress-shimmer {
+      position: absolute;
+      top: 0; left: -100%;
+      width: 60%; height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.7), transparent);
+      animation: barShimmer 1.6s ease-in-out 2s infinite;
+    }
+
+    #dismiss {
+      position: absolute;
+      top: 16px; right: 16px;
+      z-index: 10;
+      background: rgba(139,92,246,0.06);
+      border: 0.5px solid rgba(139,92,246,0.18);
+      color: rgba(109,40,217,0.5);
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      padding: 6px 14px;
+      border-radius: 999px;
+      cursor: pointer;
+      opacity: 0;
+      animation: textFadeUp 0.5s ease 3.2s forwards;
+      transition: background 0.2s, color 0.2s;
+      font-family: inherit;
+    }
+    #dismiss:hover {
+      background: rgba(139,92,246,0.1);
+      color: rgba(109,40,217,0.8);
+    }
+
+    #splash.exiting { animation: fadeOut 0.8s ease forwards; }
+  </style>
+</head>
+<body>
+
+<div id="splash" role="status" aria-label="Loading Scholar!">
+
+  <div class="orbs">
+    <div class="orb orb-a"></div>
+    <div class="orb orb-b"></div>
+    <div class="orb orb-c"></div>
+  </div>
+
+  <div class="content">
+
+    <!-- ── Main logo ── -->
+    <div class="logo-wrap">
+      <div class="logo-glow"></div>
+      <!--
+        REPLACE src WITH YOUR ACTUAL LOGO FILE.
+        Supported formats: PNG, SVG, WebP, JPG.
+        Examples: src="./assets/Main.png"  or  src="./assets/Main.svg"
+      -->
+      <img class="logo-img" src="./assets/Main.png" alt="Scholar! logo"/>
+
+      <div class="tagline">Mindset over matter. Act like a Scholar.</div>
+    </div>
+
+    <!-- ── Partnership row ── -->
+    <div class="divider"></div>
+    <div class="partner-label">In partnership with</div>
+
+    <div class="partners">
+      <div class="partner p1">
+        <!--
+          REPLACE src WITH YOUR FIRST PARTNER LOGO.
+          Examples: src="./assets/partner1.png"  or  src="./assets/partner1.svg"
+        -->
+        <img class="partner-img" src="./assets/partner1.png" alt="Partner 1"/>
+      </div>
+
+      <div class="partner-sep"></div>
+
+      <div class="partner p2">
+        <!--
+          REPLACE src WITH YOUR SECOND PARTNER LOGO.
+          Examples: src="./assets/partner2.png"  or  src="./assets/partner2.svg"
+        -->
+        <img class="partner-img" src="./assets/partner2.png" alt="Partner 2"/>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── Progress bar ── -->
+  <div class="progress-track">
+    <div class="progress-bar">
+      <div class="progress-shimmer"></div>
+    </div>
+  </div>
+
+  <!-- ── Skip button ── -->
+  <button id="dismiss"
+    onclick="document.getElementById('splash').classList.add('exiting')"
+    aria-label="Skip loading screen">
+    Skip
+  </button>
+
+</div>
+
+</body>
+</html>

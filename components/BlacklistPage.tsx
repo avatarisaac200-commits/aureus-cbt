@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { db } from '../firebase';
 import { collection, limit, onSnapshot, orderBy, query } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
-import logo from '../assets/logo.png';
+import logo from '../assets/scholar-main.png';
 
 interface BlacklistEntry {
   userId: string;
@@ -40,7 +40,7 @@ const BlacklistPage: React.FC<BlacklistPageProps> = ({ onOpenAttendance, onOpenD
         <section className="bg-slate-950 text-white rounded-[2.5rem] border-b-8 border-red-500 px-6 py-7 md:px-8">
           <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
             <div className="flex items-center gap-4">
-              <img src={logo} alt="Logo" className="w-14 h-14" />
+              <img src={logo} alt="Scholar! logo" className="w-14 h-14" />
               <div>
                 <p className="text-[11px] font-black uppercase tracking-[0.32em] text-red-300">Public Attendance Status</p>
                 <h1 className="text-2xl font-black uppercase tracking-tight">Blacklist</h1>

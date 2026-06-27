@@ -4,12 +4,13 @@ import { User, MockTest, ExamResult, Question, TestSection, TestAttempt, Difficu
 import { auth, authPersistenceReady, db } from './firebase';
 import { onAuthStateChanged, sendEmailVerification } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 import { doc, getDoc, getDocFromServer, collection, getDocs, query, where, limit, documentId, updateDoc, addDoc, onSnapshot, setDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
-import logo from './assets/logo.png';
+import logo from './assets/scholar-main.png';
 import { AppTheme } from './theme';
 import { clearGlassAccent, syncGlassAccent } from './glassAccent';
 import { toast } from './components/ui/Toast';
 import { ATTENDANCE_ROUTE, BLACKLIST_ROUTE } from './brainstorm';
 import { refreshOwnLeaderboardPublic, toPublicLeaderboardRow } from './lib/leaderboard';
+import SplashScreen from './components/SplashScreen';
 
 const Auth = lazy(() => import('./components/Auth'));
 const Dashboard = lazy(() => import('./components/Dashboard'));
@@ -29,7 +30,7 @@ const DEFAULT_FREE_ACCESS_ENDS_AT_ISO = '2026-04-01T23:00:00.000Z'; // April 2, 
 const DEADLINE_CONFIG_DOC_ID = 'deadline_config';
 const LICENSE_PROMPT_SNOOZE_HOURS = 24;
 const WHATSAPP_PHONE = '2348145807650';
-const WHATSAPP_URL = `https://wa.me/${WHATSAPP_PHONE}?text=${encodeURIComponent('Hello, I want to purchase my CBT annual license key.')}`;
+const WHATSAPP_URL = `https://wa.me/${WHATSAPP_PHONE}?text=${encodeURIComponent('Hello, I want to purchase my Scholar annual license key.')}`;
 const OFFLINE_PACKAGE_KEY_PREFIX = 'testpkg:offline:';
 const PENDING_RESULTS_QUEUE_KEY = 'pendingResultsQueue';
 const QUESTION_FETCH_LIMIT = 3000;
@@ -189,13 +190,13 @@ const MonetizationModal: React.FC<MonetizationModalProps> = ({
         <div className="v2-scroll p-6 sm:p-8 space-y-5">
           {isPreDeadline ? (
             <p className="text-slate-600 text-sm leading-relaxed">
-              This CBT platform has been running on free resources. To keep service stable for growing usage, free access
+              Scholar has been running on free resources. To keep service stable for growing usage, free access
               ends on <strong>{deadlineLabel}</strong>. Buy your annual activation key before this date to
               avoid interruption.
             </p>
           ) : (
             <p className="text-slate-600 text-sm leading-relaxed">
-              Free access ended on <strong>{deadlineLabel}</strong>. To continue using the CBT simulator,
+              Free access ended on <strong>{deadlineLabel}</strong>. To continue using Scholar,
               activate your annual license key.
             </p>
           )}
@@ -307,6 +308,7 @@ const SocialProfilePrompt: React.FC<SocialProfilePromptProps> = ({ onCreateNow, 
 };
 
 const App: React.FC = () => {
+  const [showSplash, setShowSplash] = useState(true);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentView, setCurrentView] = useState<ViewState>('auth');
   const [lastMainView, setLastMainView] = useState<ViewState>('dashboard');
@@ -1531,12 +1533,16 @@ const App: React.FC = () => {
     toast.info('Profile setup saved for later', 'Open Profile, then Edit Social Profile when you are ready.');
   };
 
+  if (showSplash) {
+    return <SplashScreen onDone={() => setShowSplash(false)} />;
+  }
+
   if (isLoading) {
     return (
       <div className="h-full w-full flex flex-col items-center justify-center bg-slate-950">
-        <img src={logo} className="w-20 h-20 animate-pulse mb-6" alt="Aureus Medicos CBT Logo" />
+        <img src={logo} className="w-20 h-20 animate-pulse mb-6" alt="Scholar! logo" />
         <div className="flex flex-col items-center">
-          <p className="text-amber-500 text-xs font-black uppercase tracking-[0.5em] mb-2">Aureus Medicos CBT</p>
+          <p className="text-amber-500 text-xs font-black uppercase tracking-[0.5em] mb-2">Scholar!</p>
           <div className="w-32 h-1 bg-slate-900 rounded-full overflow-hidden">
             <div className="h-full bg-amber-500 w-1/2 animate-shimmer"></div>
           </div>
@@ -1548,7 +1554,7 @@ const App: React.FC = () => {
   if (packagingState) {
     return (
       <div className="h-full w-full flex flex-col items-center justify-center bg-slate-950 p-8 text-center">
-        <img src={logo} className="w-16 h-16 animate-pulse mb-6" alt="Aureus Medicos CBT Logo" />
+        <img src={logo} className="w-16 h-16 animate-pulse mb-6" alt="Scholar! logo" />
         <p className="text-amber-500 text-xs font-black uppercase tracking-[0.4em] mb-4">{packagingState.message}</p>
         <div className="w-64 h-2 bg-slate-900 rounded-full overflow-hidden mb-3">
           <div className="h-full bg-amber-500 transition-all duration-300" style={{ width: `${packagingState.progress}%` }}></div>
@@ -1583,7 +1589,7 @@ const App: React.FC = () => {
       <Suspense
         fallback={
           <div className="h-full w-full flex flex-col items-center justify-center bg-slate-950 p-8 text-center">
-            <img src={logo} className="w-16 h-16 animate-pulse mb-6" alt="Aureus Medicos CBT Logo" />
+            <img src={logo} className="w-16 h-16 animate-pulse mb-6" alt="Scholar! logo" />
             <p className="text-amber-500 text-xs font-black uppercase tracking-[0.4em] mb-2">Loading Screen</p>
           </div>
         }

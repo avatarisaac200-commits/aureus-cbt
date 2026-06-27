@@ -7,7 +7,7 @@ import { GoogleGenAI } from '@google/genai';
 import ScientificText from './ScientificText';
 import AdminAnalytics from './AdminAnalytics';
 import AdminVideoManager from './AdminVideoManager';
-import logo from '../assets/logo.png';
+import logo from '../assets/scholar-main.png';
 import { toast } from './ui/Toast';
 import { confirmDialog } from './ui/ConfirmDialog';
 import { DEFAULT_BRAINSTORM_WINDOWS, minutesToLabel, minutesToTimeInputValue, sanitizeBrainstormWindows, timeInputValueToMinutes } from '../brainstorm';
@@ -2504,7 +2504,7 @@ Rules:
     <div className="v2-page flex-1 w-full bg-slate-50 flex flex-col overflow-hidden min-h-0">
       <div className="v2-shell bg-white border-b border-slate-100 p-6 flex justify-between items-center shrink-0 safe-top shadow-sm z-10">
         <div className="flex items-center gap-4">
-          <img src={logo} className="w-10 h-10" alt="Logo" />
+          <img src={logo} className="w-10 h-10" alt="Scholar! logo" />
           <div>
             <h1 className="text-lg font-bold text-slate-900 leading-none">Admin Panel</h1>
             <div className="flex items-center gap-2 mt-1">
