@@ -8,6 +8,7 @@ import ScientificText from './ScientificText';
 import AdminAnalytics from './AdminAnalytics';
 import AdminVideoManager from './AdminVideoManager';
 import logo from '../assets/scholar-main.png';
+import PartnershipLogos from './PartnershipLogos';
 import { toast } from './ui/Toast';
 import { confirmDialog } from './ui/ConfirmDialog';
 import { DEFAULT_BRAINSTORM_WINDOWS, minutesToLabel, minutesToTimeInputValue, sanitizeBrainstormWindows, timeInputValueToMinutes } from '../brainstorm';
@@ -2511,6 +2512,7 @@ Rules:
                <span className={`w-2 h-2 rounded-full ${dbError ? 'bg-red-500' : 'bg-emerald-500'} animate-pulse`}></span>
                <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">{dbError || 'Connected'}</span>
             </div>
+            <PartnershipLogos className="mt-2 items-start" size="compact" />
           </div>
         </div>
         <div className="flex gap-2">

@@ -6,6 +6,7 @@ import { collection, getDocs, doc, deleteDoc, setDoc, updateDoc, query, where, l
 import { createUserWithEmailAndPassword, getAuth, sendEmailVerification } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
 import logo from '../assets/scholar-main.png';
+import PartnershipLogos from './PartnershipLogos';
 import { toast } from './ui/Toast';
 import { confirmDialog } from './ui/ConfirmDialog';
 
@@ -178,6 +179,7 @@ const RootAdminDashboard: React.FC<RootAdminDashboardProps> = ({ user, onLogout,
           <div>
             <h1 className="text-xl font-bold text-slate-900 uppercase tracking-tight leading-none">Root Admin</h1>
             <p className="text-xs font-bold text-amber-600 uppercase tracking-widest mt-1">Full System Access</p>
+            <PartnershipLogos className="mt-2 items-start" size="compact" />
           </div>
         </div>
         <div className="flex gap-2">

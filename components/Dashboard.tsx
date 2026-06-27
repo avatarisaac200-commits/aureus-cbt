@@ -3,6 +3,7 @@ import { User, MockTest, ExamResult, QuizQuestion, SharedQuiz, CsvQuestionBundle
 import { db } from '../firebase';
 import { collection, query, where, onSnapshot, getDocs, getDocsFromServer, limit, addDoc, updateDoc, deleteDoc, doc, orderBy, setDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import logo from '../assets/scholar-main.png';
+import PartnershipLogos from './PartnershipLogos';
 import factsJson from '../data/facts.json';
 import { AppTheme, THEMES } from '../theme';
 import { toast } from './ui/Toast';
@@ -1473,6 +1474,7 @@ const Dashboard: React.FC<DashboardProps> = ({
               <div>
                 <h1 className="text-2xl font-bold text-slate-950 uppercase tracking-tight leading-none">Student Dashboard</h1>
                 <p className="text-amber-600 text-xs font-black uppercase mt-1">Scholar!</p>
+                <PartnershipLogos className="mt-2 items-start" size="compact" />
               </div>
             </div>
             {(user.role === 'admin' || user.role === 'root-admin') && onReturnToAdmin && (

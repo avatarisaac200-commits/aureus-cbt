@@ -128,8 +128,8 @@ body.splash-active {
 
 #splash .logo-glow {
   position: absolute;
-  width: 200px;
-  height: 200px;
+  width: 230px;
+  height: 230px;
   border-radius: 50%;
   background: radial-gradient(circle, rgba(139,92,246,0.15) 0%, transparent 70%);
   animation: splashGlowPulse 3s ease-in-out 1.8s infinite;
@@ -137,15 +137,15 @@ body.splash-active {
 }
 
 #splash .logo-img {
-  width: 100px;
-  height: 100px;
+  width: clamp(118px, 16vw, 138px);
+  height: clamp(118px, 16vw, 138px);
   object-fit: contain;
   position: relative;
 }
 
 #splash .tagline {
-  margin-top: 8px;
-  font-size: clamp(11px, 1.8vw, 13px);
+  margin-top: 10px;
+  font-size: clamp(13px, 2vw, 15px);
   font-weight: 400;
   letter-spacing: 0.06em;
   color: rgba(90,75,130,0.55);
@@ -164,7 +164,7 @@ body.splash-active {
 }
 
 #splash .partner-label {
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 0.2em;
   text-transform: uppercase;
   color: rgba(100,85,140,0.38);
@@ -203,9 +203,9 @@ body.splash-active {
 }
 
 #splash .partner-img {
-  height: 32px;
+  height: clamp(38px, 5vw, 44px);
   width: auto;
-  max-width: 100px;
+  max-width: 130px;
   object-fit: contain;
 }
 
@@ -248,7 +248,7 @@ body.splash-active {
   background: rgba(139,92,246,0.06);
   border: 0.5px solid rgba(139,92,246,0.18);
   color: rgba(109,40,217,0.5);
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   padding: 6px 14px;

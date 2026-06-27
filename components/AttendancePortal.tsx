@@ -3,6 +3,7 @@ import { User } from '../types';
 import { db } from '../firebase';
 import { doc, getDoc, onSnapshot, runTransaction } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import logo from '../assets/scholar-main.png';
+import PartnershipLogos from './PartnershipLogos';
 import { toast } from './ui/Toast';
 import {
   BRAINSTORM_SESSION_TITLE,
@@ -278,6 +279,7 @@ const AttendancePortal: React.FC<AttendancePortalProps> = ({
                 <p className="text-[11px] font-black uppercase tracking-[0.32em] text-amber-400">Pinned Access Link</p>
                 <h1 className="text-2xl font-black uppercase tracking-tight">{BRAINSTORM_SESSION_TITLE}</h1>
                 <p className="text-sm text-slate-300 mt-1">Timezone: {BRAINSTORM_TIMEZONE}. Session date: {dateKey}.</p>
+                <PartnershipLogos className="mt-3 items-start" variant="dark" size="compact" />
               </div>
             </div>
             <div className="flex flex-wrap gap-2">

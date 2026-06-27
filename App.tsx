@@ -11,6 +11,7 @@ import { toast } from './components/ui/Toast';
 import { ATTENDANCE_ROUTE, BLACKLIST_ROUTE } from './brainstorm';
 import { refreshOwnLeaderboardPublic, toPublicLeaderboardRow } from './lib/leaderboard';
 import SplashScreen from './components/SplashScreen';
+import PartnershipLogos from './components/PartnershipLogos';
 
 const Auth = lazy(() => import('./components/Auth'));
 const Dashboard = lazy(() => import('./components/Dashboard'));
@@ -1546,6 +1547,7 @@ const App: React.FC = () => {
           <div className="w-32 h-1 bg-slate-900 rounded-full overflow-hidden">
             <div className="h-full bg-amber-500 w-1/2 animate-shimmer"></div>
           </div>
+          <PartnershipLogos className="mt-6" variant="dark" size="compact" />
         </div>
       </div>
     );
@@ -1560,6 +1562,7 @@ const App: React.FC = () => {
           <div className="h-full bg-amber-500 transition-all duration-300" style={{ width: `${packagingState.progress}%` }}></div>
         </div>
         <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">{packagingState.progress}%</p>
+        <PartnershipLogos className="mt-6" variant="dark" size="compact" />
       </div>
     );
   }
@@ -1569,6 +1572,7 @@ const App: React.FC = () => {
       <div className="h-full w-full flex flex-col items-center justify-center bg-slate-50 p-6 text-center">
         <img src={logo} className="w-16 h-16 mb-6" alt="Logo" />
         <h2 className="text-2xl font-black text-slate-950 uppercase tracking-tight mb-2">Verify Your Email</h2>
+        <PartnershipLogos className="mb-6" size="compact" />
         <p className="text-slate-500 text-sm max-w-sm mb-8 leading-relaxed">
           We sent a verification link to your email. Open it to activate your account, and check spam/junk if you do not see it.
         </p>
@@ -1591,6 +1595,7 @@ const App: React.FC = () => {
           <div className="h-full w-full flex flex-col items-center justify-center bg-slate-950 p-8 text-center">
             <img src={logo} className="w-16 h-16 animate-pulse mb-6" alt="Scholar! logo" />
             <p className="text-amber-500 text-xs font-black uppercase tracking-[0.4em] mb-2">Loading Screen</p>
+            <PartnershipLogos className="mt-5" variant="dark" size="compact" />
           </div>
         }
       >
