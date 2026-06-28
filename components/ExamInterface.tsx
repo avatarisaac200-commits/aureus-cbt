@@ -5,11 +5,10 @@ import { db } from '../firebase';
 import { collection, getDocs, addDoc, query, where, documentId, doc, setDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import Calculator from './Calculator';
 import ScientificText from './ScientificText';
-import logo from '../assets/scholar-main.png';
+import logo from '../assets/logo.png';
 import { getOrCreateAiExplanation } from './aiExplanationService';
 import { confirmDialog } from './ui/ConfirmDialog';
 import { refreshOwnLeaderboardPublic, toPublicLeaderboardRow } from '../lib/leaderboard';
-import { DEFAULT_PREP_MODE, getTestPrepMode } from '../lib/prepModes';
 
 interface ExamInterfaceProps {
   test: MockTest;
@@ -168,7 +167,6 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
       userName: user.name,
       testId: test.id,
       testName: test.name,
-      prepMode: getTestPrepMode(test) || DEFAULT_PREP_MODE,
       score: totalScore,
       maxScore: maxScore,
       correctAnsweredCount,
@@ -351,7 +349,7 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
   if (isPreparingQuestions) {
     return (
       <div className="v2-page h-full w-full flex flex-col items-center justify-center bg-slate-950 p-8 text-center">
-        <img src={logo} className="w-12 h-12 animate-pulse mb-5" alt="Scholar! logo" />
+        <img src={logo} className="w-12 h-12 animate-pulse mb-5" alt="Aureus Medicos CBT Logo" />
         <p className="text-amber-500 text-xs font-black uppercase tracking-[0.3em] mb-2">Preparing Question Package</p>
         <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">Please wait...</p>
       </div>
@@ -361,7 +359,7 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
   if (questionLoadError) {
     return (
       <div className="v2-page h-full w-full flex flex-col items-center justify-center bg-slate-50 p-8 text-center">
-        <img src={logo} className="w-14 h-14 mb-6" alt="Scholar! logo" />
+        <img src={logo} className="w-14 h-14 mb-6" alt="Aureus Medicos CBT Logo" />
         <p className="text-red-600 text-xs font-black uppercase tracking-[0.2em] mb-3">Could Not Open Test</p>
         <p className="text-slate-500 text-sm max-w-md mb-8">{questionLoadError}</p>
         <button onClick={onExit} className="px-8 py-3 bg-slate-950 text-amber-500 rounded-xl text-xs font-bold uppercase tracking-widest">Back to Dashboard</button>
@@ -376,7 +374,7 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
           <div className="flex items-center gap-4">
             <img src={logo} className="w-10 h-10" alt="Logo" />
             <div>
-              <h1 className="text-xs font-bold uppercase tracking-widest text-amber-500">Scholar!</h1>
+              <h1 className="text-xs font-bold uppercase tracking-widest text-amber-500">Aureus Medicos</h1>
               <p className="text-xs text-slate-400 font-bold uppercase truncate max-w-[150px]">{test.name}</p>
             </div>
           </div>
@@ -437,7 +435,7 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
   if (!activeSection) {
     return (
       <div className="v2-page h-full w-full flex flex-col items-center justify-center bg-slate-950 p-8 text-center">
-        <img src={logo} className="w-12 h-12 animate-pulse mb-5" alt="Scholar! logo" />
+        <img src={logo} className="w-12 h-12 animate-pulse mb-5" alt="Aureus Medicos CBT Logo" />
         <p className="text-amber-500 text-xs font-black uppercase tracking-[0.3em] mb-2">Preparing Section</p>
         <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">Please wait...</p>
       </div>
@@ -450,7 +448,7 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
         <div className="flex items-center gap-4">
           <img src={logo} className="w-8 h-8" alt="Logo" />
           <div className="hidden sm:block">
-            <h1 className="text-xs font-bold uppercase tracking-widest text-amber-500">Scholar!</h1>
+            <h1 className="text-xs font-bold uppercase tracking-widest text-amber-500">Aureus Medicos</h1>
             <p className="text-xs text-slate-400 font-bold uppercase truncate max-w-[200px] mt-0.5">{test.name}</p>
           </div>
         </div>

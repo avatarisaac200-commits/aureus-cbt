@@ -1,15 +1,15 @@
 {
-  "short_name": "Scholar!",
-  "name": "Scholar!",
+  "short_name": "Aureus CBT",
+  "name": "Aureus Medicos CBT",
   "icons": [
     {
-      "src": "/assets/scholar-main.png",
+      "src": "/assets/logo.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "/assets/scholar-main.png",
+      "src": "/assets/logo.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"

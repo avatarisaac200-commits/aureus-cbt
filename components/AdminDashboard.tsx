@@ -1,15 +1,13 @@
 
 import React, { useState, useRef, useMemo, useEffect } from 'react';
-import { User, Question, TestSection, MockTest, ExamResult, DifficultyLevel, TestGenerationMode, CsvBundleCategoryField, CsvQuestionBundle, QuestionTagInsight, PrepMode } from '../types';
+import { User, Question, TestSection, MockTest, ExamResult, DifficultyLevel, TestGenerationMode, CsvBundleCategoryField, CsvQuestionBundle, QuestionTagInsight } from '../types';
 import { db } from '../firebase';
 import { collection, addDoc, getDocs, getDoc, deleteDoc, doc, query, updateDoc, setDoc, writeBatch, limit, where, documentId, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import { GoogleGenAI } from '@google/genai';
 import ScientificText from './ScientificText';
 import AdminAnalytics from './AdminAnalytics';
 import AdminVideoManager from './AdminVideoManager';
-import logo from '../assets/scholar-main.png';
-import PartnershipLogos from './PartnershipLogos';
-import { DEFAULT_PREP_MODE, PREP_MODE_LABELS, PREP_MODES } from '../lib/prepModes';
+import logo from '../assets/logo.png';
 import { toast } from './ui/Toast';
 import { confirmDialog } from './ui/ConfirmDialog';
 import { DEFAULT_BRAINSTORM_WINDOWS, minutesToLabel, minutesToTimeInputValue, sanitizeBrainstormWindows, timeInputValueToMinutes } from '../brainstorm';
@@ -35,7 +33,6 @@ type TestEditAutosaveDraft = {
   testId: string;
   userId: string;
   generationMode: TestGenerationMode;
-  prepMode: PrepMode;
   updatedAt: string;
   name: string;
   description: string;
@@ -592,8 +589,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
   const [managedTestsLoading, setManagedTestsLoading] = useState(false);
   const [editingTestId, setEditingTestId] = useState<string | null>(null);
   const [editingTest, setEditingTest] = useState<MockTest | null>(null);
-  const [adminPrepModeFilter, setAdminPrepModeFilter] = useState<PrepMode | 'all'>('all');
-  const [editTestPrepMode, setEditTestPrepMode] = useState<PrepMode>(DEFAULT_PREP_MODE);
   const [editTestName, setEditTestName] = useState('');
   const [editTestDesc, setEditTestDesc] = useState('');
   const [editTestDuration, setEditTestDuration] = useState(60);
@@ -618,7 +613,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
   // Test Builder State
   const [testName, setTestName] = useState('');
   const [testDesc, setTestDesc] = useState('');
-  const [testPrepMode, setTestPrepMode] = useState<PrepMode>(DEFAULT_PREP_MODE);
   const [testDuration, setTestDuration] = useState(60);
   const [testGenerationMode, setTestGenerationMode] = useState<TestGenerationMode>('fixed');
   const [csvDynamicQuestions, setCsvDynamicQuestions] = useState<StagedQuestion[]>([]);
@@ -654,7 +648,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
   const [qOptions, setQOptions] = useState(['', '', '', '']);
   const [qCorrect, setQCorrect] = useState(0);
   const [qExplanation, setQExplanation] = useState('');
-  const [qPrepMode, setQPrepMode] = useState<PrepMode>(DEFAULT_PREP_MODE);
   const [qDifficulty, setQDifficulty] = useState<DifficultyLevel>(DEFAULT_DIFFICULTY);
   const [qTags, setQTags] = useState('');
   const [qImageUrl, setQImageUrl] = useState('');
@@ -673,7 +666,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
   const [singleKeyDurationDays, setSingleKeyDurationDays] = useState(365);
   const [bulkKeyCount, setBulkKeyCount] = useState(10);
   const [bulkKeyDurationDays, setBulkKeyDurationDays] = useState(365);
-  const [licenseKeyPrepMode, setLicenseKeyPrepMode] = useState<PrepMode>(DEFAULT_PREP_MODE);
   const [generatedKeys, setGeneratedKeys] = useState<string[]>([]);
   const [keyToolLoading, setKeyToolLoading] = useState(false);
   const [deadlineInput, setDeadlineInput] = useState(toWatInputValue(DEFAULT_FREE_ACCESS_ENDS_AT_ISO));
@@ -712,39 +704,25 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
     return () => window.removeEventListener('message', handleMediaPickerMessage);
   }, [editingMediaTarget]);
 
-  const questionMatchesAdminPrepFilter = (q: Question) => {
-    if (adminPrepModeFilter === 'all') return true;
-    return ((q.prepMode as PrepMode) || DEFAULT_PREP_MODE) === adminPrepModeFilter;
-  };
-
-  const filteredQuestions = useMemo(() => {
-    return questions.filter(questionMatchesAdminPrepFilter);
-  }, [questions, adminPrepModeFilter]);
-
   const groupedQuestions = useMemo(() => {
     const groups: Record<string, Question[]> = {};
-    filteredQuestions.forEach(q => {
+    questions.forEach(q => {
       const subject = q.subject?.trim() || 'General';
       if (!groups[subject]) groups[subject] = [];
       groups[subject].push(q);
     });
     return groups;
-  }, [filteredQuestions]);
+  }, [questions]);
 
   const builderQuestions = useMemo(() => {
     const q = builderSearchQuery.toLowerCase().trim();
-    if (!q) return filteredQuestions;
-    return filteredQuestions.filter(item =>
+    if (!q) return questions;
+    return questions.filter(item =>
       item.text.toLowerCase().includes(q) ||
       item.subject.toLowerCase().includes(q) ||
       (item.topic || '').toLowerCase().includes(q)
     );
-  }, [filteredQuestions, builderSearchQuery]);
-
-  const visibleManagedTests = useMemo(() => {
-    if (adminPrepModeFilter === 'all') return managedTests;
-    return managedTests.filter((test) => ((test.prepMode as PrepMode) || DEFAULT_PREP_MODE) === adminPrepModeFilter);
-  }, [managedTests, adminPrepModeFilter]);
+  }, [questions, builderSearchQuery]);
 
   const csvBundlePreview = useMemo(() => {
     if (!csvBundleEnabled || csvDynamicQuestions.length === 0) return [];
@@ -785,7 +763,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
   };
 
   const applyTestEditAutosaveDraft = (draft: TestEditAutosaveDraft) => {
-    setEditTestPrepMode((draft.prepMode as PrepMode) || DEFAULT_PREP_MODE);
     setEditTestName(draft.name || '');
     setEditTestDesc(draft.description || '');
     setEditTestDuration(Math.max(1, Number(draft.durationMinutes) || 1));
@@ -849,7 +826,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
         testId: editingTestId,
         userId: user.id,
         generationMode: (activeEditTest.generationMode || 'fixed') as TestGenerationMode,
-        prepMode: editTestPrepMode,
         updatedAt: new Date().toISOString(),
         name: editTestName,
         description: editTestDesc,
@@ -886,7 +862,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
     managedTests,
     user.id,
     editTestName,
-    editTestPrepMode,
     editTestDesc,
     editTestDuration,
     editTestPasswordEnabled,
@@ -1524,7 +1499,6 @@ Rules:
       options: normalizeOptions(qOptions),
       correctAnswerIndex: qCorrect,
       explanation: qExplanation.trim(),
-      prepMode: qPrepMode,
       difficulty: qDifficulty,
       tags: parseList(qTags),
       imageUrl,
@@ -1575,7 +1549,6 @@ Rules:
     setQOptions(['','','','']);
     setQCorrect(0);
     setQExplanation('');
-    setQPrepMode(DEFAULT_PREP_MODE);
     setQDifficulty(DEFAULT_DIFFICULTY);
     setQTags('');
     setQImageUrl('');
@@ -1591,12 +1564,11 @@ Rules:
     }
   };
 
-  const buildDynamicSectionsWithPools = async (baseSections: TestSection[], prepMode: PrepMode) => {
+  const buildDynamicSectionsWithPools = async (baseSections: TestSection[]) => {
     const allSnap = await getDocs(query(collection(db, 'questions'), limit(5000)));
     const allQuestions = allSnap.docs.map(d => ({ ...d.data(), id: d.id } as Question));
     const sectionsWithPools = baseSections.map((section) => {
       const poolIds = allQuestions
-        .filter(q => ((q.prepMode as PrepMode) || DEFAULT_PREP_MODE) === prepMode)
         .filter(q => matchesSectionFilters(q, section))
         .map(q => q.id);
       return {
@@ -1643,7 +1615,7 @@ Rules:
       let sectionsToPersist = sections;
       let csvMeta: Record<string, any> = {};
       if (testGenerationMode === 'dynamic') {
-        sectionsToPersist = await buildDynamicSectionsWithPools(sections, testPrepMode);
+        sectionsToPersist = await buildDynamicSectionsWithPools(sections);
       } else if (testGenerationMode === 'csv-dynamic') {
         const nowIso = new Date().toISOString();
         const csvPoolId = `csvpool_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -1672,7 +1644,6 @@ Rules:
             normalizedText: normalizeText(q.text),
             createdBy: user.id,
             createdAt: nowIso,
-            prepMode: testPrepMode,
             csvPoolId
           });
           writes++;
@@ -1712,7 +1683,6 @@ Rules:
       const createdTestRef = await addDoc(collection(db, 'tests'), {
         name: testName,
         description: testDesc,
-        prepMode: testPrepMode,
         totalDurationSeconds: testDuration * 60,
         sections: sectionsToPersist,
         generationMode: testGenerationMode,
@@ -1764,7 +1734,7 @@ Rules:
     if (!shouldRebuildPools) return;
     setLoading(true);
     try {
-      const nextSections = await buildDynamicSectionsWithPools(test.sections, ((test.prepMode as PrepMode) || DEFAULT_PREP_MODE));
+      const nextSections = await buildDynamicSectionsWithPools(test.sections);
       await updateDoc(doc(db, 'tests', test.id), {
         sections: nextSections,
         poolsRebuiltAt: new Date().toISOString(),
@@ -1825,7 +1795,6 @@ Rules:
     setQOptions(q.options);
     setQCorrect(q.correctAnswerIndex);
     setQExplanation(q.explanation || '');
-    setQPrepMode((q.prepMode as PrepMode) || DEFAULT_PREP_MODE);
     setQDifficulty((q.difficulty as DifficultyLevel) || DEFAULT_DIFFICULTY);
     setQTags((q.tags || []).join(', '));
     setQImageUrl(q.imageUrl || '');
@@ -1937,7 +1906,6 @@ Rules:
           imageAlt: String(persistable.imageAlt || '').trim(),
           status: persistable.status || 'approved',
           isActive: persistable.isActive !== false,
-          prepMode: persistable.prepMode || qPrepMode || DEFAULT_PREP_MODE,
           normalizedText: normalizeText(persistable.text),
           createdBy: user.id,
           createdAt: new Date().toISOString()
@@ -1970,7 +1938,6 @@ Rules:
     const autosaveDraft = readTestEditAutosaveDraft(test.id);
     setEditingTestId(test.id);
     setEditingTest(test);
-    setEditTestPrepMode((test.prepMode as PrepMode) || DEFAULT_PREP_MODE);
     setEditTestName(test.name || '');
     setEditTestDesc(test.description || '');
     setEditTestDuration(Math.max(1, Math.floor((test.totalDurationSeconds || 3600) / 60)));
@@ -2072,7 +2039,6 @@ Rules:
     setEditingTestId(null);
     setEditingTest(null);
     setEditTestName('');
-    setEditTestPrepMode(DEFAULT_PREP_MODE);
     setEditTestDesc('');
     setEditTestDuration(60);
     setEditTestPasswordEnabled(false);
@@ -2157,7 +2123,6 @@ Rules:
             source: String(row.source || (activeEditTest as any).csvPoolSourceFile || 'csv-dynamic').trim() || 'csv-dynamic',
             year: row.year ?? null,
             examType: String(row.examType || '').trim(),
-            prepMode: editTestPrepMode,
             imageUrl: sanitizeOptionalUrl(String(row.imageUrl || '')),
             imageAlt: String(row.imageAlt || '').trim(),
             status: 'approved',
@@ -2204,7 +2169,6 @@ Rules:
         await updateDoc(doc(db, 'tests', testId), {
           name: editTestName.trim(),
           description: editTestDesc.trim(),
-          prepMode: editTestPrepMode,
           totalDurationSeconds: Math.max(1, editTestDuration) * 60,
           accessPassword: editTestPasswordEnabled ? editTestPassword.trim() : '',
           isArchived: editTestArchived,
@@ -2234,7 +2198,6 @@ Rules:
             batch.update(doc(db, 'questions', row.id), {
               imageUrl: sanitizeOptionalUrl(String(row.imageUrl || '')),
               imageAlt: String(row.imageAlt || '').trim(),
-              prepMode: editTestPrepMode,
               updatedAt: nowIso
             });
             writes++;
@@ -2251,7 +2214,6 @@ Rules:
         await updateDoc(doc(db, 'tests', testId), {
           name: editTestName.trim(),
           description: editTestDesc.trim(),
-          prepMode: editTestPrepMode,
           totalDurationSeconds: Math.max(1, editTestDuration) * 60,
           accessPassword: editTestPasswordEnabled ? editTestPassword.trim() : '',
           isArchived: editTestArchived,
@@ -2400,7 +2362,7 @@ Rules:
     processCsvForDynamicTest(file);
   };
 
-  const saveGeneratedKeyDocs = async (codes: string[], durationDays: number, prepMode: PrepMode) => {
+  const saveGeneratedKeyDocs = async (codes: string[], durationDays: number) => {
     const nowIso = new Date().toISOString();
     const batch = writeBatch(db);
     const normalizedDays = Math.max(1, Math.floor(durationDays || 365));
@@ -2410,7 +2372,6 @@ Rules:
         code,
         status: 'new',
         isUsed: false,
-        prepMode,
         durationDays: normalizedDays,
         createdBy: user.id,
         createdByName: user.name,
@@ -2425,9 +2386,9 @@ Rules:
     setKeyToolLoading(true);
     try {
       const code = makeLicenseKey();
-      await saveGeneratedKeyDocs([code], singleKeyDurationDays, licenseKeyPrepMode);
+      await saveGeneratedKeyDocs([code], singleKeyDurationDays);
       setGeneratedKeys([code]);
-      notify(`Single ${PREP_MODE_LABELS[licenseKeyPrepMode]} activation key generated.`);
+      notify('Single activation key generated.');
     } catch (err: any) {
       notify('Failed to generate key. ' + (err?.message || ''));
     } finally {
@@ -2445,9 +2406,9 @@ Rules:
         codeSet.add(makeLicenseKey());
       }
       const codes = Array.from(codeSet);
-      await saveGeneratedKeyDocs(codes, bulkKeyDurationDays, licenseKeyPrepMode);
+      await saveGeneratedKeyDocs(codes, bulkKeyDurationDays);
       setGeneratedKeys(codes);
-      notify(`Generated ${codes.length} ${PREP_MODE_LABELS[licenseKeyPrepMode]} activation keys.`);
+      notify(`Generated ${codes.length} activation keys.`);
     } catch (err: any) {
       notify('Bulk generation failed. ' + (err?.message || ''));
     } finally {
@@ -2543,28 +2504,16 @@ Rules:
     <div className="v2-page flex-1 w-full bg-slate-50 flex flex-col overflow-hidden min-h-0">
       <div className="v2-shell bg-white border-b border-slate-100 p-6 flex justify-between items-center shrink-0 safe-top shadow-sm z-10">
         <div className="flex items-center gap-4">
-          <img src={logo} className="w-10 h-10" alt="Scholar! logo" />
+          <img src={logo} className="w-10 h-10" alt="Logo" />
           <div>
             <h1 className="text-lg font-bold text-slate-900 leading-none">Admin Panel</h1>
             <div className="flex items-center gap-2 mt-1">
                <span className={`w-2 h-2 rounded-full ${dbError ? 'bg-red-500' : 'bg-emerald-500'} animate-pulse`}></span>
                <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">{dbError || 'Connected'}</span>
             </div>
-            <PartnershipLogos className="mt-2 items-start" size="compact" />
           </div>
         </div>
         <div className="flex gap-2">
-          <select
-            value={adminPrepModeFilter}
-            onChange={(e) => setAdminPrepModeFilter(e.target.value as PrepMode | 'all')}
-            className="px-4 py-2 text-xs font-bold text-slate-600 border border-slate-200 rounded-xl bg-white uppercase tracking-widest"
-            aria-label="Filter admin content by prep mode"
-          >
-            <option value="all">All Prep</option>
-            {PREP_MODES.map((mode) => (
-              <option key={mode} value={mode}>{PREP_MODE_LABELS[mode]}</option>
-            ))}
-          </select>
           {onOpenCourses && (
             <button onClick={onOpenCourses} className="px-5 py-2 text-xs font-bold text-emerald-700 border border-emerald-100 rounded-xl hover:bg-emerald-50 uppercase tracking-widest">Courses</button>
           )}
@@ -2594,7 +2543,7 @@ Rules:
           </div>
         )}
 
-        {activeTab === 'analytics' && <AdminAnalytics prepModeFilter={adminPrepModeFilter} />}
+        {activeTab === 'analytics' && <AdminAnalytics />}
 
         {activeTab === 'videos' && <AdminVideoManager user={user} />}
 
@@ -2745,18 +2694,6 @@ Rules:
               <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-xl space-y-6">
                 <h3 className="text-lg font-bold">Test Setup</h3>
                 <input placeholder="Test name" className="w-full p-4 bg-slate-50 border rounded-2xl text-xs font-bold" value={testName} onChange={e => setTestName(e.target.value)} />
-                <label className="block text-xs font-bold uppercase tracking-widest text-slate-400">
-                  Prep Mode
-                  <select
-                    value={testPrepMode}
-                    onChange={(e) => setTestPrepMode(e.target.value as PrepMode)}
-                    className="mt-2 w-full p-4 bg-slate-50 border rounded-2xl text-xs font-bold text-slate-700 outline-none"
-                  >
-                    {PREP_MODES.map((mode) => (
-                      <option key={mode} value={mode}>{PREP_MODE_LABELS[mode]}</option>
-                    ))}
-                  </select>
-                </label>
                 <textarea placeholder="Instructions shown to students" className="w-full p-4 bg-slate-50 border rounded-2xl text-xs h-20" value={testDesc} onChange={e => setTestDesc(e.target.value)} />
                 <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl">
                    <span className="text-xs font-bold uppercase text-slate-400">Time (mins)</span>
@@ -3176,14 +3113,14 @@ Rules:
               </div>
             )}
 
-            {!managedTestsLoading && visibleManagedTests.length === 0 && (
+            {!managedTestsLoading && managedTests.length === 0 && (
               <div className="bg-white p-12 rounded-[2rem] border border-dashed text-center text-slate-300 text-xs font-bold uppercase tracking-widest">
                 No tests found
               </div>
             )}
 
             <div className="space-y-4">
-              {visibleManagedTests.map(test => {
+              {managedTests.map(test => {
                 const isPaused = Boolean((test as any).isPaused);
                 const isEditing = editingTestId === test.id;
                 return (
@@ -3194,7 +3131,7 @@ Rules:
                           <div>
                             <h4 className="text-base font-bold text-slate-900 uppercase">{test.name}</h4>
                             <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">
-                              {PREP_MODE_LABELS[(test.prepMode as PrepMode) || DEFAULT_PREP_MODE]} - {Math.round((test.totalDurationSeconds || 0) / 60)} mins - {test.sections?.length || 0} section(s) - {(test.generationMode || 'fixed')} mode
+                              {Math.round((test.totalDurationSeconds || 0) / 60)} mins - {test.sections?.length || 0} section(s) - {(test.generationMode || 'fixed')} mode
                             </p>
                           </div>
                           <div className="flex flex-wrap gap-2">
@@ -3232,18 +3169,6 @@ Rules:
                     ) : (
                       <div className="space-y-4">
                         <input value={editTestName} onChange={(e) => setEditTestName(e.target.value)} className="w-full p-4 bg-slate-50 border rounded-2xl text-xs font-bold" placeholder="Test name" />
-                        <label className="block text-xs font-bold uppercase tracking-widest text-slate-400">
-                          Prep Mode
-                          <select
-                            value={editTestPrepMode}
-                            onChange={(e) => setEditTestPrepMode(e.target.value as PrepMode)}
-                            className="mt-2 w-full p-4 bg-slate-50 border rounded-2xl text-xs font-bold text-slate-700 outline-none"
-                          >
-                            {PREP_MODES.map((mode) => (
-                              <option key={mode} value={mode}>{PREP_MODE_LABELS[mode]}</option>
-                            ))}
-                          </select>
-                        </label>
                         <textarea value={editTestDesc} onChange={(e) => setEditTestDesc(e.target.value)} className="w-full p-4 bg-slate-50 border rounded-2xl text-xs h-24" placeholder="Instructions" />
                         <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl">
                           <span className="text-xs font-bold uppercase text-slate-400">Time (mins)</span>
@@ -3885,18 +3810,6 @@ Rules:
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
               <div className="bg-white border border-slate-100 rounded-[2rem] p-8 shadow-sm space-y-4">
                 <h4 className="text-sm font-bold uppercase tracking-widest text-slate-900">Single Key</h4>
-                <label className="block text-xs font-bold uppercase tracking-widest text-slate-400">
-                  Prep Mode
-                  <select
-                    value={licenseKeyPrepMode}
-                    onChange={(e) => setLicenseKeyPrepMode(e.target.value as PrepMode)}
-                    className="mt-2 w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-700 outline-none"
-                  >
-                    {PREP_MODES.map((mode) => (
-                      <option key={mode} value={mode}>{PREP_MODE_LABELS[mode]}</option>
-                    ))}
-                  </select>
-                </label>
                 <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl">
                   <span className="text-xs font-bold uppercase text-slate-400">Duration (days)</span>
                   <input
@@ -3918,18 +3831,6 @@ Rules:
 
               <div className="bg-white border border-slate-100 rounded-[2rem] p-8 shadow-sm space-y-4">
                 <h4 className="text-sm font-bold uppercase tracking-widest text-slate-900">Bulk Keys</h4>
-                <label className="block text-xs font-bold uppercase tracking-widest text-slate-400">
-                  Prep Mode
-                  <select
-                    value={licenseKeyPrepMode}
-                    onChange={(e) => setLicenseKeyPrepMode(e.target.value as PrepMode)}
-                    className="mt-2 w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-700 outline-none"
-                  >
-                    {PREP_MODES.map((mode) => (
-                      <option key={mode} value={mode}>{PREP_MODE_LABELS[mode]}</option>
-                    ))}
-                  </select>
-                </label>
                 <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl">
                   <span className="text-xs font-bold uppercase text-slate-400">How Many</span>
                   <input
@@ -3999,18 +3900,6 @@ Rules:
                 <input placeholder="Subject" className="w-full p-4 bg-slate-50 border rounded-2xl text-xs font-bold outline-none" value={qSubject} onChange={e => setQSubject(e.target.value)} required />
                 <input placeholder="Topic" className="w-full p-4 bg-slate-50 border rounded-2xl text-xs font-bold outline-none" value={qTopic} onChange={e => setQTopic(e.target.value)} />
               </div>
-              <label className="block text-xs font-bold uppercase tracking-widest text-slate-400">
-                Prep Mode
-                <select
-                  value={qPrepMode}
-                  onChange={(e) => setQPrepMode(e.target.value as PrepMode)}
-                  className="mt-2 w-full p-4 bg-slate-50 border rounded-2xl text-xs font-bold text-slate-700 outline-none"
-                >
-                  {PREP_MODES.map((mode) => (
-                    <option key={mode} value={mode}>{PREP_MODE_LABELS[mode]}</option>
-                  ))}
-                </select>
-              </label>
               <textarea placeholder="Question text" className="w-full p-5 bg-slate-50 border rounded-2xl text-sm h-32 outline-none" value={qText} onChange={e => setQText(e.target.value)} required />
               <div className="space-y-3 rounded-2xl border border-slate-100 bg-slate-50 p-4">
                 <div className="flex flex-col md:flex-row gap-2">

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import logo from '../assets/scholar-main.png';
+import logo from '../assets/logo.png';
 
 interface UpdateManualProps {
   version: string;
@@ -61,8 +61,8 @@ const UpdateManual: React.FC<UpdateManualProps> = ({ version, onClose }) => {
           <div className="absolute -top-10 -left-10 w-32 h-32 rounded-full bg-amber-400/20 blur-2xl animate-pulse"></div>
           <div className="absolute -bottom-10 -right-10 w-36 h-36 rounded-full bg-cyan-300/10 blur-2xl animate-pulse"></div>
           <div className="relative flex flex-col items-center text-center">
-            <img src={logo} alt="Scholar! logo" className="w-16 h-16 mb-4 animate-pulse" />
-            <p className="text-[10px] font-black uppercase tracking-[0.35em] text-amber-400 mb-2">Scholar!</p>
+            <img src={logo} alt="Aureus Medicos CBT Logo" className="w-16 h-16 mb-4 animate-pulse" />
+            <p className="text-[10px] font-black uppercase tracking-[0.35em] text-amber-400 mb-2">Aureus Medicos CBT</p>
             <h1 className="text-2xl font-black text-white uppercase tracking-tight">What&apos;s New</h1>
             <p className="text-xs text-slate-300 mt-2">{headerLabel}</p>
             <div className="mt-5 w-40 h-1 rounded-full bg-slate-800 overflow-hidden">
@@ -79,7 +79,7 @@ const UpdateManual: React.FC<UpdateManualProps> = ({ version, onClose }) => {
       <div className="max-w-5xl mx-auto p-6 md:p-10 space-y-6">
         <div className="v2-surface p-6 md:p-8 flex flex-col md:flex-row md:items-center md:justify-between gap-5">
           <div className="flex items-center gap-4">
-            <img src={logo} alt="Scholar! logo" className="w-14 h-14" />
+            <img src={logo} alt="Aureus Medicos CBT Logo" className="w-14 h-14" />
             <div>
               <p className="text-[11px] font-black uppercase tracking-[0.25em] text-amber-600">{headerLabel}</p>
               <h1 className="text-2xl md:text-3xl font-black text-slate-900 leading-tight">Update Manual</h1>

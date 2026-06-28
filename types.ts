@@ -1,6 +1,5 @@
 
 export type UserRole = 'student' | 'admin' | 'root-admin';
-export type PrepMode = 'utme' | 'oau' | 'putme';
 export type DifficultyLevel = 'easy' | 'medium' | 'hard';
 export type QuestionStatus = 'draft' | 'approved';
 export type TestGenerationMode = 'fixed' | 'dynamic' | 'csv-dynamic';
@@ -20,13 +19,6 @@ export interface User {
   studyInterests?: string[];
   socialOnboardingCompletedAt?: string;
   emailVerified?: boolean;
-  lastPrepMode?: PrepMode;
-  licenses?: Partial<Record<PrepMode, {
-    status: 'inactive' | 'active' | 'expired' | 'pending';
-    activatedAt?: string;
-    endsAt?: string;
-    key?: string;
-  }>>;
   subscriptionStatus?: 'inactive' | 'active' | 'expired' | 'pending';
   subscriptionEndsAt?: string;
 }
@@ -45,7 +37,6 @@ export interface Question {
   source?: string;
   year?: number | null;
   examType?: string;
-  prepMode?: PrepMode;
   imageUrl?: string;
   imageKey?: string;
   imageAlt?: string;
@@ -97,7 +88,6 @@ export interface MockTest {
   allowRetake: boolean;
   maxAttempts?: number | null;
   accessPassword?: string;
-  prepMode?: PrepMode;
   isArchived?: boolean;
   createdBy: string;
   creatorName: string;
@@ -137,7 +127,6 @@ export interface ExamResult {
   userName: string;
   testId: string;
   testName: string;
-  prepMode?: PrepMode;
   score: number;
   maxScore: number;
   correctAnsweredCount?: number;
@@ -488,4 +477,4 @@ export interface CustomThemeConfig {
   border: string;
 }
 
-export type ViewState = 'auth' | 'verify-email' | 'prep-selector' | 'dashboard' | 'courses' | 'videos' | 'attendance' | 'blacklist' | 'exam' | 'admin' | 'root-admin' | 'results' | 'review' | 'update-manual';
+export type ViewState = 'auth' | 'verify-email' | 'dashboard' | 'courses' | 'videos' | 'attendance' | 'blacklist' | 'exam' | 'admin' | 'root-admin' | 'results' | 'review' | 'update-manual';
