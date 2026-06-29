@@ -261,6 +261,7 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
   const [activeCourseDoc, setActiveCourseDoc] = useState('');
   const [frameReloadNonce, setFrameReloadNonce] = useState(0);
   const [showOutlineMobile, setShowOutlineMobile] = useState(false);
+  const [showOutlineDesktop, setShowOutlineDesktop] = useState(true);
   const isAdmin = user.role === 'admin' || user.role === 'root-admin';
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const endAtRef = useRef<number | null>(null);
@@ -757,6 +758,7 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
     setLastSession(null);
     setFrameLoaded(false);
     setShowOutlineMobile(false);
+    setShowOutlineDesktop(true);
     setActiveCourseDoc(buildSafeCourseDocument(course.contentHtml));
     endAtRef.current = null;
     setIsRunning(true);
@@ -875,6 +877,7 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
     setLastSession(null);
     setActiveCourseDoc('');
     setShowOutlineMobile(false);
+    setShowOutlineDesktop(true);
   };
 
   return (
@@ -1300,6 +1303,12 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
                   {showOutlineMobile ? 'Hide Outline' : 'Outline'}
                 </button>
                 <button
+                  onClick={() => setShowOutlineDesktop((prev) => !prev)}
+                  className="hidden lg:inline-flex px-3 py-2 rounded-xl text-xs font-black uppercase tracking-widest bg-slate-800 text-slate-100"
+                >
+                  {showOutlineDesktop ? 'Hide Outline' : 'Show Outline'}
+                </button>
+                <button
                   onClick={() => setIsRunning((prev) => !prev)}
                   className="px-3 py-2 rounded-xl text-[11px] md:text-xs font-black uppercase tracking-widest bg-slate-800 text-slate-100"
                 >
@@ -1319,23 +1328,34 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
                 </button>
               </div>
             </div>
-            <div className="relative min-h-0 flex-1 lg:grid lg:grid-cols-[300px_1fr]">
-              <aside className="hidden lg:block border-r border-slate-200 p-4 bg-slate-50 overflow-y-auto">
-                <p className="text-xs font-black uppercase tracking-widest text-slate-500 mb-2">Outline Checklist</p>
-                <div className="text-xs font-black uppercase tracking-widest text-amber-700 mb-4">{progressPercent}% complete</div>
-                <div className="space-y-2">
-                  {activeOutline.map((heading, idx) => (
-                    <label key={`${heading}-${idx}`} className="flex items-start gap-2 p-2 rounded-lg bg-white border border-slate-200 text-xs">
-                      <input
-                        type="checkbox"
-                        checked={Boolean(checkedSections[idx])}
-                        onChange={(e) => setCheckedSections((prev) => ({ ...prev, [idx]: e.target.checked }))}
-                      />
-                      <span className="font-semibold text-slate-700">{heading}</span>
-                    </label>
-                  ))}
-                </div>
-              </aside>
+            <div className={`relative min-h-0 flex-1 lg:grid ${showOutlineDesktop ? 'lg:grid-cols-[300px_1fr]' : 'lg:grid-cols-1'}`}>
+              {showOutlineDesktop && (
+                <aside className="hidden lg:block border-r border-slate-200 p-4 bg-slate-50 overflow-y-auto">
+                  <div className="flex items-center justify-between gap-3 mb-2">
+                    <p className="text-xs font-black uppercase tracking-widest text-slate-500">Outline Checklist</p>
+                    <button
+                      type="button"
+                      onClick={() => setShowOutlineDesktop(false)}
+                      className="px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border border-slate-300 text-slate-600 hover:bg-white"
+                    >
+                      Minimize
+                    </button>
+                  </div>
+                  <div className="text-xs font-black uppercase tracking-widest text-amber-700 mb-4">{progressPercent}% complete</div>
+                  <div className="space-y-2">
+                    {activeOutline.map((heading, idx) => (
+                      <label key={`${heading}-${idx}`} className="flex items-start gap-2 p-2 rounded-lg bg-white border border-slate-200 text-xs">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(checkedSections[idx])}
+                          onChange={(e) => setCheckedSections((prev) => ({ ...prev, [idx]: e.target.checked }))}
+                        />
+                        <span className="font-semibold text-slate-700">{heading}</span>
+                      </label>
+                    ))}
+                  </div>
+                </aside>
+              )}
               <div className="relative min-h-0 h-full">
                 {!frameLoaded && (
                   <div className="absolute inset-0 z-10 bg-white/95 flex items-center justify-center">
