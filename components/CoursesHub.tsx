@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Course, CourseSession, User } from '../types';
 import { db } from '../firebase';
-import { addDoc, collection, doc, getDoc, limit, onSnapshot, orderBy, query, setDoc, updateDoc, where } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+import { addDoc, collection, deleteField, doc, getDoc, limit, onSnapshot, orderBy, query, setDoc, updateDoc, where } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import { toast } from './ui/Toast';
 import { confirmDialog } from './ui/ConfirmDialog';
 
@@ -54,6 +54,38 @@ const formatCompactNumber = (value: number) => {
 };
 
 const roundOne = (value: number) => Number(Number(value || 0).toFixed(1));
+
+const COURSE_ART_PALETTE = [
+  { bg: '#fef3c7', line: '#d97706', wash: '#fde68a' },
+  { bg: '#dbeafe', line: '#2563eb', wash: '#bfdbfe' },
+  { bg: '#dcfce7', line: '#059669', wash: '#bbf7d0' },
+  { bg: '#fae8ff', line: '#c026d3', wash: '#f5d0fe' },
+  { bg: '#ffe4e6', line: '#e11d48', wash: '#fecdd3' },
+  { bg: '#e0f2fe', line: '#0284c7', wash: '#bae6fd' }
+];
+
+const hashCourseSeed = (value: string) => {
+  let hash = 0;
+  for (let i = 0; i < value.length; i += 1) {
+    hash = ((hash << 5) - hash) + value.charCodeAt(i);
+    hash |= 0;
+  }
+  return Math.abs(hash);
+};
+
+const getCourseArt = (course: Course) => {
+  const seed = hashCourseSeed(`${course.id}-${course.title}-${course.coverArtSeed || 0}`);
+  const palette = COURSE_ART_PALETTE[seed % COURSE_ART_PALETTE.length];
+  const tag = (course.tags?.[0] || course.title || 'Course').trim().slice(0, 12);
+  const initials = (course.title || 'Course')
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join('') || 'C';
+
+  return { ...palette, tag, initials, offset: seed % 18 };
+};
 
 const toDayStamp = (value?: string) => {
   const ms = parseIsoDateMs(value);
@@ -249,6 +281,7 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
   const [uploadHtml, setUploadHtml] = useState('');
   const [uploadVersion, setUploadVersion] = useState<Course['version']>('html-v1');
   const [uploadPublished, setUploadPublished] = useState(true);
+  const [reloadingCourseImageId, setReloadingCourseImageId] = useState<string | null>(null);
   const [activeCourse, setActiveCourse] = useState<Course | null>(null);
   const [launchMinutes, setLaunchMinutes] = useState(30);
   const [isRunning, setIsRunning] = useState(false);
@@ -729,6 +762,24 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
     }
   };
 
+  const reloadCourseImage = async (course: Course) => {
+    if (!isAdmin) return;
+    setReloadingCourseImageId(course.id);
+    try {
+      await updateDoc(doc(db, 'courses', course.id), {
+        coverArtSeed: Date.now(),
+        coverImageUrl: deleteField(),
+        coverImageAlt: deleteField(),
+        updatedAt: new Date().toISOString()
+      });
+      toast.success('Image reloaded', 'Course artwork has been refreshed.');
+    } catch {
+      toast.error('Reload failed', 'Could not refresh course artwork.');
+    } finally {
+      setReloadingCourseImageId((current) => (current === course.id ? null : current));
+    }
+  };
+
   const startCourse = (course: Course) => {
     void (async () => {
       try {
@@ -1032,101 +1083,125 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
               <div className="bg-white border border-slate-100 rounded-2xl p-8 text-xs font-black uppercase tracking-widest text-slate-500">Loading courses...</div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                {visibleCards.map(({ course, history, analytics, reason }) => (
-                  <article key={course.id} className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm flex flex-col">
-                    <div
-                      className="h-2"
-                      style={{
-                        background: `linear-gradient(90deg, ${history?.lastProgress ? '#f59e0b' : '#cbd5e1'} ${(history?.lastProgress || 0)}%, #e2e8f0 ${(history?.lastProgress || 0)}%)`
-                      }}
-                    />
-                    <div className="p-5 flex flex-col gap-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <h3 className="text-base font-black text-slate-900 uppercase">{course.title}</h3>
-                      <div className="flex flex-col items-end gap-1">
-                        <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${course.isPublished ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
-                          {course.isPublished ? 'Published' : 'Draft'}
-                        </span>
-                        <span className="px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest bg-slate-100 text-slate-700">
-                          {formatCompactNumber(analytics.enrollmentCount)} learners
-                        </span>
-                      </div>
-                    </div>
-                    <p className="text-xs text-slate-500 line-clamp-3">{course.description || 'No description provided.'}</p>
-                    <div className="text-[11px] font-bold uppercase tracking-widest text-slate-500">
-                      {course.estimatedDurationMinutes} mins - {course.version}
-                    </div>
-                    <div className="grid grid-cols-3 gap-2">
-                      <div className="rounded-lg border border-slate-200 bg-slate-50 p-2">
-                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Completion</p>
-                        <p className="text-xs font-black text-slate-900 mt-1">{Math.round(analytics.completionRate)}%</p>
-                      </div>
-                      <div className="rounded-lg border border-slate-200 bg-slate-50 p-2">
-                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Avg Progress</p>
-                        <p className="text-xs font-black text-slate-900 mt-1">{Math.round(analytics.averageProgressPercent)}%</p>
-                      </div>
-                      <div className="rounded-lg border border-slate-200 bg-slate-50 p-2">
-                        <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Avg Time</p>
-                        <p className="text-xs font-black text-slate-900 mt-1">{formatClock(analytics.averageElapsedSeconds)}</p>
-                      </div>
-                    </div>
-                    <div className="text-[10px] font-black uppercase tracking-widest text-amber-700">{reason}</div>
-                    {history && (
-                      <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
-                        {Math.round(history.lastProgress)}% complete - last session {toDaysAgoLabel(history.lastEndedAtMs)}
-                      </div>
-                    )}
-                    {(course.tags || []).length > 0 && (
-                      <div className="flex flex-wrap gap-1">
-                        {(course.tags || []).slice(0, 4).map((tag) => (
-                          <span key={tag} className="px-2 py-1 rounded-md bg-slate-100 text-[10px] font-black uppercase tracking-widest text-slate-600">{tag}</span>
-                        ))}
-                      </div>
-                    )}
-                    <div className="mt-auto flex flex-col gap-2">
-                      <label className="text-[11px] font-black uppercase tracking-widest text-slate-500">
-                        Session timer (mins)
-                      </label>
-                      <input
-                        type="number"
-                        min={1}
-                        max={300}
-                        value={launchMinutes}
-                        onChange={(e) => setLaunchMinutes(Math.max(1, Math.min(300, Number(e.target.value) || course.estimatedDurationMinutes || 30)))}
-                        className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm font-bold"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => startCourse(course)}
-                        disabled={isReadOnly}
-                        className="px-4 py-3 rounded-xl bg-amber-500 text-slate-950 text-xs font-black uppercase tracking-widest disabled:opacity-40"
-                      >
-                        {isReadOnly ? 'Activation Needed' : 'Start Course'}
-                      </button>
+                {visibleCards.map(({ course, history, reason }) => {
+                  const art = getCourseArt(course);
+                  const progress = Math.max(0, Math.min(100, Math.round(history?.lastProgress || 0)));
+
+                  return (
+                    <article
+                      key={course.id}
+                      className="group relative min-h-[360px] overflow-hidden rounded-2xl border border-white/60 bg-white/45 shadow-[0_18px_50px_rgba(15,23,42,0.10)] backdrop-blur-xl transition duration-200 hover:-translate-y-1 hover:border-amber-200/80 hover:shadow-[0_24px_70px_rgba(15,23,42,0.16)] focus-within:-translate-y-1 focus-within:border-amber-200/80"
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-br from-white/80 via-white/45 to-amber-50/40" />
                       <button
                         type="button"
                         onClick={() => void shareCourse(course)}
-                        className="px-4 py-2 rounded-xl border border-slate-200 bg-white text-xs font-black uppercase tracking-widest text-slate-700"
+                        className="absolute right-4 top-4 z-20 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/70 bg-white/70 text-slate-700 shadow-sm backdrop-blur-md transition hover:bg-white hover:text-amber-700"
+                        aria-label={`Share ${course.title}`}
+                        title="Share course"
                       >
-                        Share
+                        <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="18" cy="5" r="3" />
+                          <circle cx="6" cy="12" r="3" />
+                          <circle cx="18" cy="19" r="3" />
+                          <path d="M8.6 10.8 15.4 6.2M8.6 13.2l6.8 4.6" />
+                        </svg>
                       </button>
-                      {isAdmin && (
-                        <button
-                          type="button"
-                          onClick={() => togglePublished(course)}
-                          className="px-4 py-2 rounded-xl border border-slate-200 bg-white text-xs font-black uppercase tracking-widest text-slate-700"
+
+                      <div className="relative z-10 p-4">
+                        <div
+                          className="relative h-40 overflow-hidden rounded-xl border border-white/70"
+                          style={{ background: `linear-gradient(135deg, ${art.bg}, #ffffff 58%, ${art.wash})` }}
                         >
-                          {course.isPublished ? 'Unpublish' : 'Publish'}
-                        </button>
-                      )}
-                    </div>
-                    </div>
-                    <div className="px-5 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between gap-2">
-                      <p className="text-[11px] font-semibold text-slate-600">{formatCompactNumber(analytics.enrollmentCount)} people took this</p>
-                      <p className="text-[11px] font-semibold text-slate-600">Best: {Math.max(Math.round(history?.bestProgress || 0), Math.round(analytics.completionRate))}%</p>
-                    </div>
-                  </article>
-                ))}
+                          {course.coverImageUrl ? (
+                            <img
+                              src={course.coverImageUrl}
+                              alt={course.coverImageAlt || `${course.title} course artwork`}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <svg viewBox="0 0 320 180" role="img" aria-label={`${course.title} course artwork`} className="h-full w-full">
+                              <path d={`M28 ${132 - art.offset} C80 ${74 + art.offset}, 130 ${160 - art.offset}, 190 ${94 + art.offset} S276 ${68 + art.offset}, 298 ${126 - art.offset}`} fill="none" stroke={art.line} strokeWidth="3" strokeLinecap="round" opacity="0.6" />
+                              <path d="M38 132h244" fill="none" stroke={art.line} strokeWidth="2" strokeLinecap="round" opacity="0.18" />
+                              <rect x="54" y="44" width="86" height="94" rx="16" fill="#fff" opacity="0.64" stroke={art.line} strokeWidth="2" />
+                              <path d="M74 68h46M74 88h34M74 108h52" stroke={art.line} strokeWidth="3" strokeLinecap="round" opacity="0.45" />
+                              <circle cx="222" cy="82" r="36" fill="#fff" opacity="0.64" stroke={art.line} strokeWidth="2" />
+                              <path d="M204 82h36M222 64v36" stroke={art.line} strokeWidth="3" strokeLinecap="round" opacity="0.45" />
+                              <text x="222" y="135" textAnchor="middle" fill={art.line} fontSize="18" fontWeight="800" fontFamily="DM Sans, Arial, sans-serif">{art.initials}</text>
+                              <text x="34" y="158" fill={art.line} fontSize="12" fontWeight="800" fontFamily="DM Sans, Arial, sans-serif" opacity="0.72">{art.tag.toUpperCase()}</text>
+                            </svg>
+                          )}
+                          <div className="absolute left-3 top-3 rounded-full border border-white/70 bg-white/70 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-slate-700 backdrop-blur-md">
+                            {course.estimatedDurationMinutes} min
+                          </div>
+                        </div>
+
+                        <div className="mt-4 min-h-[132px]">
+                          <div className="flex items-start gap-3">
+                            <div className="min-w-0 flex-1">
+                              <h3 className="line-clamp-2 text-base font-black uppercase leading-snug text-slate-900">{course.title}</h3>
+                              <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-slate-600">{course.description || 'No description provided.'}</p>
+                            </div>
+                            {isAdmin && (
+                              <button
+                                type="button"
+                                onClick={() => togglePublished(course)}
+                                className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-widest ${course.isPublished ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}
+                              >
+                                {course.isPublished ? 'Live' : 'Draft'}
+                              </button>
+                            )}
+                          </div>
+
+                          <div className="mt-4 flex items-center justify-between gap-3">
+                            <p className="truncate text-[10px] font-black uppercase tracking-widest text-amber-700">{reason}</p>
+                            {history && (
+                              <p className="shrink-0 text-[10px] font-bold uppercase tracking-widest text-slate-500">{toDaysAgoLabel(history.lastEndedAtMs)}</p>
+                            )}
+                          </div>
+
+                          {history && (
+                            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-200/70">
+                              <div className="h-full rounded-full bg-amber-500" style={{ width: `${progress}%` }} />
+                            </div>
+                          )}
+
+                          {(course.tags || []).length > 0 && (
+                            <div className="mt-4 flex flex-wrap gap-1.5">
+                              {(course.tags || []).slice(0, 3).map((tag) => (
+                                <span key={tag} className="rounded-full bg-white/65 px-2 py-1 text-[10px] font-black uppercase tracking-widest text-slate-600">{tag}</span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="absolute inset-x-4 bottom-4 z-20 rounded-xl border border-white/70 bg-white/85 p-3 shadow-lg backdrop-blur-xl transition duration-200 md:translate-y-3 md:opacity-0 md:group-hover:translate-y-0 md:group-hover:opacity-100 md:group-focus-within:translate-y-0 md:group-focus-within:opacity-100">
+                        <div className="grid grid-cols-[1fr_auto] items-end gap-2">
+                          <label className="mb-0 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                            Timer
+                            <input
+                              type="number"
+                              min={1}
+                              max={300}
+                              value={launchMinutes}
+                              onChange={(e) => setLaunchMinutes(Math.max(1, Math.min(300, Number(e.target.value) || course.estimatedDurationMinutes || 30)))}
+                              className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold"
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => startCourse(course)}
+                            disabled={isReadOnly}
+                            className="rounded-lg bg-amber-500 px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-950 shadow-sm disabled:opacity-40"
+                          >
+                            {isReadOnly ? 'Locked' : 'Start'}
+                          </button>
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
                 {visibleCards.length === 0 && (
                   <div className="col-span-full bg-white border border-dashed border-slate-200 rounded-2xl p-10 text-center text-xs font-black uppercase tracking-widest text-slate-400">
                     No courses found.
@@ -1248,6 +1323,63 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
             >
               {isUploading ? 'Uploading...' : 'Save Course'}
             </button>
+
+            <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <div>
+                  <h3 className="text-sm font-black uppercase tracking-widest text-slate-900">Course Images</h3>
+                  <p className="mt-1 text-xs text-slate-500">Refresh the generated outline artwork shown on course cards.</p>
+                </div>
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">{courses.length} courses</span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {courses.map((course) => {
+                  const art = getCourseArt(course);
+                  return (
+                    <div key={`manage-image-${course.id}`} className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3">
+                      <div
+                        className="h-16 w-24 shrink-0 overflow-hidden rounded-lg border border-slate-200"
+                        style={{ background: `linear-gradient(135deg, ${art.bg}, #ffffff 58%, ${art.wash})` }}
+                      >
+                        {course.coverImageUrl ? (
+                          <img
+                            src={course.coverImageUrl}
+                            alt={course.coverImageAlt || `${course.title} course artwork`}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <svg viewBox="0 0 320 180" role="img" aria-label={`${course.title} generated course artwork`} className="h-full w-full">
+                            <path d={`M28 ${132 - art.offset} C80 ${74 + art.offset}, 130 ${160 - art.offset}, 190 ${94 + art.offset} S276 ${68 + art.offset}, 298 ${126 - art.offset}`} fill="none" stroke={art.line} strokeWidth="4" strokeLinecap="round" opacity="0.55" />
+                            <rect x="58" y="48" width="76" height="86" rx="14" fill="#fff" opacity="0.62" stroke={art.line} strokeWidth="3" />
+                            <circle cx="220" cy="82" r="34" fill="#fff" opacity="0.62" stroke={art.line} strokeWidth="3" />
+                            <text x="222" y="136" textAnchor="middle" fill={art.line} fontSize="20" fontWeight="800" fontFamily="DM Sans, Arial, sans-serif">{art.initials}</text>
+                          </svg>
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-xs font-black uppercase tracking-widest text-slate-900">{course.title}</p>
+                        <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                          {course.coverImageUrl ? 'Custom cover' : 'Generated cover'}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void reloadCourseImage(course)}
+                        disabled={isReadOnly || reloadingCourseImageId === course.id}
+                        className="shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-700 disabled:opacity-40"
+                      >
+                        {reloadingCourseImageId === course.id ? 'Reloading' : 'Reload Image'}
+                      </button>
+                    </div>
+                  );
+                })}
+                {courses.length === 0 && (
+                  <p className="rounded-xl border border-dashed border-slate-200 bg-white p-4 text-xs font-black uppercase tracking-widest text-slate-400">
+                    No courses to manage yet.
+                  </p>
+                )}
+              </div>
+            </div>
 
             <div className="mt-4 p-4 rounded-2xl border border-amber-100 bg-amber-50 space-y-3">
               <h3 className="text-sm font-black uppercase tracking-widest text-amber-800">cbtcourse File Manual</h3>
