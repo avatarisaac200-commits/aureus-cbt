@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Course, CourseSession, User } from '../types';
 import { db } from '../firebase';
-import { addDoc, collection, deleteField, doc, getDoc, limit, onSnapshot, orderBy, query, setDoc, updateDoc, where } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+import { addDoc, collection, doc, getDoc, limit, onSnapshot, orderBy, query, setDoc, updateDoc, where } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import { toast } from './ui/Toast';
 import { confirmDialog } from './ui/ConfirmDialog';
 
@@ -55,37 +55,45 @@ const formatCompactNumber = (value: number) => {
 
 const roundOne = (value: number) => Number(Number(value || 0).toFixed(1));
 
-const COURSE_ART_PALETTE = [
-  { bg: '#fef3c7', line: '#d97706', wash: '#fde68a' },
-  { bg: '#dbeafe', line: '#2563eb', wash: '#bfdbfe' },
-  { bg: '#dcfce7', line: '#059669', wash: '#bbf7d0' },
-  { bg: '#fae8ff', line: '#c026d3', wash: '#f5d0fe' },
-  { bg: '#ffe4e6', line: '#e11d48', wash: '#fecdd3' },
-  { bg: '#e0f2fe', line: '#0284c7', wash: '#bae6fd' }
-];
-
-const hashCourseSeed = (value: string) => {
-  let hash = 0;
-  for (let i = 0; i < value.length; i += 1) {
-    hash = ((hash << 5) - hash) + value.charCodeAt(i);
-    hash |= 0;
+const buildCoursePreviewDocument = (html: string) => {
+  const previewGuard = `
+<style>
+  html, body {
+    width: 960px !important;
+    min-width: 960px !important;
+    min-height: 540px !important;
+    overflow: hidden !important;
+    background: #ffffff !important;
   }
-  return Math.abs(hash);
+  body {
+    margin: 0 !important;
+    transform-origin: top left !important;
+  }
+  a, button, input, textarea, select { pointer-events: none !important; }
+</style>`;
+
+  const withoutScripts = html
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/\son\w+=["'][\s\S]*?["']/gi, '');
+
+  if (/<head[^>]*>/i.test(withoutScripts)) {
+    return withoutScripts.replace(/<head([^>]*)>/i, `<head$1><meta name="viewport" content="width=960, initial-scale=1" />${previewGuard}`);
+  }
+  return `<!doctype html><html><head><meta charset="utf-8" /><meta name="viewport" content="width=960, initial-scale=1" />${previewGuard}</head><body>${withoutScripts}</body></html>`;
 };
 
-const getCourseArt = (course: Course) => {
-  const seed = hashCourseSeed(`${course.id}-${course.title}-${course.coverArtSeed || 0}`);
-  const palette = COURSE_ART_PALETTE[seed % COURSE_ART_PALETTE.length];
-  const tag = (course.tags?.[0] || course.title || 'Course').trim().slice(0, 12);
-  const initials = (course.title || 'Course')
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join('') || 'C';
-
-  return { ...palette, tag, initials, offset: seed % 18 };
-};
+const CourseHtmlPreview: React.FC<{ course: Course; className?: string }> = ({ course, className = '' }) => (
+  <div className={`relative overflow-hidden bg-white ${className}`}>
+    <iframe
+      key={`${course.id}-${course.coverArtSeed || 0}-${course.updatedAt || ''}`}
+      title={`${course.title} preview`}
+      srcDoc={buildCoursePreviewDocument(course.contentHtml)}
+      sandbox=""
+      tabIndex={-1}
+      className="absolute left-0 top-0 h-[540px] w-[960px] origin-top-left scale-[0.333] border-0 bg-white pointer-events-none"
+    />
+  </div>
+);
 
 const toDayStamp = (value?: string) => {
   const ms = parseIsoDateMs(value);
@@ -726,7 +734,9 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
     setIsUploading(true);
     try {
       const now = new Date().toISOString();
-      await addDoc(collection(db, 'courses'), {
+      const coverArtSeed = Date.now();
+      const courseDraft = {
+        id: `${title}-${coverArtSeed}`,
         title,
         description: uploadDescription.trim(),
         version: uploadVersion,
@@ -739,7 +749,13 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
         createdBy: user.id,
         creatorName: user.name,
         createdAt: now,
-        updatedAt: now
+        updatedAt: now,
+        coverArtSeed
+      } as Course;
+      const { id: _draftId, ...coursePayload } = courseDraft;
+      await addDoc(collection(db, 'courses'), {
+        ...coursePayload,
+        coverPreviewAlt: `${title} course HTML preview`
       });
       toast.success('Course uploaded', 'Course saved successfully.');
       resetUpload();
@@ -766,15 +782,15 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
     if (!isAdmin) return;
     setReloadingCourseImageId(course.id);
     try {
+      const coverArtSeed = Date.now();
       await updateDoc(doc(db, 'courses', course.id), {
-        coverArtSeed: Date.now(),
-        coverImageUrl: deleteField(),
-        coverImageAlt: deleteField(),
+        coverArtSeed,
+        coverPreviewAlt: `${course.title} course HTML preview`,
         updatedAt: new Date().toISOString()
       });
-      toast.success('Image reloaded', 'Course artwork has been refreshed.');
+      toast.success('Preview reloaded', 'Course HTML preview has been refreshed.');
     } catch {
-      toast.error('Reload failed', 'Could not refresh course artwork.');
+      toast.error('Reload failed', 'Could not refresh course preview.');
     } finally {
       setReloadingCourseImageId((current) => (current === course.id ? null : current));
     }
@@ -932,7 +948,7 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
   };
 
   return (
-    <div className="v2-page min-h-screen bg-slate-50 safe-top safe-bottom">
+    <div className="v2-page min-h-screen bg-[#111827] safe-top safe-bottom">
       <div className="max-w-6xl mx-auto p-4 md:p-8 space-y-5">
         <section className="bg-white border border-slate-200 rounded-2xl px-5 md:px-7 py-4 shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
@@ -1084,19 +1100,18 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                 {visibleCards.map(({ course, history, reason }) => {
-                  const art = getCourseArt(course);
                   const progress = Math.max(0, Math.min(100, Math.round(history?.lastProgress || 0)));
 
                   return (
                     <article
                       key={course.id}
-                      className="group relative min-h-[360px] overflow-hidden rounded-2xl border border-white/60 bg-white/45 shadow-[0_18px_50px_rgba(15,23,42,0.10)] backdrop-blur-xl transition duration-200 hover:-translate-y-1 hover:border-amber-200/80 hover:shadow-[0_24px_70px_rgba(15,23,42,0.16)] focus-within:-translate-y-1 focus-within:border-amber-200/80"
+                      className="group relative min-h-[360px] overflow-hidden rounded-2xl border border-white/80 bg-white/95 shadow-[0_18px_50px_rgba(15,23,42,0.18)] backdrop-blur-xl transition duration-200 hover:-translate-y-1 hover:border-amber-200/90 hover:shadow-[0_24px_70px_rgba(15,23,42,0.22)] focus-within:-translate-y-1 focus-within:border-amber-200/90"
                     >
-                      <div className="absolute inset-0 bg-gradient-to-br from-white/80 via-white/45 to-amber-50/40" />
+                      <div className="absolute inset-0 bg-gradient-to-br from-white via-white to-amber-50/70" />
                       <button
                         type="button"
                         onClick={() => void shareCourse(course)}
-                        className="absolute right-4 top-4 z-20 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/70 bg-white/70 text-slate-700 shadow-sm backdrop-blur-md transition hover:bg-white hover:text-amber-700"
+                        className="absolute right-4 top-4 z-20 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/80 bg-white/90 text-[#334155] shadow-sm backdrop-blur-md transition hover:bg-white hover:text-[#b45309]"
                         aria-label={`Share ${course.title}`}
                         title="Share course"
                       >
@@ -1109,29 +1124,10 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
                       </button>
 
                       <div className="relative z-10 p-4">
-                        <div
-                          className="relative h-40 overflow-hidden rounded-xl border border-white/70"
-                          style={{ background: `linear-gradient(135deg, ${art.bg}, #ffffff 58%, ${art.wash})` }}
-                        >
-                          {course.coverImageUrl ? (
-                            <img
-                              src={course.coverImageUrl}
-                              alt={course.coverImageAlt || `${course.title} course artwork`}
-                              className="h-full w-full object-cover"
-                            />
-                          ) : (
-                            <svg viewBox="0 0 320 180" role="img" aria-label={`${course.title} course artwork`} className="h-full w-full">
-                              <path d={`M28 ${132 - art.offset} C80 ${74 + art.offset}, 130 ${160 - art.offset}, 190 ${94 + art.offset} S276 ${68 + art.offset}, 298 ${126 - art.offset}`} fill="none" stroke={art.line} strokeWidth="3" strokeLinecap="round" opacity="0.6" />
-                              <path d="M38 132h244" fill="none" stroke={art.line} strokeWidth="2" strokeLinecap="round" opacity="0.18" />
-                              <rect x="54" y="44" width="86" height="94" rx="16" fill="#fff" opacity="0.64" stroke={art.line} strokeWidth="2" />
-                              <path d="M74 68h46M74 88h34M74 108h52" stroke={art.line} strokeWidth="3" strokeLinecap="round" opacity="0.45" />
-                              <circle cx="222" cy="82" r="36" fill="#fff" opacity="0.64" stroke={art.line} strokeWidth="2" />
-                              <path d="M204 82h36M222 64v36" stroke={art.line} strokeWidth="3" strokeLinecap="round" opacity="0.45" />
-                              <text x="222" y="135" textAnchor="middle" fill={art.line} fontSize="18" fontWeight="800" fontFamily="DM Sans, Arial, sans-serif">{art.initials}</text>
-                              <text x="34" y="158" fill={art.line} fontSize="12" fontWeight="800" fontFamily="DM Sans, Arial, sans-serif" opacity="0.72">{art.tag.toUpperCase()}</text>
-                            </svg>
-                          )}
-                          <div className="absolute left-3 top-3 rounded-full border border-white/70 bg-white/70 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-slate-700 backdrop-blur-md">
+                        <div className="relative h-40 overflow-hidden rounded-xl border border-white/80 bg-white">
+                          <CourseHtmlPreview course={course} className="h-full w-full" />
+                          <div className="absolute inset-0 bg-gradient-to-t from-white/10 to-transparent" />
+                          <div className="absolute left-3 top-3 rounded-full border border-white/80 bg-white/90 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-[#475569] backdrop-blur-md">
                             {course.estimatedDurationMinutes} min
                           </div>
                         </div>
@@ -1139,14 +1135,14 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
                         <div className="mt-4 min-h-[132px]">
                           <div className="flex items-start gap-3">
                             <div className="min-w-0 flex-1">
-                              <h3 className="line-clamp-2 text-base font-black uppercase leading-snug text-slate-900">{course.title}</h3>
-                              <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-slate-600">{course.description || 'No description provided.'}</p>
+                              <h3 className="line-clamp-2 text-base font-black uppercase leading-snug text-[#0f172a]">{course.title}</h3>
+                              <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-[#64748b]">{course.description || 'No description provided.'}</p>
                             </div>
                             {isAdmin && (
                               <button
                                 type="button"
                                 onClick={() => togglePublished(course)}
-                                className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-widest ${course.isPublished ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}
+                                className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-widest ${course.isPublished ? 'bg-emerald-50 text-[#047857]' : 'bg-slate-100 text-[#64748b]'}`}
                               >
                                 {course.isPublished ? 'Live' : 'Draft'}
                               </button>
@@ -1154,9 +1150,9 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
                           </div>
 
                           <div className="mt-4 flex items-center justify-between gap-3">
-                            <p className="truncate text-[10px] font-black uppercase tracking-widest text-amber-700">{reason}</p>
+                            <p className="truncate text-[10px] font-black uppercase tracking-widest text-[#d97706]">{reason}</p>
                             {history && (
-                              <p className="shrink-0 text-[10px] font-bold uppercase tracking-widest text-slate-500">{toDaysAgoLabel(history.lastEndedAtMs)}</p>
+                              <p className="shrink-0 text-[10px] font-bold uppercase tracking-widest text-[#94a3b8]">{toDaysAgoLabel(history.lastEndedAtMs)}</p>
                             )}
                           </div>
 
@@ -1169,16 +1165,16 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
                           {(course.tags || []).length > 0 && (
                             <div className="mt-4 flex flex-wrap gap-1.5">
                               {(course.tags || []).slice(0, 3).map((tag) => (
-                                <span key={tag} className="rounded-full bg-white/65 px-2 py-1 text-[10px] font-black uppercase tracking-widest text-slate-600">{tag}</span>
+                                <span key={tag} className="rounded-full bg-white/80 px-2 py-1 text-[10px] font-black uppercase tracking-widest text-[#475569]">{tag}</span>
                               ))}
                             </div>
                           )}
                         </div>
                       </div>
 
-                      <div className="absolute inset-x-4 bottom-4 z-20 rounded-xl border border-white/70 bg-white/85 p-3 shadow-lg backdrop-blur-xl transition duration-200 md:translate-y-3 md:opacity-0 md:group-hover:translate-y-0 md:group-hover:opacity-100 md:group-focus-within:translate-y-0 md:group-focus-within:opacity-100">
+                      <div className="absolute inset-x-4 bottom-4 z-20 rounded-xl border border-white/80 bg-white/95 p-3 shadow-lg backdrop-blur-xl transition duration-200 md:translate-y-3 md:opacity-0 md:group-hover:translate-y-0 md:group-hover:opacity-100 md:group-focus-within:translate-y-0 md:group-focus-within:opacity-100">
                         <div className="grid grid-cols-[1fr_auto] items-end gap-2">
-                          <label className="mb-0 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                          <label className="mb-0 text-[10px] font-black uppercase tracking-widest text-[#64748b]">
                             Timer
                             <input
                               type="number"
@@ -1327,39 +1323,19 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
             <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
               <div className="flex items-center justify-between gap-3 mb-3">
                 <div>
-                  <h3 className="text-sm font-black uppercase tracking-widest text-slate-900">Course Images</h3>
-                  <p className="mt-1 text-xs text-slate-500">Refresh the generated outline artwork shown on course cards.</p>
+                  <h3 className="text-sm font-black uppercase tracking-widest text-slate-900">Course Previews</h3>
+                  <p className="mt-1 text-xs text-slate-500">Refresh the mini preview rendered from each course HTML file.</p>
                 </div>
                 <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">{courses.length} courses</span>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {courses.map((course) => {
-                  const art = getCourseArt(course);
-                  return (
+                {courses.map((course) => (
                     <div key={`manage-image-${course.id}`} className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3">
-                      <div
-                        className="h-16 w-24 shrink-0 overflow-hidden rounded-lg border border-slate-200"
-                        style={{ background: `linear-gradient(135deg, ${art.bg}, #ffffff 58%, ${art.wash})` }}
-                      >
-                        {course.coverImageUrl ? (
-                          <img
-                            src={course.coverImageUrl}
-                            alt={course.coverImageAlt || `${course.title} course artwork`}
-                            className="h-full w-full object-cover"
-                          />
-                        ) : (
-                          <svg viewBox="0 0 320 180" role="img" aria-label={`${course.title} generated course artwork`} className="h-full w-full">
-                            <path d={`M28 ${132 - art.offset} C80 ${74 + art.offset}, 130 ${160 - art.offset}, 190 ${94 + art.offset} S276 ${68 + art.offset}, 298 ${126 - art.offset}`} fill="none" stroke={art.line} strokeWidth="4" strokeLinecap="round" opacity="0.55" />
-                            <rect x="58" y="48" width="76" height="86" rx="14" fill="#fff" opacity="0.62" stroke={art.line} strokeWidth="3" />
-                            <circle cx="220" cy="82" r="34" fill="#fff" opacity="0.62" stroke={art.line} strokeWidth="3" />
-                            <text x="222" y="136" textAnchor="middle" fill={art.line} fontSize="20" fontWeight="800" fontFamily="DM Sans, Arial, sans-serif">{art.initials}</text>
-                          </svg>
-                        )}
-                      </div>
+                      <CourseHtmlPreview course={course} className="h-16 w-24 shrink-0 rounded-lg border border-slate-200" />
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-xs font-black uppercase tracking-widest text-slate-900">{course.title}</p>
                         <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-slate-500">
-                          {course.coverImageUrl ? 'Custom cover' : 'Generated cover'}
+                          HTML mini preview
                         </p>
                       </div>
                       <button
@@ -1368,11 +1344,10 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
                         disabled={isReadOnly || reloadingCourseImageId === course.id}
                         className="shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-700 disabled:opacity-40"
                       >
-                        {reloadingCourseImageId === course.id ? 'Reloading' : 'Reload Image'}
+                        {reloadingCourseImageId === course.id ? 'Reloading' : 'Reload Preview'}
                       </button>
                     </div>
-                  );
-                })}
+                  ))}
                 {courses.length === 0 && (
                   <p className="rounded-xl border border-dashed border-slate-200 bg-white p-4 text-xs font-black uppercase tracking-widest text-slate-400">
                     No courses to manage yet.

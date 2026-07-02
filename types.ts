@@ -393,9 +393,8 @@ export interface Course {
   fileName: string;
   fileExtension: string;
   contentHtml: string;
-  coverImageUrl?: string;
-  coverImageAlt?: string;
   coverArtSeed?: number;
+  coverPreviewAlt?: string;
   tags?: string[];
   estimatedDurationMinutes: number;
   isPublished: boolean;
