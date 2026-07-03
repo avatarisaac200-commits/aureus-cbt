@@ -948,7 +948,7 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
   };
 
   return (
-    <div className="v2-page min-h-screen bg-[#111827] safe-top safe-bottom">
+    <div className="course-glass-page v2-page min-h-screen safe-top safe-bottom">
       <div className="max-w-6xl mx-auto p-4 md:p-8 space-y-5">
         <section className="bg-white border border-slate-200 rounded-2xl px-5 md:px-7 py-4 shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
@@ -1105,13 +1105,12 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
                   return (
                     <article
                       key={course.id}
-                      className="group relative min-h-[360px] overflow-hidden rounded-2xl border border-white/80 bg-white/95 shadow-[0_18px_50px_rgba(15,23,42,0.18)] backdrop-blur-xl transition duration-200 hover:-translate-y-1 hover:border-amber-200/90 hover:shadow-[0_24px_70px_rgba(15,23,42,0.22)] focus-within:-translate-y-1 focus-within:border-amber-200/90"
+                      className="course-glass-card group relative min-h-[360px] overflow-hidden rounded-2xl transition duration-300 hover:-translate-y-1 focus-within:-translate-y-1"
                     >
-                      <div className="absolute inset-0 bg-gradient-to-br from-white via-white to-amber-50/70" />
                       <button
                         type="button"
                         onClick={() => void shareCourse(course)}
-                        className="absolute right-4 top-4 z-20 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/80 bg-white/90 text-[#334155] shadow-sm backdrop-blur-md transition hover:bg-white hover:text-[#b45309]"
+                        className="absolute right-4 top-4 z-20 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/35 bg-white/12 text-white/85 shadow-sm backdrop-blur-md transition hover:bg-white/22 hover:text-white"
                         aria-label={`Share ${course.title}`}
                         title="Share course"
                       >
@@ -1124,10 +1123,10 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
                       </button>
 
                       <div className="relative z-10 p-4">
-                        <div className="relative h-40 overflow-hidden rounded-xl border border-white/80 bg-white">
+                        <div className="relative h-40 overflow-hidden rounded-xl border border-white/25 bg-white/12 shadow-[inset_0_1px_0_rgba(255,255,255,0.42)]">
                           <CourseHtmlPreview course={course} className="h-full w-full" />
-                          <div className="absolute inset-0 bg-gradient-to-t from-white/10 to-transparent" />
-                          <div className="absolute left-3 top-3 rounded-full border border-white/80 bg-white/90 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-[#475569] backdrop-blur-md">
+                          <div className="absolute inset-0 bg-gradient-to-t from-slate-950/18 to-white/5" />
+                          <div className="absolute left-3 top-3 rounded-full border border-white/35 bg-white/16 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-white backdrop-blur-md">
                             {course.estimatedDurationMinutes} min
                           </div>
                         </div>
@@ -1135,14 +1134,14 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
                         <div className="mt-4 min-h-[132px]">
                           <div className="flex items-start gap-3">
                             <div className="min-w-0 flex-1">
-                              <h3 className="line-clamp-2 text-base font-black uppercase leading-snug text-[#0f172a]">{course.title}</h3>
-                              <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-[#64748b]">{course.description || 'No description provided.'}</p>
+                              <h3 className="line-clamp-2 text-base font-black uppercase leading-snug text-white">{course.title}</h3>
+                              <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-white/68">{course.description || 'No description provided.'}</p>
                             </div>
                             {isAdmin && (
                               <button
                                 type="button"
                                 onClick={() => togglePublished(course)}
-                                className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-widest ${course.isPublished ? 'bg-emerald-50 text-[#047857]' : 'bg-slate-100 text-[#64748b]'}`}
+                                className={`shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-widest backdrop-blur-md ${course.isPublished ? 'border-emerald-200/40 bg-emerald-300/18 text-emerald-100' : 'border-white/25 bg-white/12 text-white/62'}`}
                               >
                                 {course.isPublished ? 'Live' : 'Draft'}
                               </button>
@@ -1150,31 +1149,31 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
                           </div>
 
                           <div className="mt-4 flex items-center justify-between gap-3">
-                            <p className="truncate text-[10px] font-black uppercase tracking-widest text-[#d97706]">{reason}</p>
+                            <p className="truncate text-[10px] font-black uppercase tracking-widest text-cyan-200">{reason}</p>
                             {history && (
-                              <p className="shrink-0 text-[10px] font-bold uppercase tracking-widest text-[#94a3b8]">{toDaysAgoLabel(history.lastEndedAtMs)}</p>
+                              <p className="shrink-0 text-[10px] font-bold uppercase tracking-widest text-white/45">{toDaysAgoLabel(history.lastEndedAtMs)}</p>
                             )}
                           </div>
 
                           {history && (
-                            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-200/70">
-                              <div className="h-full rounded-full bg-amber-500" style={{ width: `${progress}%` }} />
+                            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/12">
+                              <div className="h-full rounded-full bg-cyan-200 shadow-[0_0_12px_rgba(127,249,224,0.5)]" style={{ width: `${progress}%` }} />
                             </div>
                           )}
 
                           {(course.tags || []).length > 0 && (
                             <div className="mt-4 flex flex-wrap gap-1.5">
                               {(course.tags || []).slice(0, 3).map((tag) => (
-                                <span key={tag} className="rounded-full bg-white/80 px-2 py-1 text-[10px] font-black uppercase tracking-widest text-[#475569]">{tag}</span>
+                                <span key={tag} className="rounded-full border border-white/18 bg-white/10 px-2 py-1 text-[10px] font-black uppercase tracking-widest text-white/62 backdrop-blur-md">{tag}</span>
                               ))}
                             </div>
                           )}
                         </div>
                       </div>
 
-                      <div className="absolute inset-x-4 bottom-4 z-20 rounded-xl border border-white/80 bg-white/95 p-3 shadow-lg backdrop-blur-xl transition duration-200 md:translate-y-3 md:opacity-0 md:group-hover:translate-y-0 md:group-hover:opacity-100 md:group-focus-within:translate-y-0 md:group-focus-within:opacity-100">
+                      <div className="absolute inset-x-4 bottom-4 z-20 rounded-xl border border-white/28 bg-slate-950/32 p-3 shadow-lg backdrop-blur-xl transition duration-200 md:translate-y-3 md:opacity-0 md:group-hover:translate-y-0 md:group-hover:opacity-100 md:group-focus-within:translate-y-0 md:group-focus-within:opacity-100">
                         <div className="grid grid-cols-[1fr_auto] items-end gap-2">
-                          <label className="mb-0 text-[10px] font-black uppercase tracking-widest text-[#64748b]">
+                          <label className="mb-0 text-[10px] font-black uppercase tracking-widest text-white/62">
                             Timer
                             <input
                               type="number"
@@ -1182,14 +1181,14 @@ const CoursesHub: React.FC<CoursesHubProps> = ({ user, isReadOnly = false, onBac
                               max={300}
                               value={launchMinutes}
                               onChange={(e) => setLaunchMinutes(Math.max(1, Math.min(300, Number(e.target.value) || course.estimatedDurationMinutes || 30)))}
-                              className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold"
+                              className="mt-1 w-full rounded-lg border border-white/25 bg-white/14 px-3 py-2 text-sm font-bold text-white"
                             />
                           </label>
                           <button
                             type="button"
                             onClick={() => startCourse(course)}
                             disabled={isReadOnly}
-                            className="rounded-lg bg-amber-500 px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-950 shadow-sm disabled:opacity-40"
+                            className="rounded-lg border border-cyan-100/45 bg-white/16 px-4 py-3 text-xs font-black uppercase tracking-widest text-white shadow-sm backdrop-blur-md hover:bg-white/24 disabled:opacity-40"
                           >
                             {isReadOnly ? 'Locked' : 'Start'}
                           </button>
