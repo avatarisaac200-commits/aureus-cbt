@@ -21,6 +21,7 @@ import {
 } from '../types';
 import { db } from '../firebase';
 import { collection, getDocs, limit, orderBy, query } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+import { getAnswerIndexForAnalytics, isCorrectAnswer } from '../lib/examOptions';
 
 type RangeFilter = '7d' | '30d' | '90d' | 'all';
 type StatusFilter = 'all' | ExamResult['status'];
@@ -108,7 +109,7 @@ const deltaLabel = (value: number, decimals = 0) => {
   return `${value > 0 ? '+' : ''}${value.toFixed(decimals)}`;
 };
 const normalizeLabel = (value?: string, fallback = 'General') => value?.trim() || fallback;
-const hasAnswer = (answers: Record<string, number> | undefined, qId: string) => (
+const hasAnswer = (answers: Record<string, number | string> | undefined, qId: string) => (
   Boolean(answers) && Object.prototype.hasOwnProperty.call(answers, qId)
 );
 const uniq = <T,>(items: T[]) => Array.from(new Set(items));
@@ -546,8 +547,9 @@ const AdminAnalytics: React.FC = () => {
         }
 
         const selected = result.userAnswers[qId];
-        if (selected >= 0 && selected < grouped[qId].optionCounts.length) grouped[qId].optionCounts[selected] += 1;
-        if (selected === q.correctAnswerIndex) grouped[qId].correct += 1;
+        const selectedIndex = getAnswerIndexForAnalytics(q, selected, result.attemptOptionOrders?.[qId]);
+        if (selectedIndex >= 0 && selectedIndex < grouped[qId].optionCounts.length) grouped[qId].optionCounts[selectedIndex] += 1;
+        if (isCorrectAnswer(q, selected)) grouped[qId].correct += 1;
       });
     });
 

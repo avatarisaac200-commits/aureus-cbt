@@ -2,6 +2,7 @@ import { GoogleGenAI } from '@google/genai';
 import { Question } from '../types';
 import { db } from '../firebase';
 import { doc, getDoc, setDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+import { getCorrectOptionId, getQuestionOptions } from '../lib/examOptions';
 
 const COLLECTION_NAME = 'aiQuestionExplanations';
 const MODEL_CANDIDATES = ['gemini-2.0-flash', 'gemini-1.5-flash'];
@@ -12,8 +13,8 @@ let quotaBlockedUntilMs = 0;
 const normalize = (value: string) => value.trim().replace(/\s+/g, ' ').toLowerCase();
 
 const getQuestionSignature = (question: Question) => {
-  const optionsSig = (question.options || []).map(opt => normalize(opt)).join('|');
-  return `${normalize(question.text || '')}::${optionsSig}::${Number(question.correctAnswerIndex ?? -1)}`;
+  const optionsSig = getQuestionOptions(question).map(opt => `${opt.id}:${normalize(opt.text)}`).join('|');
+  return `${normalize(question.text || '')}::${optionsSig}::${getCorrectOptionId(question)}`;
 };
 
 const hashString = (value: string) => {
@@ -29,8 +30,10 @@ const getCacheKey = (question: Question, signature: string) => {
 };
 
 const buildPrompt = (question: Question) => {
-  const options = (question.options || []).map((opt, idx) => `${String.fromCharCode(65 + idx)}. ${opt}`).join('\n');
-  const correctLetter = String.fromCharCode(65 + Number(question.correctAnswerIndex || 0));
+  const questionOptions = getQuestionOptions(question);
+  const options = questionOptions.map((opt, idx) => `${String.fromCharCode(65 + idx)}. ${opt.text}`).join('\n');
+  const correctIndex = questionOptions.findIndex(option => option.id === getCorrectOptionId(question));
+  const correctLetter = correctIndex >= 0 ? String.fromCharCode(65 + correctIndex) : 'Unavailable';
   return `
 You are explaining a CBT multiple-choice question.
 Give a concise, student-friendly explanation.

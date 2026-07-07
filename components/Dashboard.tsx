@@ -6,6 +6,7 @@ import logo from '../assets/logo.png';
 import factsJson from '../data/facts.json';
 import { AppTheme, THEMES } from '../theme';
 import { toast } from './ui/Toast';
+import { buildOptionMetadata } from '../lib/examOptions';
 import { confirmDialog } from './ui/ConfirmDialog';
 import CommunityHub from './CommunityHub';
 import NotificationBell from './notifications/NotificationBell';
@@ -530,6 +531,7 @@ const Dashboard: React.FC<DashboardProps> = ({
       ...q,
       text: q.text.trim(),
       options: q.options.map(opt => opt.trim()),
+      ...buildOptionMetadata(q.options.map(opt => opt.trim()), q.correctAnswerIndex),
       explanation: (q.explanation || '').trim()
     }));
 

@@ -7,6 +7,7 @@ import ScientificText from './ScientificText';
 import logo from '../assets/logo.png';
 import { getOrCreateAiExplanation } from './aiExplanationService';
 import { toast } from './ui/Toast';
+import { buildOptionMetadata, getCorrectOptionId, getDisplayedOptions, isCorrectAnswer } from '../lib/examOptions';
 
 interface ReviewInterfaceProps {
   result: ExamResult;
@@ -69,6 +70,7 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
 
             const qMap: Record<string, Question> = {};
             (quizData.questions || []).forEach((q: any, idx: number) => {
+              const optionMetadata = buildOptionMetadata(q.options || [], Number(q.correctAnswerIndex || 0));
               qMap[`quizq_${idx}`] = {
                 id: `quizq_${idx}`,
                 subject: 'Quiz',
@@ -76,6 +78,8 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
                 text: q.text,
                 options: q.options || [],
                 correctAnswerIndex: Number(q.correctAnswerIndex || 0),
+                optionChoices: q.optionChoices || optionMetadata.optionChoices,
+                correctOptionId: q.correctOptionId || optionMetadata.correctOptionId,
                 explanation: q.explanation || '',
                 createdBy: quizData.createdBy || '',
                 createdAt: quizData.createdAt || new Date().toISOString()
@@ -202,7 +206,7 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
   const activeReviewedQuestion = questions[activeReviewedQuestionId!];
   const isReviewedQuestionMissing = Boolean(activeReviewedQuestionId) && !activeReviewedQuestion;
   const reviewedUserAnswer = result.userAnswers[activeReviewedQuestionId!];
-  const isReviewedCorrect = reviewedUserAnswer === activeReviewedQuestion?.correctAnswerIndex;
+  const isReviewedCorrect = activeReviewedQuestion ? isCorrectAnswer(activeReviewedQuestion, reviewedUserAnswer) : false;
 
   useEffect(() => {
     if (reviewedSections.length === 0) {
@@ -337,8 +341,7 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
                   <div className="grid grid-flow-col auto-cols-[40px] md:grid-flow-row md:grid-cols-5 md:auto-cols-auto gap-2">
                     {section.questionIds.map((id, qIdx) => {
                       const qUserAns = result.userAnswers[id];
-                      const qCorrectAns = questions[id]?.correctAnswerIndex;
-                      const qIsCorrect = qUserAns === qCorrectAns;
+                      const qIsCorrect = questions[id] ? isCorrectAnswer(questions[id], qUserAns) : false;
                       const isActive = activeSectionIndex === sIdx && currentQuestionIndex === qIdx;
                       
                       return (
@@ -421,9 +424,12 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
             )}
 
             <div className="space-y-5">
-              {activeReviewedQuestion?.options.map((option, idx) => {
-                const isSelected = reviewedUserAnswer === idx;
-                const isCorrectOption = activeReviewedQuestion.correctAnswerIndex === idx;
+              {activeReviewedQuestion && getDisplayedOptions(
+                activeReviewedQuestion,
+                result.attemptOptionOrders?.[activeReviewedQuestion.id]
+              ).map((option, idx) => {
+                const isSelected = reviewedUserAnswer === option.id || reviewedUserAnswer === idx;
+                const isCorrectOption = getCorrectOptionId(activeReviewedQuestion) === option.id;
                 
                 let cardStyle = "border-slate-50 bg-white text-slate-600";
                 let badgeStyle = "bg-slate-100 text-slate-400";
@@ -442,7 +448,7 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
                       {String.fromCharCode(65 + idx)}
                     </div>
                     <div className="flex-1">
-                      <ScientificText text={option} className="text-lg md:text-xl font-bold" />
+                      <ScientificText text={option.text} className="text-lg md:text-xl font-bold" />
                     </div>
                   </div>
                 );

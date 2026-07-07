@@ -10,6 +10,8 @@ import { clearGlassAccent, syncGlassAccent } from './glassAccent';
 import { toast } from './components/ui/Toast';
 import { ATTENDANCE_ROUTE, BLACKLIST_ROUTE } from './brainstorm';
 import { refreshOwnLeaderboardPublic, toPublicLeaderboardRow } from './lib/leaderboard';
+import { fisherYatesShuffle } from './lib/shuffle';
+import { buildOptionMetadata } from './lib/examOptions';
 
 const Auth = lazy(() => import('./components/Auth'));
 const Dashboard = lazy(() => import('./components/Dashboard'));
@@ -721,15 +723,6 @@ const App: React.FC = () => {
     };
   };
 
-  const shuffleWithRng = <T,>(arr: T[], rng: () => number) => {
-    const out = [...arr];
-    for (let i = out.length - 1; i > 0; i--) {
-      const j = Math.floor(rng() * (i + 1));
-      [out[i], out[j]] = [out[j], out[i]];
-    }
-    return out;
-  };
-
   const normalizeDifficulty = (value?: string): DifficultyLevel => {
     if (value === 'easy' || value === 'hard') return value;
     return 'medium';
@@ -793,18 +786,18 @@ const App: React.FC = () => {
       }
 
       (['easy', 'medium', 'hard'] as DifficultyLevel[]).forEach((d) => {
-        const pick = shuffleWithRng(byDifficulty[d], rng).slice(0, targets[d]);
+        const pick = fisherYatesShuffle(byDifficulty[d], rng).slice(0, targets[d]);
         chosen.push(...pick);
       });
     }
 
     if (chosen.length < wanted) {
       const chosenSet = new Set(chosen.map(q => q.id));
-      const remaining = shuffleWithRng(pool.filter(q => !chosenSet.has(q.id)), rng);
+      const remaining = fisherYatesShuffle(pool.filter(q => !chosenSet.has(q.id)), rng);
       chosen.push(...remaining.slice(0, wanted - chosen.length));
     }
 
-    const final = shuffleWithRng(chosen, rng).slice(0, wanted).map(q => q.id);
+    const final = fisherYatesShuffle(chosen, rng).slice(0, wanted).map(q => q.id);
     final.forEach(id => usedIds.add(id));
     return final;
   };
@@ -1060,6 +1053,7 @@ const App: React.FC = () => {
 
       const packaged: Record<string, Question> = {};
       quiz.questions.forEach((q, idx) => {
+        const optionMetadata = buildOptionMetadata(q.options || [], q.correctAnswerIndex);
         packaged[`quizq_${idx}`] = {
           id: `quizq_${idx}`,
           subject: 'Quiz',
@@ -1067,6 +1061,8 @@ const App: React.FC = () => {
           text: q.text,
           options: q.options,
           correctAnswerIndex: q.correctAnswerIndex,
+          optionChoices: q.optionChoices || optionMetadata.optionChoices,
+          correctOptionId: q.correctOptionId || optionMetadata.correctOptionId,
           explanation: q.explanation || '',
           createdBy: quiz.createdBy,
           createdAt: quiz.createdAt

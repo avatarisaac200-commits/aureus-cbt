@@ -11,6 +11,7 @@ import logo from '../assets/logo.png';
 import { toast } from './ui/Toast';
 import { confirmDialog } from './ui/ConfirmDialog';
 import { DEFAULT_BRAINSTORM_WINDOWS, minutesToLabel, minutesToTimeInputValue, sanitizeBrainstormWindows, timeInputValueToMinutes } from '../brainstorm';
+import { buildOptionMetadata, isCorrectAnswer } from '../lib/examOptions';
 
 interface AdminDashboardProps {
   user: User;
@@ -1017,7 +1018,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
           section.questionIds.forEach(qId => {
             const question = questionMap[qId];
             if (!question) return;
-            if (result.userAnswers?.[qId] === question.correctAnswerIndex) {
+            if (isCorrectAnswer(question, result.userAnswers?.[qId])) {
               sectionScore += section.marksPerQuestion;
             }
           });
@@ -1507,6 +1508,10 @@ Rules:
       isActive: qIsActive,
       normalizedText: normalizeText(qText)
     };
+    const questionData = {
+      ...data,
+      ...buildOptionMetadata(data.options, data.correctAnswerIndex)
+    };
     try {
       const duplicateId = await findDuplicateQuestion(data.text, editingId || undefined);
       if (duplicateId) {
@@ -1520,7 +1525,7 @@ Rules:
           ? areOptionsChanged(existingQuestion.options || [], data.options) || existingQuestion.correctAnswerIndex !== data.correctAnswerIndex
           : true;
 
-        await updateDoc(doc(db, 'questions', editingId), { ...data, updatedAt: new Date().toISOString() });
+        await updateDoc(doc(db, 'questions', editingId), { ...questionData, updatedAt: new Date().toISOString() });
         if (optionsChanged) {
           const updatedCount = await recalculateScoresForQuestion(editingId);
           if (updatedCount > 0) {
@@ -1528,7 +1533,7 @@ Rules:
           }
         }
       } else {
-        await addDoc(collection(db, 'questions'), { ...data, createdBy: user.id, createdAt: new Date().toISOString() });
+        await addDoc(collection(db, 'questions'), { ...questionData, createdBy: user.id, createdAt: new Date().toISOString() });
       }
       resetForm();
       setIsQuestionModalOpen(false);
@@ -1625,12 +1630,14 @@ Rules:
         for (const q of csvDynamicQuestions) {
           const ref = doc(collection(db, 'questions'));
           persistedRows.push({ id: ref.id, question: q });
+          const optionMetadata = buildOptionMetadata(q.options || [], q.correctAnswerIndex);
           batch.set(ref, {
             subject: q.subject || 'General',
             topic: q.topic || 'General',
             text: q.text,
             options: q.options,
             correctAnswerIndex: q.correctAnswerIndex,
+            ...optionMetadata,
             explanation: q.explanation || '',
             difficulty: q.difficulty || DEFAULT_DIFFICULTY,
             tags: Array.isArray(q.tags) ? q.tags : [],
@@ -1898,8 +1905,10 @@ Rules:
         const persistable = { ...q } as any;
         delete persistable.selected;
         const ref = doc(collection(db, 'questions'));
+        const optionMetadata = buildOptionMetadata(persistable.options || [], Number(persistable.correctAnswerIndex || 0));
         batch.set(ref, {
           ...persistable,
+          ...optionMetadata,
           difficulty: persistable.difficulty || DEFAULT_DIFFICULTY,
           tags: Array.isArray(persistable.tags) ? persistable.tags : [],
           imageUrl: sanitizeOptionalUrl(String(persistable.imageUrl || '')),
@@ -2111,12 +2120,14 @@ Rules:
         for (const row of editingCsvQuestions) {
           const cleanedText = String(row.text || '').trim();
           const cleanedOptions = row.options.map(opt => String(opt || '').trim()).slice(0, 4);
+          const optionMetadata = buildOptionMetadata(cleanedOptions, Number(row.correctAnswerIndex));
           batch.update(doc(db, 'questions', row.id), {
             subject: String(row.subject || 'General').trim() || 'General',
             topic: String(row.topic || 'General').trim() || 'General',
             text: cleanedText,
             options: cleanedOptions,
             correctAnswerIndex: Number(row.correctAnswerIndex),
+            ...optionMetadata,
             explanation: String(row.explanation || '').trim(),
             difficulty: normalizeDifficulty(String(row.difficulty || DEFAULT_DIFFICULTY)),
             tags: Array.isArray(row.tags) ? row.tags.map(tag => String(tag || '').trim()).filter(Boolean) : [],

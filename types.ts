@@ -30,6 +30,8 @@ export interface Question {
   text: string;
   options: string[];
   correctAnswerIndex: number;
+  optionChoices?: AnswerOption[];
+  correctOptionId?: string;
   explanation?: string;
   normalizedText?: string;
   difficulty?: DifficultyLevel;
@@ -44,6 +46,11 @@ export interface Question {
   isActive?: boolean;
   createdBy: string;
   createdAt: string;
+}
+
+export interface AnswerOption {
+  id: string;
+  text: string;
 }
 
 export interface SectionSampleFilters {
@@ -104,6 +111,8 @@ export interface QuizQuestion {
   text: string;
   options: string[];
   correctAnswerIndex: number;
+  optionChoices?: AnswerOption[];
+  correctOptionId?: string;
   explanation?: string;
 }
 
@@ -134,7 +143,8 @@ export interface ExamResult {
   totalQuestionCount?: number;
   completedAt: string;
   status: 'completed' | 'abandoned' | 'auto-submitted';
-  userAnswers: Record<string, number>;
+  userAnswers: Record<string, number | string>;
+  attemptOptionOrders?: Record<string, string[]>;
   resolvedSections?: TestSection[];
   attemptSections?: TestSection[];
   attemptQuestionIds?: string[];

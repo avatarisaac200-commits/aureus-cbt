@@ -9,6 +9,8 @@ import logo from '../assets/logo.png';
 import { getOrCreateAiExplanation } from './aiExplanationService';
 import { confirmDialog } from './ui/ConfirmDialog';
 import { refreshOwnLeaderboardPublic, toPublicLeaderboardRow } from '../lib/leaderboard';
+import { fisherYatesShuffle } from '../lib/shuffle';
+import { getCorrectOptionId, getDisplayedOptions, isCorrectAnswer, shuffleOptionIdsForAttempt } from '../lib/examOptions';
 
 interface ExamInterfaceProps {
   test: MockTest;
@@ -46,7 +48,8 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [timeRemaining, setTimeRemaining] = useState(test.totalDurationSeconds);
   const [hasStarted, setHasStarted] = useState(false);
-  const [answers, setAnswers] = useState<Record<string, number>>({});
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [attemptOptionOrders, setAttemptOptionOrders] = useState<Record<string, string[]>>({});
   const [completedSections, setCompletedSections] = useState<number[]>([]);
   const [showCalculator, setShowCalculator] = useState(false);
   const [showNav, setShowNav] = useState(false);
@@ -62,22 +65,12 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
   const [aiSource, setAiSource] = useState<'cache' | 'generated' | 'fallback' | ''>('');
   const effectiveSections = resolvedSections || test.sections;
 
-  // Store the shuffled order of question IDs for each section
+  // Store the randomized order of question IDs for each section.
   const [shuffledSections, setShuffledSections] = useState<TestSection[]>([]);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const endTimeRef = useRef<number | null>(null);
   const hasSubmittedRef = useRef(false);
-
-  // Simple shuffle function (Fisher-Yates)
-  const shuffleArray = <T,>(array: T[]): T[] => {
-    const shuffled = [...array];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-    }
-    return shuffled;
-  };
 
   useEffect(() => {
     const fetchQuestions = async () => {
@@ -119,7 +112,7 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
     // Prepare shuffled question IDs for this specific attempt
     const randomized = effectiveSections.map(section => ({
       ...section,
-      questionIds: shuffleArray(section.questionIds)
+      questionIds: fisherYatesShuffle(section.questionIds)
     }));
     setShuffledSections(randomized);
   }, [test, packagedQuestions, effectiveSections]);
@@ -141,13 +134,13 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
     const correctAnsweredCount = allQuestionIds.reduce((count, qId) => {
       const question = allQuestions[qId];
       if (!question) return count;
-      return answers[qId] === question.correctAnswerIndex ? count + 1 : count;
+      return isCorrectAnswer(question, answers[qId]) ? count + 1 : count;
     }, 0);
     const sectionBreakdown = sectionsForResult.map((section) => {
       let sectionScore = 0;
       section.questionIds.forEach(qId => {
         const question = allQuestions[qId];
-        if (question && answers[qId] === question.correctAnswerIndex) {
+        if (question && isCorrectAnswer(question, answers[qId])) {
           sectionScore += section.marksPerQuestion;
         }
       });
@@ -175,6 +168,7 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
       completedAt: new Date().toISOString(),
       status: status,
       userAnswers: answers,
+      attemptOptionOrders,
       resolvedSections: effectiveSections,
       attemptSections: attemptedSections,
       attemptQuestionIds: attemptedQuestionIds,
@@ -192,7 +186,22 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
       queuePendingResult(result);
       onFinish({ ...result, id: 'temp-' + Date.now() } as ExamResult);
     }
-  }, [allQuestions, answers, onFinish, test, user.id, user.name, effectiveSections, attemptId, shuffledSections]);
+  }, [allQuestions, answers, attemptOptionOrders, onFinish, test, user.id, user.name, effectiveSections, attemptId, shuffledSections]);
+
+  useEffect(() => {
+    if (Object.keys(allQuestions).length === 0 || shuffledSections.length === 0) return;
+    setAttemptOptionOrders(prev => {
+      const next = { ...prev };
+      let changed = false;
+      shuffledSections.flatMap(section => section.questionIds).forEach(qId => {
+        const question = allQuestions[qId];
+        if (!question || next[qId]) return;
+        next[qId] = shuffleOptionIdsForAttempt(question);
+        changed = true;
+      });
+      return changed ? next : prev;
+    });
+  }, [allQuestions, shuffledSections]);
 
   useEffect(() => {
     if (!isTimedMode) return;
@@ -273,10 +282,10 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
     }
   };
 
-  const selectAnswer = (questionId: string | undefined, optionIndex: number) => {
+  const selectAnswer = (questionId: string | undefined, optionId: string) => {
     if (!questionId) return;
     if (instantFeedback && revealedAnswers[questionId]) return;
-    setAnswers(prev => ({ ...prev, [questionId]: optionIndex }));
+    setAnswers(prev => ({ ...prev, [questionId]: optionId }));
     if (instantFeedback) {
       setRevealedAnswers(prev => ({ ...prev, [questionId]: true }));
       setShowMoreInfo(true);
@@ -308,7 +317,9 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
   const activeSection = activeSectionIndex === null ? undefined : shuffledSections[activeSectionIndex];
   const currentQuestionId = activeSection?.questionIds[currentQuestionIndex];
   const currentQuestion = currentQuestionId ? allQuestions[currentQuestionId] : undefined;
-  const correctAnswerIndex = currentQuestion?.correctAnswerIndex ?? -1;
+  const displayedOptions = currentQuestion ? getDisplayedOptions(currentQuestion, attemptOptionOrders[currentQuestion.id]) : [];
+  const correctOptionId = currentQuestion ? getCorrectOptionId(currentQuestion) : '';
+  const correctAnswerIndex = displayedOptions.findIndex(option => option.id === correctOptionId);
   const currentAnswer = currentQuestionId ? answers[currentQuestionId] : undefined;
   const isCurrentRevealed = currentQuestionId ? Boolean(revealedAnswers[currentQuestionId]) : false;
   const timerToneClass = timeRemaining <= 60 ? 'text-red-500' : timeRemaining <= 300 ? 'text-amber-500' : 'text-emerald-500';
@@ -498,39 +509,39 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
               </div>
             )}
             <div className="space-y-4">
-              {currentQuestion?.options.map((option, idx) => (
+              {currentQuestion && displayedOptions.map((option, idx) => (
                 <button
-                  key={idx}
-                  onClick={() => selectAnswer(currentQuestionId, idx)}
+                  key={option.id}
+                  onClick={() => selectAnswer(currentQuestionId, option.id)}
                     disabled={instantFeedback && isCurrentRevealed}
                     className={`w-full text-left p-6 min-h-12 rounded-2xl border-2 transition-all flex items-center ${(instantFeedback && isCurrentRevealed)
-                    ? (correctAnswerIndex === idx
+                    ? (correctOptionId === option.id
                       ? 'border-emerald-500 bg-emerald-50 shadow-sm'
-                      : (currentAnswer === idx
+                      : (currentAnswer === option.id
                         ? 'border-red-400 bg-red-50 shadow-sm'
                         : 'border-slate-100 bg-white'))
-                    : (currentAnswer === idx
+                    : (currentAnswer === option.id
                       ? 'border-amber-500 bg-amber-50 shadow-sm'
                       : 'border-slate-50 hover:bg-slate-50 hover:border-slate-200')
                   } ${instantFeedback && isCurrentRevealed ? 'cursor-default' : ''}`}
                 >
                   <div className={`w-10 h-10 rounded-xl flex items-center justify-center mr-6 font-bold text-base transition-all ${(instantFeedback && isCurrentRevealed)
-                    ? (correctAnswerIndex === idx
+                    ? (correctOptionId === option.id
                       ? 'bg-emerald-500 text-white'
-                      : (currentAnswer === idx ? 'bg-red-500 text-white' : 'bg-slate-100 text-slate-400'))
-                    : (currentAnswer === idx ? 'bg-amber-500 text-slate-950' : 'bg-slate-100 text-slate-400')
+                      : (currentAnswer === option.id ? 'bg-red-500 text-white' : 'bg-slate-100 text-slate-400'))
+                    : (currentAnswer === option.id ? 'bg-amber-500 text-slate-950' : 'bg-slate-100 text-slate-400')
                   }`}>{String.fromCharCode(65 + idx)}</div>
-                  <ScientificText text={option} className={`text-base font-bold flex-1 ${(instantFeedback && isCurrentRevealed)
-                    ? (correctAnswerIndex === idx ? 'text-emerald-700' : (currentAnswer === idx ? 'text-red-700' : 'text-slate-600'))
-                    : (currentAnswer === idx ? 'text-slate-950' : 'text-slate-600')
+                  <ScientificText text={option.text} className={`text-base font-bold flex-1 ${(instantFeedback && isCurrentRevealed)
+                    ? (correctOptionId === option.id ? 'text-emerald-700' : (currentAnswer === option.id ? 'text-red-700' : 'text-slate-600'))
+                    : (currentAnswer === option.id ? 'text-slate-950' : 'text-slate-600')
                   }`} />
                 </button>
               ))}
             </div>
             {instantFeedback && isCurrentRevealed && currentQuestion && (
               <div className="mt-6 p-4 rounded-2xl border border-emerald-100 bg-emerald-50">
-                <p className={`text-xs font-bold uppercase tracking-widest ${currentAnswer === correctAnswerIndex ? 'text-emerald-700' : 'text-red-600'}`}>
-                  {currentAnswer === correctAnswerIndex ? 'Correct' : `Incorrect. Correct answer: ${String.fromCharCode(65 + correctAnswerIndex)}`}
+                <p className={`text-xs font-bold uppercase tracking-widest ${currentAnswer === correctOptionId ? 'text-emerald-700' : 'text-red-600'}`}>
+                  {currentAnswer === correctOptionId ? 'Correct' : `Incorrect. Correct answer: ${correctAnswerIndex >= 0 ? String.fromCharCode(65 + correctAnswerIndex) : 'Unavailable'}`}
                 </p>
               </div>
             )}
