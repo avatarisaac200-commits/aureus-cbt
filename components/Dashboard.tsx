@@ -26,6 +26,7 @@ interface DashboardProps {
   onReviewResult: (result: ExamResult) => void;
   onOpenCourses?: () => void;
   onOpenVideos?: () => void;
+  onOpenFlashcards?: () => void;
   onSaveOfflineTest?: (test: MockTest) => void;
   onReturnToAdmin?: () => void;
   isReadOnly?: boolean;
@@ -45,7 +46,7 @@ interface DashboardProps {
 }
 
 type TestSortMode = 'updated' | 'name' | 'duration' | 'attempts';
-type MainTab = 'home' | 'announcements' | 'schedule' | 'community' | 'videos' | 'ranks' | 'create' | 'reviews' | 'settings' | 'profile';
+type MainTab = 'home' | 'announcements' | 'schedule' | 'community' | 'videos' | 'flashcards' | 'ranks' | 'create' | 'reviews' | 'settings' | 'profile';
 type MobileUiMode = 'dark' | 'light';
 type TestShelf = 'all' | 'unfiled' | 'archived' | string;
 
@@ -200,6 +201,7 @@ const Dashboard: React.FC<DashboardProps> = ({
   onReviewResult,
   onOpenCourses,
   onOpenVideos,
+  onOpenFlashcards,
   onSaveOfflineTest,
   onReturnToAdmin,
   isReadOnly = false,
@@ -1266,6 +1268,7 @@ const Dashboard: React.FC<DashboardProps> = ({
     { id: 'schedule', label: 'Schedule' },
     { id: 'community', label: 'Community' },
     { id: 'videos', label: 'Videos' },
+    { id: 'flashcards', label: 'Flashcards' },
     { id: 'ranks', label: 'Ranks' },
     { id: 'create', label: 'Create' },
     { id: 'reviews', label: 'Reviews' },
@@ -1323,6 +1326,15 @@ const Dashboard: React.FC<DashboardProps> = ({
         <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <rect x="3" y="5" width="18" height="14" rx="2" />
           <path d="M10 9l5 3-5 3V9z" />
+        </svg>
+      );
+    }
+    if (tabId === 'flashcards') {
+      return (
+        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M7 4h10a2 2 0 012 2v12a2 2 0 01-2 2H7a2 2 0 01-2-2V6a2 2 0 012-2z" />
+          <path d="M8 9h8M8 13h5" />
+          <path d="M16 4v5h3" />
         </svg>
       );
     }
@@ -1502,6 +1514,14 @@ const Dashboard: React.FC<DashboardProps> = ({
                 Watch Videos
               </button>
             )}
+            {onOpenFlashcards && (
+              <button
+                onClick={onOpenFlashcards}
+                className="px-6 py-3 text-xs font-black text-teal-700 bg-teal-50 border border-teal-100 rounded-2xl hover:bg-teal-100 uppercase tracking-widest shadow-sm"
+              >
+                Study Cards
+              </button>
+            )}
           </div>
 
           <div className="mb-8 bg-white rounded-2xl border border-slate-100 p-2 hidden md:inline-flex gap-2">
@@ -1540,6 +1560,12 @@ const Dashboard: React.FC<DashboardProps> = ({
               className={`px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest ${activeTab === 'videos' ? 'bg-slate-950 text-amber-500' : 'text-slate-500 bg-slate-50'}`}
             >
               Videos
+            </button>
+            <button
+              onClick={() => setActiveTab('flashcards')}
+              className={`px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest ${activeTab === 'flashcards' ? 'bg-slate-950 text-amber-500' : 'text-slate-500 bg-slate-50'}`}
+            >
+              Flashcards
             </button>
             <button
               onClick={() => setActiveTab('reviews')}
@@ -1823,9 +1849,56 @@ const Dashboard: React.FC<DashboardProps> = ({
                       Watch Videos
                     </button>
                   )}
+                  {onOpenFlashcards && (
+                    <button
+                      onClick={onOpenFlashcards}
+                      className="w-full py-4 bg-teal-50 border border-teal-100 text-teal-700 rounded-2xl text-xs font-black uppercase tracking-widest"
+                    >
+                      Study Flashcards
+                    </button>
+                  )}
                 </div>
               </aside>
             </div>
+            </div>
+          )}
+
+          {activeTab === 'flashcards' && (
+            <div className="space-y-6">
+              <section className="bg-white rounded-[2rem] border border-slate-100 p-6 md:p-8 shadow-sm flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-widest text-teal-700">Recall Practice</p>
+                  <h2 className="text-xl font-black uppercase text-slate-950">Flashcards from your test bank</h2>
+                  <p className="mt-2 text-sm leading-relaxed text-slate-600 max-w-2xl">
+                    Pick any published test, reveal answers one by one, and mark confidence so weak cards come back sooner.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={onOpenFlashcards}
+                  disabled={!onOpenFlashcards}
+                  className="px-6 py-4 rounded-2xl bg-slate-950 text-amber-500 text-xs font-black uppercase tracking-widest disabled:opacity-40"
+                >
+                  Open Flashcards
+                </button>
+              </section>
+              <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm">
+                  <p className="text-xs font-black uppercase tracking-widest text-slate-400">Step 1</p>
+                  <h3 className="mt-2 text-sm font-black uppercase text-slate-950">Choose a deck</h3>
+                  <p className="mt-2 text-xs leading-relaxed text-slate-500">Each approved test becomes a study deck automatically.</p>
+                </div>
+                <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm">
+                  <p className="text-xs font-black uppercase tracking-widest text-slate-400">Step 2</p>
+                  <h3 className="mt-2 text-sm font-black uppercase text-slate-950">Reveal answers</h3>
+                  <p className="mt-2 text-xs leading-relaxed text-slate-500">Questions become prompts; correct options become answers.</p>
+                </div>
+                <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm">
+                  <p className="text-xs font-black uppercase tracking-widest text-slate-400">Step 3</p>
+                  <h3 className="mt-2 text-sm font-black uppercase text-slate-950">Track recall</h3>
+                  <p className="mt-2 text-xs leading-relaxed text-slate-500">Again, Hard, Good, and Easy ratings save your progress.</p>
+                </div>
+              </section>
             </div>
           )}
 
@@ -2210,6 +2283,11 @@ const Dashboard: React.FC<DashboardProps> = ({
                   <button onClick={() => setActiveTab('settings')} className="w-full py-4 bg-slate-50 border border-slate-200 text-slate-700 rounded-2xl text-xs font-black uppercase tracking-widest">
                     Open Settings
                   </button>
+                  {onOpenFlashcards && (
+                    <button onClick={onOpenFlashcards} className="w-full py-4 bg-teal-50 border border-teal-100 text-teal-700 rounded-2xl text-xs font-black uppercase tracking-widest">
+                      Study Flashcards
+                    </button>
+                  )}
                 </div>
               </section>
             </div>

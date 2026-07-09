@@ -276,6 +276,81 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    match /flashcards/{flashcardId} {
+      allow get, list: if
+        signedIn() &&
+        (
+          isAdmin() ||
+          resource.data.isPublished == true
+        );
+
+      allow create: if
+        signedIn() &&
+        isAdmin() &&
+        request.resource.data.front is string &&
+        request.resource.data.back is string &&
+        request.resource.data.createdBy == request.auth.uid;
+
+      allow update, delete: if signedIn() && isAdmin();
+    }
+
+    match /flashcardProgress/{progressId} {
+      allow create: if
+        signedIn() &&
+        request.resource.data.userId == request.auth.uid &&
+        request.resource.data.flashcardId is string &&
+        request.resource.data.sourceQuestionId is string &&
+        request.resource.data.confidence in ['again', 'hard', 'good', 'easy'] &&
+        request.resource.data.reviewCount is number &&
+        request.resource.data.reviewCount >= 1 &&
+        request.resource.data.lastReviewedAt is string &&
+        progressId == (request.auth.uid + '_' + request.resource.data.flashcardId);
+
+      allow get, list: if
+        signedIn() &&
+        (
+          isAdmin() ||
+          resource.data.userId == request.auth.uid
+        );
+
+      allow update: if
+        signedIn() &&
+        (
+          isAdmin() ||
+          (
+            resource.data.userId == request.auth.uid &&
+            request.resource.data.userId == request.auth.uid &&
+            request.resource.data.flashcardId == resource.data.flashcardId &&
+            request.resource.data.sourceQuestionId == resource.data.sourceQuestionId &&
+            request.resource.data.confidence in ['again', 'hard', 'good', 'easy'] &&
+            request.resource.data.reviewCount is number &&
+            request.resource.data.reviewCount >= resource.data.reviewCount &&
+            request.resource.data.lastReviewedAt is string
+          )
+        );
+
+      allow delete: if isAdmin();
+    }
+
+    match /flashcardSessions/{sessionId} {
+      allow create: if
+        signedIn() &&
+        request.resource.data.userId == request.auth.uid &&
+        request.resource.data.cardCount is number &&
+        request.resource.data.reviewedCount is number &&
+        request.resource.data.startedAt is string &&
+        request.resource.data.completedAt is string;
+
+      allow get, list: if
+        signedIn() &&
+        (
+          isAdmin() ||
+          resource.data.userId == request.auth.uid
+        );
+
+      allow update, delete: if isAdmin();
+    }
+
     match /announcements/{announcementId} {
       allow get, list: if signedIn();
       allow create: if signedIn() && isAdmin() && request.resource.data.authorId == request.auth.uid;

@@ -12,6 +12,7 @@ import { ATTENDANCE_ROUTE, BLACKLIST_ROUTE } from './brainstorm';
 import { refreshOwnLeaderboardPublic, toPublicLeaderboardRow } from './lib/leaderboard';
 import { fisherYatesShuffle } from './lib/shuffle';
 import { buildOptionMetadata } from './lib/examOptions';
+import FlashcardsIntro from './components/FlashcardsIntro';
 
 const Auth = lazy(() => import('./components/Auth'));
 const Dashboard = lazy(() => import('./components/Dashboard'));
@@ -25,6 +26,7 @@ const ReviewInterface = lazy(() => import('./components/ReviewInterface'));
 const UpdateManual = lazy(() => import('./components/UpdateManual'));
 const CoursesHub = lazy(() => import('./components/CoursesHub'));
 const VideoLearningHub = lazy(() => import('./components/VideoLearningHub'));
+const FlashcardsHub = lazy(() => import('./components/FlashcardsHub'));
 const SocialProfileOnboarding = lazy(() => import('./components/SocialProfileOnboarding'));
 
 const DEFAULT_FREE_ACCESS_ENDS_AT_ISO = '2026-04-01T23:00:00.000Z'; // April 2, 2026 00:00 WAT
@@ -125,6 +127,7 @@ const viewToPath = (view: ViewState) => {
   if (view === 'dashboard') return '/dashboard';
   if (view === 'courses') return '/courses';
   if (view === 'videos') return '/videos';
+  if (view === 'flashcards') return '/flashcards';
   if (view === 'attendance') return ATTENDANCE_ROUTE;
   if (view === 'blacklist') return BLACKLIST_ROUTE;
   if (view === 'admin') return '/admin';
@@ -140,6 +143,7 @@ const pathToView = (path: string): ViewState | null => {
   if (normalized === '/dashboard' || normalized === '/') return 'dashboard';
   if (normalized === '/courses') return 'courses';
   if (normalized === '/videos') return 'videos';
+  if (normalized === '/flashcards') return 'flashcards';
   if (normalized === ATTENDANCE_ROUTE) return 'attendance';
   if (normalized === BLACKLIST_ROUTE) return 'blacklist';
   if (normalized === '/admin') return 'admin';
@@ -1137,6 +1141,8 @@ const App: React.FC = () => {
             setCurrentView('blacklist');
           } else if (requestedView === 'courses') {
             setCurrentView('courses');
+          } else if (requestedView === 'flashcards') {
+            setCurrentView('flashcards');
           } else if (requestedView === 'update-manual') {
             setCurrentView('update-manual');
           } else if (requestedView === 'admin' && (userData.role === 'admin' || userData.role === 'root-admin')) {
@@ -1629,6 +1635,7 @@ const App: React.FC = () => {
           onReturnToAdmin={() => setCurrentView(currentUser.role === 'root-admin' ? 'root-admin' : 'admin')}
           onOpenCourses={() => setCurrentView('courses')}
           onOpenVideos={() => setCurrentView('videos')}
+          onOpenFlashcards={() => setCurrentView('flashcards')}
           onSaveOfflineTest={saveTestForOffline}
           isReadOnly={isReadOnlyForUnactivatedUser(currentUser)}
           deadlineLabel={deadlineLabel}
@@ -1668,6 +1675,13 @@ const App: React.FC = () => {
       )}
       {currentView === 'videos' && currentUser && (
         <VideoLearningHub
+          user={currentUser}
+          isReadOnly={isReadOnlyForUnactivatedUser(currentUser)}
+          onBack={() => setCurrentView('dashboard')}
+        />
+      )}
+      {currentView === 'flashcards' && currentUser && (
+        <FlashcardsHub
           user={currentUser}
           isReadOnly={isReadOnlyForUnactivatedUser(currentUser)}
           onBack={() => setCurrentView('dashboard')}
@@ -1748,6 +1762,9 @@ const App: React.FC = () => {
           onCreateNow={handleCreateSocialProfileNow}
           onCreateLater={handleCreateSocialProfileLater}
         />
+      )}
+      {currentUser && currentView !== 'auth' && currentView !== 'verify-email' && (
+        <FlashcardsIntro user={currentUser} onTryNow={() => setCurrentView('flashcards')} />
       )}
       {currentUser && isSocialProfileEditorOpen && (
         <SocialProfileOnboarding

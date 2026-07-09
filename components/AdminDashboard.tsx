@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useMemo, useEffect } from 'react';
-import { User, Question, TestSection, MockTest, ExamResult, DifficultyLevel, TestGenerationMode, CsvBundleCategoryField, CsvQuestionBundle, QuestionTagInsight } from '../types';
+import { User, Question, TestSection, MockTest, ExamResult, DifficultyLevel, TestGenerationMode, CsvBundleCategoryField, CsvQuestionBundle, QuestionTagInsight, Flashcard } from '../types';
 import { db } from '../firebase';
 import { collection, addDoc, getDocs, getDoc, deleteDoc, doc, query, updateDoc, setDoc, writeBatch, limit, where, documentId, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import { GoogleGenAI } from '@google/genai';
@@ -21,7 +21,7 @@ interface AdminDashboardProps {
   onOpenCourses?: () => void;
 }
 
-type AdminTab = 'questions' | 'create-test' | 'tests' | 'import' | 'analytics' | 'videos' | 'attendance' | 'license-keys';
+type AdminTab = 'questions' | 'create-test' | 'tests' | 'flashcards' | 'import' | 'analytics' | 'videos' | 'attendance' | 'license-keys';
 type StagedQuestion = Omit<Question, 'id' | 'createdAt' | 'createdBy'> & { selected?: boolean };
 type EditableCsvQuestion = StagedQuestion & { id: string };
 type EditingMediaTarget =
@@ -147,6 +147,17 @@ const CSV_IMPORT_HEADERS = [
   'isActive'
 ] as const;
 const CSV_IMPORT_HEADER_LINE = CSV_IMPORT_HEADERS.join(',');
+const FLASHCARD_CSV_HEADERS = [
+  'subject',
+  'topic',
+  'front',
+  'back',
+  'explanation',
+  'difficulty',
+  'tags',
+  'isPublished'
+] as const;
+const FLASHCARD_CSV_HEADER_LINE = FLASHCARD_CSV_HEADERS.join(',');
 
 const parseList = (value: string) => value.split(',').map(item => item.trim()).filter(Boolean);
 const sanitizeOptionalUrl = (value: string) => {
@@ -407,6 +418,63 @@ const buildQuestionsCsv = (rows: Array<Pick<Question, 'subject' | 'topic' | 'tex
   return lines.join('\n');
 };
 
+const mapCsvRowsToFlashcards = (rows: Array<Record<string, string>>) => {
+  const required = ['front', 'back'];
+  const first = rows[0] || {};
+  const missing = required.filter(col => !(col in first));
+  if (missing.length > 0) {
+    throw new Error(`Missing required CSV columns: ${missing.join(', ')}`);
+  }
+
+  const mapped: Array<Omit<Flashcard, 'id'>> = [];
+  const errors: string[] = [];
+  rows.forEach((row, idx) => {
+    const rowNo = idx + 2;
+    const front = (row.front || '').trim();
+    const back = (row.back || '').trim();
+    if (!front || !back) {
+      errors.push(`Row ${rowNo}: front/back missing.`);
+      return;
+    }
+    mapped.push({
+      subject: (row.subject || 'General').trim() || 'General',
+      topic: (row.topic || 'Mixed Practice').trim() || 'Mixed Practice',
+      front,
+      back,
+      explanation: (row.explanation || '').trim(),
+      difficulty: normalizeDifficulty(row.difficulty || DEFAULT_DIFFICULTY),
+      tags: parseList(row.tags || ''),
+      isPublished: toBoolean(row.ispublished || 'true', true)
+    });
+  });
+
+  if (mapped.length === 0) {
+    throw new Error(errors[0] || 'No valid flashcards were found in CSV.');
+  }
+
+  return { mapped, errors };
+};
+
+const buildFlashcardsCsv = (rows: Flashcard[]) => {
+  const lines = [
+    FLASHCARD_CSV_HEADER_LINE,
+    ...rows.map((card) => {
+      const values = [
+        card.subject || 'General',
+        card.topic || 'Mixed Practice',
+        card.front || '',
+        card.back || '',
+        card.explanation || '',
+        normalizeDifficulty(String(card.difficulty || DEFAULT_DIFFICULTY)),
+        Array.isArray(card.tags) ? card.tags.join(', ') : '',
+        card.isPublished === false ? 'false' : 'true'
+      ];
+      return values.map(escapeCsvCell).join(',');
+    })
+  ];
+  return lines.join('\n');
+};
+
 const downloadCsv = (fileName: string, csvContent: string) => {
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
   const url = window.URL.createObjectURL(blob);
@@ -586,6 +654,18 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
   const [tagInsights, setTagInsights] = useState<QuestionTagInsight[]>([]);
   const [tagInsightsLoading, setTagInsightsLoading] = useState(false);
   const [isQuestionModalOpen, setIsQuestionModalOpen] = useState(false);
+  const [adminFlashcards, setAdminFlashcards] = useState<Flashcard[]>([]);
+  const [flashcardsLoading, setFlashcardsLoading] = useState(false);
+  const [editingFlashcardId, setEditingFlashcardId] = useState<string | null>(null);
+  const [flashcardSubject, setFlashcardSubject] = useState('');
+  const [flashcardTopic, setFlashcardTopic] = useState('');
+  const [flashcardFront, setFlashcardFront] = useState('');
+  const [flashcardBack, setFlashcardBack] = useState('');
+  const [flashcardExplanation, setFlashcardExplanation] = useState('');
+  const [flashcardDifficulty, setFlashcardDifficulty] = useState<DifficultyLevel>(DEFAULT_DIFFICULTY);
+  const [flashcardTags, setFlashcardTags] = useState('');
+  const [flashcardPublished, setFlashcardPublished] = useState(true);
+  const [flashcardSaving, setFlashcardSaving] = useState(false);
   const [managedTests, setManagedTests] = useState<MockTest[]>([]);
   const [managedTestsLoading, setManagedTestsLoading] = useState(false);
   const [editingTestId, setEditingTestId] = useState<string | null>(null);
@@ -661,6 +741,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
   const [stagedQuestions, setStagedQuestions] = useState<StagedQuestion[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const csvInputRef = useRef<HTMLInputElement>(null);
+  const flashcardCsvInputRef = useRef<HTMLInputElement>(null);
   const dynamicCsvInputRef = useRef<HTMLInputElement>(null);
   const [isImportCsvDragActive, setIsImportCsvDragActive] = useState(false);
   const [isDynamicCsvDragActive, setIsDynamicCsvDragActive] = useState(false);
@@ -882,6 +963,28 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
       setActiveTab('questions');
     }
   }, [activeTab, canManageKeys]);
+
+  useEffect(() => {
+    if (activeTab !== 'flashcards') return;
+    setFlashcardsLoading(true);
+    const unsub = onSnapshot(
+      query(collection(db, 'flashcards'), limit(500)),
+      (snap) => {
+        const rows = snap.docs
+          .map((row) => ({ ...row.data(), id: row.id } as Flashcard))
+          .sort((a, b) => String(b.updatedAt || b.createdAt || '').localeCompare(String(a.updatedAt || a.createdAt || '')));
+        setAdminFlashcards(rows);
+        setFlashcardsLoading(false);
+      },
+      (err) => {
+        console.error('Flashcard admin load error:', err);
+        setAdminFlashcards([]);
+        setFlashcardsLoading(false);
+        notify('Unable to load flashcards. ' + (err?.message || ''));
+      }
+    );
+    return () => unsub();
+  }, [activeTab]);
 
   useEffect(() => {
     if (activeTab !== 'questions') return;
@@ -2438,6 +2541,163 @@ Rules:
     }
   };
 
+  const resetFlashcardForm = () => {
+    setEditingFlashcardId(null);
+    setFlashcardSubject('');
+    setFlashcardTopic('');
+    setFlashcardFront('');
+    setFlashcardBack('');
+    setFlashcardExplanation('');
+    setFlashcardDifficulty(DEFAULT_DIFFICULTY);
+    setFlashcardTags('');
+    setFlashcardPublished(true);
+  };
+
+  const editFlashcard = (card: Flashcard) => {
+    setEditingFlashcardId(card.id);
+    setFlashcardSubject(card.subject || '');
+    setFlashcardTopic(card.topic || '');
+    setFlashcardFront(card.front || '');
+    setFlashcardBack(card.back || '');
+    setFlashcardExplanation(card.explanation || '');
+    setFlashcardDifficulty(card.difficulty || DEFAULT_DIFFICULTY);
+    setFlashcardTags((card.tags || []).join(', '));
+    setFlashcardPublished(card.isPublished !== false);
+  };
+
+  const saveFlashcard = async () => {
+    const front = flashcardFront.trim();
+    const back = flashcardBack.trim();
+    if (!front || !back) {
+      notify('Flashcard prompt and answer are required.');
+      return;
+    }
+
+    setFlashcardSaving(true);
+    const now = new Date().toISOString();
+    const payload: Omit<Flashcard, 'id'> = {
+      subject: flashcardSubject.trim() || 'General',
+      topic: flashcardTopic.trim() || 'Mixed Practice',
+      front,
+      back,
+      explanation: flashcardExplanation.trim(),
+      difficulty: flashcardDifficulty,
+      tags: parseList(flashcardTags),
+      isPublished: flashcardPublished,
+      createdBy: user.id,
+      creatorName: user.name,
+      createdAt: now,
+      updatedAt: now
+    };
+
+    try {
+      if (editingFlashcardId) {
+        const { createdAt, createdBy, creatorName, ...updatePayload } = payload;
+        await updateDoc(doc(db, 'flashcards', editingFlashcardId), updatePayload);
+        notify('Flashcard updated.');
+      } else {
+        await addDoc(collection(db, 'flashcards'), payload);
+        notify('Flashcard created.');
+      }
+      resetFlashcardForm();
+    } catch (err: any) {
+      notify('Could not save flashcard. ' + (err?.message || ''));
+    } finally {
+      setFlashcardSaving(false);
+    }
+  };
+
+  const toggleFlashcardPublished = async (card: Flashcard) => {
+    try {
+      await updateDoc(doc(db, 'flashcards', card.id), {
+        isPublished: card.isPublished === false,
+        updatedAt: new Date().toISOString()
+      });
+      notify(card.isPublished === false ? 'Flashcard published.' : 'Flashcard unpublished.');
+    } catch (err: any) {
+      notify('Could not update flashcard. ' + (err?.message || ''));
+    }
+  };
+
+  const removeFlashcard = async (card: Flashcard) => {
+    const ok = await confirmDialog({
+      title: 'Delete flashcard?',
+      message: 'Delete this flashcard from the curated deck?',
+      confirmText: 'Delete',
+      variant: 'danger'
+    });
+    if (!ok) return;
+    try {
+      await deleteDoc(doc(db, 'flashcards', card.id));
+      if (editingFlashcardId === card.id) resetFlashcardForm();
+      notify('Flashcard deleted.');
+    } catch (err: any) {
+      notify('Could not delete flashcard. ' + (err?.message || ''));
+    }
+  };
+
+  const importFlashcardsCsv = async (file: File) => {
+    setFlashcardSaving(true);
+    try {
+      const text = await file.text();
+      const rows = parseCsvRows(text);
+      if (rows.length === 0) throw new Error('CSV has no valid data rows.');
+      const { mapped, errors } = mapCsvRowsToFlashcards(rows);
+      const now = new Date().toISOString();
+      let batch = writeBatch(db);
+      let writes = 0;
+      for (const card of mapped) {
+        const ref = doc(collection(db, 'flashcards'));
+        batch.set(ref, {
+          ...card,
+          createdBy: user.id,
+          creatorName: user.name,
+          createdAt: now,
+          updatedAt: now
+        });
+        writes++;
+        if (writes >= 450) {
+          await batch.commit();
+          batch = writeBatch(db);
+          writes = 0;
+        }
+      }
+      if (writes > 0) await batch.commit();
+      notify(`Imported ${mapped.length} flashcard(s).`);
+      if (errors.length > 0) {
+        notify(`Skipped ${errors.length} row(s). First issue: ${errors[0]}`);
+      }
+    } catch (err: any) {
+      notify(err?.message || 'Flashcard CSV import failed.');
+    } finally {
+      setFlashcardSaving(false);
+      if (flashcardCsvInputRef.current) flashcardCsvInputRef.current.value = '';
+    }
+  };
+
+  const exportFlashcardsCsv = () => {
+    const safeDate = new Date().toISOString().slice(0, 10);
+    downloadCsv(`flashcards-${safeDate}.csv`, buildFlashcardsCsv(adminFlashcards));
+    notify(`Exported ${adminFlashcards.length} flashcard(s).`);
+  };
+
+  const downloadFlashcardCsvTemplate = () => {
+    const sample = [
+      FLASHCARD_CSV_HEADER_LINE,
+      [
+        'Anatomy',
+        'Upper limb',
+        'Which nerve innervates the deltoid?',
+        'Axillary nerve',
+        'The axillary nerve supplies deltoid and teres minor.',
+        'medium',
+        'anatomy, nerves',
+        'true'
+      ].map(escapeCsvCell).join(',')
+    ].join('\n');
+    downloadCsv('flashcards-template.csv', sample);
+  };
+
   const handleSaveDeadline = async () => {
     if (!canManageKeys) return;
     const iso = watInputToIso(deadlineInput);
@@ -2539,6 +2799,7 @@ Rules:
         <button onClick={() => setActiveTab('questions')} className={`px-8 py-4 text-xs font-bold uppercase tracking-widest transition-all ${activeTab === 'questions' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50' : 'text-slate-400'}`}>Question Bank</button>
         <button onClick={() => setActiveTab('create-test')} className={`px-8 py-4 text-xs font-bold uppercase tracking-widest transition-all ${activeTab === 'create-test' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50' : 'text-slate-400'}`}>Create Test</button>
         <button onClick={() => setActiveTab('tests')} className={`px-8 py-4 text-xs font-bold uppercase tracking-widest transition-all ${activeTab === 'tests' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50' : 'text-slate-400'}`}>Tests</button>
+        <button onClick={() => setActiveTab('flashcards')} className={`px-8 py-4 text-xs font-bold uppercase tracking-widest transition-all ${activeTab === 'flashcards' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50' : 'text-slate-400'}`}>Flashcards</button>
         <button onClick={() => setActiveTab('import')} className={`px-8 py-4 text-xs font-bold uppercase tracking-widest transition-all ${activeTab === 'import' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50' : 'text-slate-400'}`}>Import</button>
         <button onClick={() => setActiveTab('attendance')} className={`px-8 py-4 text-xs font-bold uppercase tracking-widest transition-all ${activeTab === 'attendance' ? 'border-b-4 border-amber-500 text-slate-950 bg-slate-50' : 'text-slate-400'}`}>Attendance</button>
         {canManageKeys && (
@@ -2696,6 +2957,166 @@ Rules:
                 );
               })}
             </div>
+          </div>
+        )}
+
+        {activeTab === 'flashcards' && (
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+            <section className="xl:col-span-1 bg-white p-6 md:p-8 rounded-[2rem] border border-slate-100 shadow-sm space-y-4">
+              <div>
+                <p className="text-xs font-black uppercase tracking-widest text-amber-600">Curated Deck</p>
+                <h2 className="text-lg font-black uppercase text-slate-950">{editingFlashcardId ? 'Edit Flashcard' : 'Create Flashcard'}</h2>
+              </div>
+              <input
+                value={flashcardSubject}
+                onChange={(e) => setFlashcardSubject(e.target.value)}
+                placeholder="Subject"
+                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold"
+              />
+              <input
+                value={flashcardTopic}
+                onChange={(e) => setFlashcardTopic(e.target.value)}
+                placeholder="Topic"
+                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold"
+              />
+              <textarea
+                value={flashcardFront}
+                onChange={(e) => setFlashcardFront(e.target.value)}
+                placeholder="Front / prompt"
+                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold min-h-32"
+              />
+              <textarea
+                value={flashcardBack}
+                onChange={(e) => setFlashcardBack(e.target.value)}
+                placeholder="Back / answer"
+                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold min-h-28"
+              />
+              <textarea
+                value={flashcardExplanation}
+                onChange={(e) => setFlashcardExplanation(e.target.value)}
+                placeholder="Explanation (optional)"
+                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm min-h-24"
+              />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <select
+                  value={flashcardDifficulty}
+                  onChange={(e) => setFlashcardDifficulty(e.target.value as DifficultyLevel)}
+                  className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold uppercase"
+                >
+                  <option value="easy">Easy</option>
+                  <option value="medium">Medium</option>
+                  <option value="hard">Hard</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={() => setFlashcardPublished((value) => !value)}
+                  className={`p-4 rounded-2xl text-xs font-black uppercase tracking-widest ${flashcardPublished ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-slate-100 text-slate-600 border border-slate-200'}`}
+                >
+                  {flashcardPublished ? 'Published' : 'Draft'}
+                </button>
+              </div>
+              <input
+                value={flashcardTags}
+                onChange={(e) => setFlashcardTags(e.target.value)}
+                placeholder="Tags, comma separated"
+                className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold"
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={saveFlashcard}
+                  disabled={flashcardSaving}
+                  className="flex-1 py-4 bg-slate-950 text-amber-500 rounded-2xl text-xs font-black uppercase tracking-widest disabled:opacity-40"
+                >
+                  {flashcardSaving ? 'Saving...' : editingFlashcardId ? 'Update Card' : 'Create Card'}
+                </button>
+                {editingFlashcardId && (
+                  <button onClick={resetFlashcardForm} className="px-5 py-4 bg-slate-50 border border-slate-200 text-slate-700 rounded-2xl text-xs font-black uppercase tracking-widest">
+                    Cancel
+                  </button>
+                )}
+              </div>
+            </section>
+
+            <section className="xl:col-span-2 bg-white p-6 md:p-8 rounded-[2rem] border border-slate-100 shadow-sm">
+              <div className="flex items-center justify-between gap-3 mb-5">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-widest text-slate-500">Flashcard Library</p>
+                  <h2 className="text-lg font-black uppercase text-slate-950">Admin-created cards</h2>
+                </div>
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  <input
+                    type="file"
+                    ref={flashcardCsvInputRef}
+                    className="hidden"
+                    accept=".csv,text/csv"
+                    onChange={(e) => e.target.files?.[0] && importFlashcardsCsv(e.target.files[0])}
+                  />
+                  <button
+                    onClick={downloadFlashcardCsvTemplate}
+                    className="px-4 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-700 text-xs font-black uppercase tracking-widest"
+                  >
+                    Template
+                  </button>
+                  <button
+                    onClick={() => flashcardCsvInputRef.current?.click()}
+                    disabled={flashcardSaving}
+                    className="px-4 py-2 rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-700 text-xs font-black uppercase tracking-widest disabled:opacity-40"
+                  >
+                    Import CSV
+                  </button>
+                  <button
+                    onClick={exportFlashcardsCsv}
+                    disabled={adminFlashcards.length === 0}
+                    className="px-4 py-2 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-700 text-xs font-black uppercase tracking-widest disabled:opacity-40"
+                  >
+                    Export CSV
+                  </button>
+                  <span className="px-3 py-1 rounded-full bg-amber-50 text-amber-700 text-xs font-black uppercase tracking-widest">
+                    {flashcardsLoading ? 'Loading' : `${adminFlashcards.length} Card(s)`}
+                  </span>
+                </div>
+              </div>
+              <div className="mb-5 rounded-2xl bg-slate-50 border border-slate-100 p-4">
+                <p className="text-xs font-black uppercase tracking-widest text-slate-500 mb-2">CSV Headers</p>
+                <code className="block text-[11px] text-slate-500 break-all">{FLASHCARD_CSV_HEADER_LINE}</code>
+              </div>
+              <div className="space-y-3 max-h-[70dvh] v2-scroll pr-1">
+                {adminFlashcards.map((card) => (
+                  <div key={card.id} className="p-5 rounded-2xl bg-slate-50 border border-slate-100">
+                    <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2 mb-2">
+                          <span className="px-2 py-1 rounded-lg bg-white border border-slate-200 text-[10px] font-black uppercase tracking-widest text-slate-500">{card.subject || 'General'}</span>
+                          <span className="px-2 py-1 rounded-lg bg-white border border-slate-200 text-[10px] font-black uppercase tracking-widest text-slate-500">{card.topic || 'Mixed'}</span>
+                          <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${card.isPublished === false ? 'bg-slate-200 text-slate-600' : 'bg-emerald-50 text-emerald-700 border border-emerald-100'}`}>
+                            {card.isPublished === false ? 'Draft' : 'Published'}
+                          </span>
+                        </div>
+                        <p className="text-sm font-black text-slate-950">{card.front}</p>
+                        <p className="mt-2 text-sm text-slate-600">{card.back}</p>
+                        {card.explanation && <p className="mt-2 text-xs text-slate-500">{card.explanation}</p>}
+                      </div>
+                      <div className="flex flex-wrap gap-2 shrink-0">
+                        <button onClick={() => editFlashcard(card)} className="px-4 py-3 rounded-xl bg-white border border-slate-200 text-slate-700 text-xs font-black uppercase tracking-widest">
+                          Edit
+                        </button>
+                        <button onClick={() => toggleFlashcardPublished(card)} className="px-4 py-3 rounded-xl bg-amber-50 border border-amber-100 text-amber-700 text-xs font-black uppercase tracking-widest">
+                          {card.isPublished === false ? 'Publish' : 'Unpublish'}
+                        </button>
+                        <button onClick={() => removeFlashcard(card)} className="px-4 py-3 rounded-xl bg-red-50 border border-red-100 text-red-700 text-xs font-black uppercase tracking-widest">
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {!flashcardsLoading && adminFlashcards.length === 0 && (
+                  <div className="py-16 rounded-2xl border border-dashed border-slate-200 text-center text-xs font-black uppercase tracking-widest text-slate-400">
+                    No admin flashcards yet.
+                  </div>
+                )}
+              </div>
+            </section>
           </div>
         )}
 

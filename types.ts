@@ -168,6 +168,51 @@ export interface TestAttempt {
   questionIds: string[];
 }
 
+export type FlashcardConfidence = 'again' | 'hard' | 'good' | 'easy';
+
+export interface Flashcard {
+  id: string;
+  sourceQuestionId?: string;
+  sourceTestId?: string;
+  sourceTestName?: string;
+  subject: string;
+  topic: string;
+  front: string;
+  back: string;
+  explanation?: string;
+  tags?: string[];
+  difficulty?: DifficultyLevel;
+  isPublished?: boolean;
+  createdBy?: string;
+  creatorName?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface FlashcardProgress {
+  id: string;
+  userId: string;
+  flashcardId: string;
+  sourceQuestionId: string;
+  sourceTestId?: string;
+  confidence: FlashcardConfidence;
+  reviewCount: number;
+  lastReviewedAt: string;
+  nextReviewAt?: string;
+}
+
+export interface FlashcardSession {
+  id: string;
+  userId: string;
+  sourceTestId?: string;
+  sourceTestName?: string;
+  cardCount: number;
+  reviewedCount: number;
+  startedAt: string;
+  completedAt?: string;
+  confidenceBreakdown: Record<FlashcardConfidence, number>;
+}
+
 export interface QuestionTagInsight {
   id: string;
   questionId: string;
@@ -489,4 +534,4 @@ export interface CustomThemeConfig {
   border: string;
 }
 
-export type ViewState = 'auth' | 'verify-email' | 'dashboard' | 'courses' | 'videos' | 'attendance' | 'blacklist' | 'exam' | 'admin' | 'root-admin' | 'results' | 'review' | 'update-manual';
+export type ViewState = 'auth' | 'verify-email' | 'dashboard' | 'courses' | 'videos' | 'flashcards' | 'attendance' | 'blacklist' | 'exam' | 'admin' | 'root-admin' | 'results' | 'review' | 'update-manual';
