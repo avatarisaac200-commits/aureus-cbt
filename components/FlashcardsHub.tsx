@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { db } from '../firebase';
 import { Flashcard, FlashcardConfidence, FlashcardProgress, FlashcardSession, MockTest, Question, User } from '../types';
 import { buildFlashcardsFromQuestions, getFlashcardProgressId, getNextReviewAt, sortFlashcardsForStudy } from '../lib/flashcards';
@@ -26,6 +26,13 @@ const confidenceStyles: Record<FlashcardConfidence, string> = {
   hard: 'bg-orange-50 text-orange-700 border-orange-100',
   good: 'bg-emerald-50 text-emerald-700 border-emerald-100',
   easy: 'bg-sky-50 text-sky-700 border-sky-100'
+};
+
+const confidenceButtonStyles: Record<FlashcardConfidence, string> = {
+  again: 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100',
+  hard: 'border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100',
+  good: 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100',
+  easy: 'border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100'
 };
 
 const chunk = <T,>(items: T[], size: number) => {
@@ -57,7 +64,9 @@ const FlashcardsHub: React.FC<FlashcardsHubProps> = ({ user, isReadOnly = false,
   const [loadError, setLoadError] = useState<string | null>(null);
   const [index, setIndex] = useState(0);
   const [isRevealed, setIsRevealed] = useState(false);
+  const [isAdvancing, setIsAdvancing] = useState(false);
   const [session, setSession] = useState<FlashcardSession | null>(null);
+  const advanceTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     const unsub = onSnapshot(
@@ -128,6 +137,7 @@ const FlashcardsHub: React.FC<FlashcardsHubProps> = ({ user, isReadOnly = false,
       setLoadError(null);
       setIndex(0);
       setIsRevealed(false);
+      setIsAdvancing(false);
       setSession(null);
 
       try {
@@ -175,6 +185,20 @@ const FlashcardsHub: React.FC<FlashcardsHubProps> = ({ user, isReadOnly = false,
   const dueCount = cards.filter((card) => !progressByCardId[card.id]?.nextReviewAt || Date.parse(progressByCardId[card.id].nextReviewAt!) <= Date.now()).length;
   const masteredCount = cards.filter((card) => ['good', 'easy'].includes(progressByCardId[card.id]?.confidence || '')).length;
   const breakdown = getSessionBreakdown(session);
+  const progressPercent = cards.length ? ((index + 1) / cards.length) * 100 : 0;
+
+  useEffect(() => {
+    setIsRevealed(false);
+    setIsAdvancing(false);
+  }, [activeCard?.id]);
+
+  useEffect(() => {
+    return () => {
+      if (advanceTimerRef.current !== null) {
+        window.clearTimeout(advanceTimerRef.current);
+      }
+    };
+  }, []);
 
   const startSessionIfNeeded = () => {
     if (session || !selectedTest) return session;
@@ -193,7 +217,7 @@ const FlashcardsHub: React.FC<FlashcardsHubProps> = ({ user, isReadOnly = false,
   };
 
   const recordConfidence = async (confidence: FlashcardConfidence) => {
-    if (!activeCard || isReadOnly) return;
+    if (!activeCard || isReadOnly || isAdvancing) return;
     const now = new Date().toISOString();
     const existing = progressByCardId[activeCard.id];
     const progressId = getFlashcardProgressId(user.id, activeCard.id);
@@ -238,8 +262,16 @@ const FlashcardsHub: React.FC<FlashcardsHubProps> = ({ user, isReadOnly = false,
         });
         toast.success('Session complete', `Reviewed ${nextSession.reviewedCount} card(s).`);
       } else {
-        setIndex((value) => Math.min(value + 1, cards.length - 1));
         setIsRevealed(false);
+        setIsAdvancing(true);
+        if (advanceTimerRef.current !== null) {
+          window.clearTimeout(advanceTimerRef.current);
+        }
+        advanceTimerRef.current = window.setTimeout(() => {
+          setIndex((value) => Math.min(value + 1, cards.length - 1));
+          setIsAdvancing(false);
+          advanceTimerRef.current = null;
+        }, 220);
       }
     } catch (err: any) {
       console.error('Flashcard progress save error:', err);
@@ -250,11 +282,56 @@ const FlashcardsHub: React.FC<FlashcardsHubProps> = ({ user, isReadOnly = false,
   const resetSession = () => {
     setIndex(0);
     setIsRevealed(false);
+    setIsAdvancing(false);
     setSession(null);
   };
 
   return (
     <div className="v2-page flex-1 min-h-0 bg-slate-50 overflow-hidden">
+      <style>{`
+        .flashcard-stage { perspective: 1600px; }
+        .flashcard-study-card {
+          transform-style: preserve-3d;
+          animation: flashcardCardIn 360ms cubic-bezier(.2,.8,.2,1) both;
+          transition: transform 260ms cubic-bezier(.2,.8,.2,1), box-shadow 260ms ease, border-color 260ms ease;
+        }
+        .flashcard-study-card:hover { transform: translateY(-3px) rotateX(1.5deg); }
+        .flashcard-study-card.is-advancing { animation: flashcardCardOut 220ms cubic-bezier(.4,0,.2,1) both; pointer-events: none; }
+        .flashcard-prompt { animation: flashcardPromptIn 280ms ease both; }
+        .flashcard-answer { animation: flashcardAnswerIn 320ms cubic-bezier(.2,.8,.2,1) both; }
+        .flashcard-stack-card { animation: flashcardStackFloat 4s ease-in-out infinite; }
+        .flashcard-stack-card:nth-child(2) { animation-delay: .45s; }
+        @keyframes flashcardCardIn {
+          from { opacity: 0; transform: translateY(18px) rotateX(6deg) scale(.97); }
+          to { opacity: 1; transform: translateY(0) rotateX(0) scale(1); }
+        }
+        @keyframes flashcardCardOut {
+          from { opacity: 1; transform: translateY(0) rotateX(0) scale(1); }
+          to { opacity: 0; transform: translateX(-28px) rotateY(-10deg) scale(.985); }
+        }
+        @keyframes flashcardPromptIn {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes flashcardAnswerIn {
+          from { opacity: 0; transform: translateY(14px) scale(.985); filter: blur(3px); }
+          to { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+        }
+        @keyframes flashcardStackFloat {
+          0%, 100% { transform: translateY(0) rotate(var(--rotate)); }
+          50% { transform: translateY(-6px) rotate(var(--rotate)); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .flashcard-study-card,
+          .flashcard-study-card.is-advancing,
+          .flashcard-prompt,
+          .flashcard-answer,
+          .flashcard-stack-card {
+            animation: none !important;
+            transition: none !important;
+          }
+        }
+      `}</style>
       <div className="v2-shell bg-slate-950 px-5 md:px-8 py-5 border-b border-slate-900 safe-top">
         <div className="max-w-6xl mx-auto flex items-center justify-between gap-4">
           <div>
@@ -318,7 +395,9 @@ const FlashcardsHub: React.FC<FlashcardsHubProps> = ({ user, isReadOnly = false,
           </aside>
 
           <main className="min-w-0">
-            <section className="bg-white border border-slate-100 rounded-[2.5rem] p-5 md:p-8 shadow-sm min-h-[620px] flex flex-col">
+            <section className="relative overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(20,184,166,0.12),transparent_34%),linear-gradient(135deg,#ffffff,#f8fafc)] border border-slate-100 rounded-[2.5rem] p-5 md:p-8 shadow-sm min-h-[620px] flex flex-col">
+              <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-amber-200/20 blur-3xl"></div>
+              <div className="pointer-events-none absolute -left-20 bottom-10 h-52 w-52 rounded-full bg-teal-200/20 blur-3xl"></div>
               {loadingCards ? (
                 <div className="flex-1 flex flex-col items-center justify-center text-center">
                   <div className="w-10 h-10 rounded-full border-4 border-amber-500 border-t-transparent animate-spin mb-4"></div>
@@ -336,41 +415,59 @@ const FlashcardsHub: React.FC<FlashcardsHubProps> = ({ user, isReadOnly = false,
                       <p className="text-xs font-black uppercase tracking-widest text-amber-600">{activeCard.subject}</p>
                       <h2 className="text-lg font-black uppercase text-slate-950">{activeCard.topic}</h2>
                     </div>
-                    <span className="px-4 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-black uppercase tracking-widest text-slate-500">
-                      {index + 1} / {cards.length}
-                    </span>
+                    <div className="min-w-[170px]">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Progress</span>
+                        <span className="text-xs font-black uppercase tracking-widest text-slate-600">{index + 1} / {cards.length}</span>
+                      </div>
+                      <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+                        <div className="h-full rounded-full bg-gradient-to-r from-amber-400 via-teal-400 to-emerald-500 transition-all duration-300" style={{ width: `${progressPercent}%` }}></div>
+                      </div>
+                    </div>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      startSessionIfNeeded();
-                      setIsRevealed(true);
-                    }}
-                    className="text-left flex-1 rounded-[2rem] border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-6 md:p-10 shadow-inner min-h-[360px] focus:outline-none focus:ring-4 focus:ring-amber-200"
-                    aria-live="polite"
-                  >
-                    <p className="text-xs font-black uppercase tracking-[0.28em] text-slate-400 mb-5">{isRevealed ? 'Answer' : 'Prompt'}</p>
-                    {!isRevealed ? (
-                      <p className="text-xl md:text-3xl font-black leading-snug text-slate-950">{activeCard.front}</p>
-                    ) : (
-                      <div className="space-y-5">
-                        <p className="text-2xl md:text-4xl font-black leading-tight text-emerald-700">{activeCard.back}</p>
-                        {activeCard.explanation && (
-                          <div className="rounded-2xl bg-amber-50 border border-amber-100 p-4">
-                            <p className="text-xs font-black uppercase tracking-widest text-amber-700 mb-2">Why</p>
-                            <p className="text-sm leading-relaxed text-slate-700">{activeCard.explanation}</p>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </button>
+                  <div className="flashcard-stage relative flex-1 min-h-[380px]">
+                    <div className="flashcard-stack-card absolute inset-x-7 top-5 bottom-0 rounded-[2rem] border border-teal-100 bg-teal-50/70 shadow-sm" style={{ '--rotate': '-3deg', transform: 'rotate(-3deg)' } as React.CSSProperties}></div>
+                    <div className="flashcard-stack-card absolute inset-x-4 top-3 bottom-3 rounded-[2rem] border border-amber-100 bg-amber-50/80 shadow-sm" style={{ '--rotate': '2deg', transform: 'rotate(2deg)' } as React.CSSProperties}></div>
+                    <button
+                      key={activeCard.id}
+                      type="button"
+                      onClick={() => {
+                        if (isAdvancing) return;
+                        startSessionIfNeeded();
+                        setIsRevealed(true);
+                      }}
+                      className={`flashcard-study-card ${isAdvancing ? 'is-advancing' : ''} relative z-10 text-left h-full w-full rounded-[2rem] border border-slate-200 bg-white p-6 md:p-10 shadow-[0_24px_70px_rgba(15,23,42,0.12)] min-h-[360px] focus:outline-none focus:ring-4 focus:ring-amber-200 overflow-hidden`}
+                      aria-live="polite"
+                    >
+                      <div className="absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r from-amber-400 via-teal-400 to-emerald-500"></div>
+                      <div className="absolute right-0 top-0 h-20 w-20 bg-gradient-to-bl from-slate-100 to-white border-b border-l border-slate-200 rounded-bl-[2rem]"></div>
+                      <p className="relative text-xs font-black uppercase tracking-[0.28em] text-slate-400 mb-5">{isRevealed ? 'Answer' : 'Prompt'}</p>
+                      {!isRevealed ? (
+                        <div className="flashcard-prompt relative">
+                          <p className="text-xl md:text-3xl font-black leading-snug text-slate-950">{activeCard.front}</p>
+                          <p className="mt-8 text-xs font-black uppercase tracking-widest text-slate-400">Tap to reveal</p>
+                        </div>
+                      ) : (
+                        <div className="flashcard-answer relative space-y-5">
+                          <p className="text-2xl md:text-4xl font-black leading-tight text-emerald-700">{activeCard.back}</p>
+                          {activeCard.explanation && (
+                            <div className="rounded-2xl bg-amber-50 border border-amber-100 p-4">
+                              <p className="text-xs font-black uppercase tracking-widest text-amber-700 mb-2">Why</p>
+                              <p className="text-sm leading-relaxed text-slate-700">{activeCard.explanation}</p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </button>
+                  </div>
 
                   <div className="mt-6 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
                     <button
                       type="button"
                       onClick={() => setIsRevealed((value) => !value)}
-                      className="px-5 py-4 rounded-2xl bg-slate-950 text-amber-500 text-xs font-black uppercase tracking-widest"
+                      disabled={isAdvancing}
+                      className="px-5 py-4 rounded-2xl bg-slate-950 text-amber-500 text-xs font-black uppercase tracking-widest disabled:opacity-40"
                     >
                       {isRevealed ? 'Hide Answer' : 'Reveal Answer'}
                     </button>
@@ -379,9 +476,9 @@ const FlashcardsHub: React.FC<FlashcardsHubProps> = ({ user, isReadOnly = false,
                         <button
                           key={key}
                           type="button"
-                          disabled={!isRevealed || isReadOnly}
+                          disabled={!isRevealed || isReadOnly || isAdvancing}
                           onClick={() => void recordConfidence(key)}
-                          className={`px-4 py-4 rounded-2xl border text-xs font-black uppercase tracking-widest disabled:opacity-40 ${confidenceStyles[key]}`}
+                          className={`px-4 py-4 rounded-2xl border text-xs font-black uppercase tracking-widest transition-all active:scale-95 disabled:opacity-40 ${confidenceButtonStyles[key]}`}
                         >
                           {confidenceLabels[key]}
                         </button>

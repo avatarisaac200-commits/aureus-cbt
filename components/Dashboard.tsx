@@ -1,5 +1,5 @@
 ﻿import React, { useState, useEffect } from 'react';
-import { User, MockTest, ExamResult, QuizQuestion, SharedQuiz, CsvQuestionBundle, CustomThemeConfig, Announcement, AnnouncementRead, AppNotification, ClassSession, Course, NotificationPreference, NotificationType } from '../types';
+import { User, MockTest, ExamResult, QuizQuestion, SharedQuiz, CsvQuestionBundle, CustomThemeConfig, AppNotification, NotificationPreference, NotificationType } from '../types';
 import { db } from '../firebase';
 import { collection, query, where, onSnapshot, getDocs, getDocsFromServer, limit, addDoc, updateDoc, deleteDoc, doc, orderBy, setDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import logo from '../assets/logo.png';
@@ -11,12 +11,8 @@ import { confirmDialog } from './ui/ConfirmDialog';
 import CommunityHub from './CommunityHub';
 import NotificationBell from './notifications/NotificationBell';
 import NotificationPreferences from './notifications/NotificationPreferences';
-import AnnouncementFeed from './announcements/AnnouncementFeed';
-import AnnouncementComposer from './announcements/AnnouncementComposer';
-import ClassCalendar from './schedule/ClassCalendar';
-import SessionModal from './schedule/SessionModal';
-import { buildAnnouncementReadId, getBodyPreview, getDefaultNotificationPreferences, isTeacherRole, overlaps, sanitizeRichText } from '../lib/classboard';
-import { maybeShowBrowserNotification, notify } from '../lib/notify';
+import { getDefaultNotificationPreferences, isTeacherRole } from '../lib/classboard';
+import { maybeShowBrowserNotification } from '../lib/notify';
 import { usePushNotifications } from '../lib/usePushNotifications';
 
 interface DashboardProps {
@@ -46,7 +42,7 @@ interface DashboardProps {
 }
 
 type TestSortMode = 'updated' | 'name' | 'duration' | 'attempts';
-type MainTab = 'home' | 'announcements' | 'schedule' | 'community' | 'videos' | 'flashcards' | 'ranks' | 'create' | 'reviews' | 'settings' | 'profile';
+type MainTab = 'home' | 'community' | 'videos' | 'flashcards' | 'ranks' | 'create' | 'reviews' | 'settings' | 'profile';
 type MobileUiMode = 'dark' | 'light';
 type TestShelf = 'all' | 'unfiled' | 'archived' | string;
 
@@ -285,17 +281,8 @@ const Dashboard: React.FC<DashboardProps> = ({
   const [profileAvatarUrl, setProfileAvatarUrl] = useState(user.avatarUrl || '');
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [showDailyFact, setShowDailyFact] = useState(false);
-  const [classOptions, setClassOptions] = useState<Course[]>([]);
-  const [classEnrollments, setClassEnrollments] = useState<Array<{ id: string; courseId: string; userId: string; userName: string }>>([]);
-  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
-  const [announcementReads, setAnnouncementReads] = useState<AnnouncementRead[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreference[]>([]);
-  const [scheduleSessions, setScheduleSessions] = useState<ClassSession[]>([]);
-  const [selectedAnnouncement, setSelectedAnnouncement] = useState<Announcement | null>(null);
-  const [selectedSession, setSelectedSession] = useState<ClassSession | null>(null);
-  const [showAnnouncementComposer, setShowAnnouncementComposer] = useState(false);
-  const [showSessionModal, setShowSessionModal] = useState(false);
   const isStudent = user.role === 'student';
   const isTeacher = isTeacherRole(user);
   const licenseEndsMs = Date.parse(user.subscriptionEndsAt || '');
@@ -308,28 +295,6 @@ const Dashboard: React.FC<DashboardProps> = ({
   const dailyFactDateKey = getUtcDateKey();
   const dailyFact = getDailyFact();
   const dailyFactBadge = dailyFact?.category?.replace(/-/g, ' ') || 'daily fact';
-  const enrolledClassIds = Array.from(new Set(classEnrollments.filter((row) => row.userId === user.id).map((row) => row.courseId)));
-  const visibleClassIds = isTeacher ? classOptions.map((item) => item.id) : enrolledClassIds;
-  const unreadAnnouncementIds = new Set(
-    announcements
-      .filter((item) => !announcementReads.some((read) => read.announcementId === item.id && read.userId === user.id))
-      .map((item) => item.id)
-  );
-  const studentsForComposer = classEnrollments
-    .filter((row) => visibleClassIds.includes(row.courseId))
-    .map((row) => ({ id: row.userId, name: row.userName || 'Student' }));
-  const readCountsByAnnouncement = announcementReads.reduce<Record<string, number>>((acc, item) => {
-    acc[item.announcementId] = (acc[item.announcementId] || 0) + 1;
-    return acc;
-  }, {});
-  const totalRecipientsByAnnouncement = announcements.reduce<Record<string, number>>((acc, item) => {
-    const classRecipients = classEnrollments.filter((row) => row.courseId === item.classId);
-    acc[item.id] = item.targetAudience === 'all'
-      ? classRecipients.length
-      : classRecipients.filter((row) => (item.targetIds || []).includes(row.userId)).length;
-    return acc;
-  }, {});
-
   usePushNotifications(user, notificationsEnabled);
 
   useEffect(() => {
@@ -725,85 +690,6 @@ const Dashboard: React.FC<DashboardProps> = ({
   }, [activeTab]);
 
   useEffect(() => {
-    const coursesQuery = isTeacher
-      ? query(collection(db, 'courses'), orderBy('updatedAt', 'desc'), limit(200))
-      : query(collection(db, 'courses'), where('isPublished', '==', true), orderBy('updatedAt', 'desc'), limit(200));
-    const unsub = onSnapshot(coursesQuery, (snap) => {
-      const rows = snap.docs.map((d) => ({ ...d.data(), id: d.id } as Course));
-      setClassOptions(rows);
-    }, () => {
-      setClassOptions([]);
-    });
-    return () => unsub();
-  }, [isTeacher]);
-
-  useEffect(() => {
-    const unsub = onSnapshot(query(collection(db, 'courseEnrollmentsPublic'), limit(5000)), (snap) => {
-      const baseRows = snap.docs.map((d) => {
-        const data = d.data() as any;
-        return {
-          id: d.id,
-          courseId: String(data.courseId || ''),
-          userId: String(data.userId || ''),
-          userName: String(data.userName || data.userId || 'Student')
-        };
-      }).filter((row) => row.courseId && row.userId);
-      setClassEnrollments(baseRows);
-    }, () => {
-      setClassEnrollments([]);
-    });
-    return () => unsub();
-  }, []);
-
-  useEffect(() => {
-    if (visibleClassIds.length === 0 && !isTeacher) {
-      setAnnouncements([]);
-      return;
-    }
-    const unsub = onSnapshot(query(collection(db, 'announcements'), limit(300)), (snap) => {
-      const rows = snap.docs
-        .map((d) => ({ ...d.data(), id: d.id } as Announcement))
-        .filter((item) => item.published !== false)
-        .filter((item) => visibleClassIds.includes(item.classId))
-        .filter((item) => {
-          if (isTeacher) return true;
-          if (item.targetAudience === 'all') return true;
-          return (item.targetIds || []).includes(user.id);
-        });
-      setAnnouncements(rows);
-    }, () => {
-      setAnnouncements([]);
-    });
-    return () => unsub();
-  }, [isTeacher, user.id, visibleClassIds.join('|')]);
-
-  useEffect(() => {
-    const unsub = onSnapshot(query(collection(db, 'announcementReads'), limit(5000)), (snap) => {
-      const rows = snap.docs.map((d) => ({ ...d.data(), id: d.id } as AnnouncementRead));
-      setAnnouncementReads(rows);
-    }, () => {
-      setAnnouncementReads([]);
-    });
-    return () => unsub();
-  }, []);
-
-  useEffect(() => {
-    if (visibleClassIds.length === 0 && !isTeacher) {
-      setScheduleSessions([]);
-      return;
-    }
-    const unsub = onSnapshot(query(collection(db, 'classSessions'), limit(300)), (snap) => {
-      const rows = snap.docs
-        .map((d) => ({ ...d.data(), id: d.id } as ClassSession))
-        .filter((item) => visibleClassIds.includes(item.classId));
-      setScheduleSessions(rows);
-    }, () => {
-      setScheduleSessions([]);
-    });
-    return () => unsub();
-  }, [isTeacher, visibleClassIds.join('|')]);
-
-  useEffect(() => {
     const unsub = onSnapshot(
       query(collection(db, 'notifications'), where('userId', '==', user.id), limit(100)),
       async (snap) => {
@@ -880,12 +766,6 @@ const Dashboard: React.FC<DashboardProps> = ({
     }
   };
 
-  const recipientsForClass = (classId: string, targetIds?: string[]) => {
-    const classRows = classEnrollments.filter((row) => row.courseId === classId);
-    if (!targetIds || targetIds.length === 0) return classRows.map((row) => row.userId);
-    return classRows.filter((row) => targetIds.includes(row.userId)).map((row) => row.userId);
-  };
-
   const markNotificationRead = async (id: string) => {
     try {
       await updateDoc(doc(db, 'notifications', id), {
@@ -914,184 +794,6 @@ const Dashboard: React.FC<DashboardProps> = ({
       });
     } catch {
       toast.error('Update failed', 'Could not update notification preferences.');
-    }
-  };
-
-  const markAnnouncementRead = async (announcementId: string) => {
-    if (isTeacher) return;
-    const existing = announcementReads.find((item) => item.announcementId === announcementId && item.userId === user.id);
-    if (existing) return;
-    try {
-      await setDoc(doc(db, 'announcementReads', buildAnnouncementReadId(announcementId, user.id)), {
-        announcementId,
-        userId: user.id,
-        readAt: new Date().toISOString()
-      });
-    } catch {
-      // Ignore read receipt failures.
-    }
-  };
-
-  const saveAnnouncement = async (payload: {
-    classId: string;
-    classTitle: string;
-    title: string;
-    body: string;
-    targetAudience: 'all' | 'group' | 'individual';
-    targetIds: string[];
-    isPinned: boolean;
-    scheduledAt?: string;
-    attachments: string[];
-  }) => {
-    try {
-      const now = new Date().toISOString();
-      const published = !payload.scheduledAt || Date.parse(payload.scheduledAt) <= Date.now();
-      const base = {
-        classId: payload.classId,
-        classTitle: payload.classTitle,
-        authorId: user.id,
-        authorName: user.name,
-        title: payload.title,
-        body: sanitizeRichText(payload.body),
-        bodyPreview: getBodyPreview(payload.body),
-        targetAudience: payload.targetAudience,
-        targetIds: payload.targetIds,
-        isPinned: payload.isPinned,
-        attachments: payload.attachments,
-        scheduledAt: payload.scheduledAt || '',
-        published,
-        publishedAt: published ? now : '',
-        createdAt: selectedAnnouncement?.createdAt || now,
-        updatedAt: now,
-        editedAt: selectedAnnouncement && selectedAnnouncement.published ? now : ''
-      };
-
-      if (selectedAnnouncement) {
-        await updateDoc(doc(db, 'announcements', selectedAnnouncement.id), base);
-      } else {
-        await addDoc(collection(db, 'announcements'), base);
-      }
-
-      if (published) {
-        const recipients = recipientsForClass(payload.classId, payload.targetAudience === 'all' ? undefined : payload.targetIds);
-        await notify(recipients, 'announcement_posted', payload.title, getBodyPreview(payload.body, 120), {
-          classId: payload.classId,
-          type: 'announcement'
-        });
-      }
-
-      setShowAnnouncementComposer(false);
-      setSelectedAnnouncement(null);
-      toast.success('Announcement saved', 'Your class notice has been saved.');
-    } catch (err: any) {
-      toast.error('Save failed', err?.message || 'Could not save announcement.');
-    }
-  };
-
-  const deleteAnnouncement = async (announcement: Announcement) => {
-    const confirmed = await confirmDialog({
-      title: 'Delete announcement?',
-      message: `Delete "${announcement.title}"?`,
-      confirmText: 'Delete',
-      variant: 'danger'
-    });
-    if (!confirmed) return;
-    try {
-      await deleteDoc(doc(db, 'announcements', announcement.id));
-      toast.success('Deleted', 'Announcement removed.');
-    } catch {
-      toast.error('Delete failed', 'Could not delete announcement.');
-    }
-  };
-
-  const saveSession = async (payload: {
-    classId: string;
-    classTitle: string;
-    title: string;
-    description?: string;
-    location?: string;
-    lessonPlan?: string;
-    startTime: string;
-    endTime: string;
-    recurrence: 'none' | 'weekly' | 'custom';
-    recurrenceDays: number[];
-    recurrenceEndDate?: string;
-    color: string;
-  }) => {
-    if (!payload.startTime || !payload.endTime) {
-      toast.warning('Missing time', 'Choose a valid date and time.');
-      return;
-    }
-    if (Date.parse(payload.endTime) <= Date.parse(payload.startTime)) {
-      toast.warning('Invalid time', 'End time must be after start time.');
-      return;
-    }
-    const conflicting = scheduleSessions.find((item) => item.teacherId === user.id && item.id !== selectedSession?.id && overlaps(item.startTime, item.endTime, payload.startTime, payload.endTime));
-    if (conflicting) {
-      toast.error('Conflict detected', `This overlaps with "${conflicting.title}".`);
-      return;
-    }
-    const now = new Date().toISOString();
-    const nextData = {
-      classId: payload.classId,
-      classTitle: payload.classTitle,
-      teacherId: user.id,
-      teacherName: user.name,
-      title: payload.title,
-      description: payload.description || '',
-      location: payload.location || '',
-      lessonPlan: payload.lessonPlan || '',
-      startTime: payload.startTime,
-      endTime: payload.endTime,
-      recurrence: payload.recurrence,
-      recurrenceDays: payload.recurrenceDays,
-      recurrenceEndDate: payload.recurrenceEndDate || '',
-      color: payload.color,
-      isCancelled: false,
-      cancelledOccurrences: selectedSession?.cancelledOccurrences || [],
-      createdAt: selectedSession?.createdAt || now,
-      updatedAt: now
-    };
-    try {
-      if (selectedSession) {
-        await updateDoc(doc(db, 'classSessions', selectedSession.id), nextData);
-      } else {
-        await addDoc(collection(db, 'classSessions'), nextData);
-      }
-      const recipients = recipientsForClass(payload.classId);
-      await notify(recipients, 'schedule_updated', payload.title, `Schedule updated for ${payload.classTitle}`, {
-        classId: payload.classId,
-        startTime: payload.startTime
-      });
-      setShowSessionModal(false);
-      setSelectedSession(null);
-      toast.success('Session saved', 'Class schedule updated.');
-    } catch (err: any) {
-      toast.error('Save failed', err?.message || 'Could not save session.');
-    }
-  };
-
-  const deleteSession = async (session: ClassSession, mode: 'single' | 'all' = 'all') => {
-    const confirmed = await confirmDialog({
-      title: mode === 'all' ? 'Delete session series?' : 'Cancel this occurrence?',
-      message: mode === 'all' ? `Delete "${session.title}" and all recurrences?` : `Cancel one occurrence of "${session.title}"?`,
-      confirmText: mode === 'all' ? 'Delete' : 'Cancel occurrence',
-      variant: 'danger'
-    });
-    if (!confirmed) return;
-    try {
-      if (mode === 'all' || session.recurrence === 'none') {
-        await deleteDoc(doc(db, 'classSessions', session.id));
-      } else {
-        const dayKey = new Date(session.startTime).toISOString().slice(0, 10);
-        await updateDoc(doc(db, 'classSessions', session.id), {
-          cancelledOccurrences: Array.from(new Set([...(session.cancelledOccurrences || []), dayKey])),
-          updatedAt: new Date().toISOString()
-        });
-      }
-      toast.success('Schedule updated', 'Session updated successfully.');
-    } catch {
-      toast.error('Delete failed', 'Could not update this session.');
     }
   };
 
@@ -1264,8 +966,6 @@ const Dashboard: React.FC<DashboardProps> = ({
 
   const navTabs: Array<{ id: MainTab; label: string }> = [
     { id: 'home', label: 'Home' },
-    { id: 'announcements', label: 'Announcements' },
-    { id: 'schedule', label: 'Schedule' },
     { id: 'community', label: 'Community' },
     { id: 'videos', label: 'Videos' },
     { id: 'flashcards', label: 'Flashcards' },
@@ -1292,23 +992,6 @@ const Dashboard: React.FC<DashboardProps> = ({
           <rect x="6" y="11" width="3" height="7" />
           <rect x="11" y="7" width="3" height="11" />
           <rect x="16" y="4" width="3" height="14" />
-        </svg>
-      );
-    }
-    if (tabId === 'announcements') {
-      return (
-        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M4 6h16v10H7l-3 3V6z" />
-          <path d="M8 10h8" />
-          <path d="M8 13h5" />
-        </svg>
-      );
-    }
-    if (tabId === 'schedule') {
-      return (
-        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <rect x="3" y="5" width="18" height="16" rx="2" />
-          <path d="M16 3v4M8 3v4M3 10h18" />
         </svg>
       );
     }
@@ -1514,14 +1197,6 @@ const Dashboard: React.FC<DashboardProps> = ({
                 Watch Videos
               </button>
             )}
-            {onOpenFlashcards && (
-              <button
-                onClick={onOpenFlashcards}
-                className="px-6 py-3 text-xs font-black text-teal-700 bg-teal-50 border border-teal-100 rounded-2xl hover:bg-teal-100 uppercase tracking-widest shadow-sm"
-              >
-                Study Cards
-              </button>
-            )}
           </div>
 
           <div className="mb-8 bg-white rounded-2xl border border-slate-100 p-2 hidden md:inline-flex gap-2">
@@ -1530,18 +1205,6 @@ const Dashboard: React.FC<DashboardProps> = ({
               className={`px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest ${activeTab === 'home' ? 'bg-slate-950 text-amber-500' : 'text-slate-500 bg-slate-50'}`}
             >
               Home
-            </button>
-            <button
-              onClick={() => setActiveTab('announcements')}
-              className={`px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest ${activeTab === 'announcements' ? 'bg-slate-950 text-amber-500' : 'text-slate-500 bg-slate-50'}`}
-            >
-              Announcements
-            </button>
-            <button
-              onClick={() => setActiveTab('schedule')}
-              className={`px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest ${activeTab === 'schedule' ? 'bg-slate-950 text-amber-500' : 'text-slate-500 bg-slate-50'}`}
-            >
-              Schedule
             </button>
             <button
               onClick={() => setActiveTab('ranks')}
@@ -1849,14 +1512,6 @@ const Dashboard: React.FC<DashboardProps> = ({
                       Watch Videos
                     </button>
                   )}
-                  {onOpenFlashcards && (
-                    <button
-                      onClick={onOpenFlashcards}
-                      className="w-full py-4 bg-teal-50 border border-teal-100 text-teal-700 rounded-2xl text-xs font-black uppercase tracking-widest"
-                    >
-                      Study Flashcards
-                    </button>
-                  )}
                 </div>
               </aside>
             </div>
@@ -1899,89 +1554,6 @@ const Dashboard: React.FC<DashboardProps> = ({
                   <p className="mt-2 text-xs leading-relaxed text-slate-500">Again, Hard, Good, and Easy ratings save your progress.</p>
                 </div>
               </section>
-            </div>
-          )}
-
-          {activeTab === 'announcements' && (
-            <div className="space-y-6">
-              <section className="bg-white rounded-[2rem] border border-slate-100 p-6 shadow-sm flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                <div>
-                  <p className="text-xs font-black uppercase tracking-widest text-slate-500">Announcements</p>
-                  <h2 className="text-lg font-black uppercase text-slate-950">Class-wide notices and read receipts</h2>
-                </div>
-                {isTeacher && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedAnnouncement(null);
-                      setShowAnnouncementComposer(true);
-                    }}
-                    className="px-5 py-3 rounded-2xl bg-slate-950 text-amber-500 text-xs font-black uppercase tracking-widest"
-                  >
-                    New Announcement
-                  </button>
-                )}
-              </section>
-              <AnnouncementFeed
-                user={user}
-                items={announcements}
-                unreadIds={unreadAnnouncementIds}
-                readCounts={readCountsByAnnouncement}
-                totalRecipientsByAnnouncement={totalRecipientsByAnnouncement}
-                onMarkRead={markAnnouncementRead}
-                onEdit={(announcement) => {
-                  setSelectedAnnouncement(announcement);
-                  setShowAnnouncementComposer(true);
-                }}
-                onDelete={(announcement) => void deleteAnnouncement(announcement)}
-              />
-            </div>
-          )}
-
-          {activeTab === 'schedule' && (
-            <div className="space-y-6">
-              <ClassCalendar
-                user={user}
-                sessions={scheduleSessions}
-                canEdit={isTeacher}
-                onNewSession={() => {
-                  setSelectedSession(null);
-                  setShowSessionModal(true);
-                }}
-                onSelectSession={(session) => {
-                  setSelectedSession(session);
-                  setShowSessionModal(true);
-                }}
-              />
-              {selectedSession && (
-                <section className="bg-white rounded-[2rem] border border-slate-100 p-6 shadow-sm">
-                  <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-                    <div>
-                      <p className="text-xs font-black uppercase tracking-widest text-slate-500">{selectedSession.classTitle}</p>
-                      <h3 className="text-lg font-black uppercase text-slate-950">{selectedSession.title}</h3>
-                      <p className="mt-2 text-sm text-slate-600">
-                        {selectedSession.description || 'No session description provided.'}
-                      </p>
-                      <p className="mt-3 text-xs font-black uppercase tracking-widest text-slate-400">
-                        {new Date(selectedSession.startTime).toLocaleString()} - {new Date(selectedSession.endTime).toLocaleTimeString()}
-                      </p>
-                    </div>
-                    {isTeacher && (
-                      <div className="flex gap-2">
-                        <button type="button" onClick={() => setShowSessionModal(true)} className="px-4 py-3 rounded-xl border border-slate-200 text-xs font-black uppercase tracking-widest text-slate-700">
-                          Edit
-                        </button>
-                        <button type="button" onClick={() => void deleteSession(selectedSession, selectedSession.recurrence === 'none' ? 'all' : 'single')} className="px-4 py-3 rounded-xl border border-red-200 text-xs font-black uppercase tracking-widest text-red-600">
-                          Cancel Once
-                        </button>
-                        <button type="button" onClick={() => void deleteSession(selectedSession, 'all')} className="px-4 py-3 rounded-xl bg-red-50 border border-red-100 text-xs font-black uppercase tracking-widest text-red-700">
-                          Delete Series
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </section>
-              )}
             </div>
           )}
 
@@ -2283,11 +1855,6 @@ const Dashboard: React.FC<DashboardProps> = ({
                   <button onClick={() => setActiveTab('settings')} className="w-full py-4 bg-slate-50 border border-slate-200 text-slate-700 rounded-2xl text-xs font-black uppercase tracking-widest">
                     Open Settings
                   </button>
-                  {onOpenFlashcards && (
-                    <button onClick={onOpenFlashcards} className="w-full py-4 bg-teal-50 border border-teal-100 text-teal-700 rounded-2xl text-xs font-black uppercase tracking-widest">
-                      Study Flashcards
-                    </button>
-                  )}
                 </div>
               </section>
             </div>
@@ -2456,29 +2023,6 @@ const Dashboard: React.FC<DashboardProps> = ({
           )}
         </div>
       </div>
-      <AnnouncementComposer
-        open={showAnnouncementComposer}
-        user={user}
-        classes={classOptions.filter((item) => isTeacher || enrolledClassIds.includes(item.id))}
-        students={studentsForComposer}
-        initialValue={selectedAnnouncement}
-        onClose={() => {
-          setShowAnnouncementComposer(false);
-          setSelectedAnnouncement(null);
-        }}
-        onSave={saveAnnouncement}
-      />
-      <SessionModal
-        open={showSessionModal}
-        classes={classOptions.filter((item) => isTeacher || enrolledClassIds.includes(item.id))}
-        initialValue={selectedSession}
-        canEdit={isTeacher}
-        onClose={() => {
-          setShowSessionModal(false);
-          setSelectedSession(null);
-        }}
-        onSave={saveSession}
-      />
       <nav className="fixed bottom-0 left-0 right-0 z-50 flex justify-between items-center bg-[var(--surface)] backdrop-blur-xl border-t border-[var(--edge)] py-2 pb-safe px-1 md:hidden">
         {mobileNavTabs.map((tab) => (
           <button
