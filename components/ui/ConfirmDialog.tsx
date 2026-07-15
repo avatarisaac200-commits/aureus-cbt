@@ -8,6 +8,7 @@ export type ConfirmInput = {
   confirmText?: string;
   cancelText?: string;
   variant?: ConfirmVariant;
+  expectedPassword?: string;
 };
 
 type ConfirmContextValue = {
@@ -30,6 +31,8 @@ export const confirmDialog = (input: ConfirmInput) => {
 
 export const ConfirmDialogProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, setState] = useState<ConfirmState>({ isOpen: false, input: null });
+  const [password, setPassword] = useState('');
+  const [passwordError, setPasswordError] = useState('');
   const resolverRef = useRef<((value: boolean) => void) | null>(null);
 
   const close = useCallback((value: boolean) => {
@@ -38,9 +41,13 @@ export const ConfirmDialogProvider: React.FC<{ children: React.ReactNode }> = ({
       resolverRef.current = null;
     }
     setState({ isOpen: false, input: null });
+    setPassword('');
+    setPasswordError('');
   }, []);
 
   const confirm = useCallback((input: ConfirmInput) => {
+    setPassword('');
+    setPasswordError('');
     setState({ isOpen: true, input });
     return new Promise<boolean>((resolve) => {
       resolverRef.current = resolve;
@@ -64,6 +71,27 @@ export const ConfirmDialogProvider: React.FC<{ children: React.ReactNode }> = ({
           <div className="confirm-panel">
             <h3 className="confirm-title font-display">{state.input.title}</h3>
             <p className="confirm-message">{state.input.message}</p>
+            {state.input.expectedPassword !== undefined && (
+              <div className="mt-4">
+                <label htmlFor="confirm-password">Password</label>
+                <input
+                  id="confirm-password"
+                  type="password"
+                  autoFocus
+                  value={password}
+                  onChange={(event) => { setPassword(event.target.value); setPasswordError(''); }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      if (password.trim() === state.input?.expectedPassword) close(true);
+                      else setPasswordError('That password is not correct.');
+                    }
+                  }}
+                  className="mt-1 w-full px-3 py-2"
+                  placeholder="Enter test password"
+                />
+                {passwordError && <p className="mt-2 text-sm text-red-600">{passwordError}</p>}
+              </div>
+            )}
             <div className="confirm-actions">
               <button type="button" className="btn btn-ghost" onClick={() => close(false)}>
                 {state.input.cancelText || 'Cancel'}
@@ -71,7 +99,13 @@ export const ConfirmDialogProvider: React.FC<{ children: React.ReactNode }> = ({
               <button
                 type="button"
                 className={`btn ${state.input.variant === 'danger' ? 'btn-danger' : 'btn-primary'}`}
-                onClick={() => close(true)}
+                onClick={() => {
+                  if (state.input?.expectedPassword !== undefined && password.trim() !== state.input.expectedPassword) {
+                    setPasswordError('That password is not correct.');
+                    return;
+                  }
+                  close(true);
+                }}
               >
                 {state.input.confirmText || 'Confirm'}
               </button>

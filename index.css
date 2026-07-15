@@ -216,7 +216,8 @@ label {
 }
 .v2-app .bg-slate-50, .v2-app .bg-slate-100 { background: var(--panel-2) !important; }
 .v2-app .bg-slate-900, .v2-app .bg-slate-950 { background: var(--surface) !important; border-color: var(--edge) !important; }
-.v2-app .text-slate-300, .v2-app .text-slate-400, .v2-app .text-slate-500, .v2-app .text-slate-600, .v2-app .text-slate-700, .v2-app .text-slate-800, .v2-app .text-slate-900, .v2-app .text-slate-950, .v2-app .text-white { color: var(--text) !important; }
+.v2-app .text-slate-300, .v2-app .text-slate-400, .v2-app .text-slate-500, .v2-app .text-slate-600 { color: var(--muted) !important; }
+.v2-app .text-slate-700, .v2-app .text-slate-800, .v2-app .text-slate-900, .v2-app .text-slate-950, .v2-app .text-white { color: var(--text) !important; }
 .v2-app .text-amber-400, .v2-app .text-amber-500, .v2-app .text-amber-600, .v2-app .text-amber-700 { color: var(--gold) !important; }
 .v2-app .bg-amber-500, .v2-app .bg-amber-600 { background: var(--gold) !important; color: var(--ink) !important; }
 .v2-app .bg-amber-50, .v2-app .bg-amber-100 { background: var(--gold-dim) !important; color: var(--gold) !important; }

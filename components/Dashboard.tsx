@@ -253,9 +253,11 @@ const Dashboard: React.FC<DashboardProps> = ({
   const [errors, setErrors] = useState<string | null>(null);
   const [showLeaderboard, setShowLeaderboard] = useState<MockTest | null>(null);
   const [activeTab, setActiveTab] = useState<MainTab>('home');
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [testFolders, setTestFolders] = useState<TestFolder[]>([]);
   const [newFolderName, setNewFolderName] = useState('');
   const [selectedFolderId, setSelectedFolderId] = useState<TestShelf>('all');
+  const [showOrganisation, setShowOrganisation] = useState(false);
   const [testFolderAssignments, setTestFolderAssignments] = useState<Record<string, string>>({});
   const [sortMode, setSortMode] = useState<TestSortMode>('updated');
   const [activationInput, setActivationInput] = useState('');
@@ -339,38 +341,6 @@ const Dashboard: React.FC<DashboardProps> = ({
     const dismissed = window.localStorage.getItem(getDailyFactDismissedKey(user.id, dailyFactDateKey)) === '1';
     setShowDailyFact(!dismissed);
   }, [dailyFact, dailyFactDateKey, user.id]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined' || !preferencesHydrated || !dailyFact || !notificationsEnabled) return;
-    const notifyKey = getDailyFactNotifiedKey(user.id, dailyFactDateKey);
-    if (window.localStorage.getItem(notifyKey) === '1') return;
-
-    toast.info('Fact of the Day', dailyFact.text);
-    window.localStorage.setItem(notifyKey, '1');
-
-    if (!('Notification' in window)) return;
-    const sendBrowserNotification = () => {
-      try {
-        new Notification('Fact of the Day', { body: dailyFact.text });
-      } catch {
-        // Ignore browser notification failures.
-      }
-    };
-
-    if (Notification.permission === 'granted') {
-      sendBrowserNotification();
-      return;
-    }
-    if (Notification.permission !== 'default') return;
-
-    Notification.requestPermission()
-      .then((permission) => {
-        if (permission === 'granted') sendBrowserNotification();
-      })
-      .catch(() => {
-        // Ignore browser notification failures.
-      });
-  }, [dailyFact, dailyFactDateKey, notificationsEnabled, preferencesHydrated, user.id]);
 
   useEffect(() => {
     setProfileName(user.name || '');
@@ -972,9 +942,11 @@ const Dashboard: React.FC<DashboardProps> = ({
     { id: 'ranks', label: 'Ranks' },
     { id: 'create', label: 'Create' },
     { id: 'reviews', label: 'Reviews' },
+    { id: 'settings', label: 'Settings' },
     { id: 'profile', label: 'Profile' }
   ];
-  const mobileNavTabs = navTabs.filter((tab) => tab.id !== 'ranks');
+  const mobileNavTabs = navTabs.filter((tab) => ['home', 'flashcards', 'reviews', 'profile'].includes(tab.id));
+  const moreNavTabs = navTabs.filter((tab) => !mobileNavTabs.some((mobileTab) => mobileTab.id === tab.id));
 
   const renderTabIcon = (tabId: MainTab) => {
     if (tabId === 'home') {
@@ -1054,9 +1026,9 @@ const Dashboard: React.FC<DashboardProps> = ({
 
   return (
     <div className={`v2-page v3-mobile-shell ui-mode-${currentUiMode} flex-1 w-full bg-slate-50 overflow-hidden min-h-0 relative shell md:grid md:grid-cols-[72px_1fr]`}>
-      <aside className="sidebar hidden md:flex flex-col items-center justify-between py-5 px-3 bg-[var(--surface)] border-r border-[var(--edge)] sticky top-0 h-screen">
+      <aside className="sidebar hidden md:flex flex-col py-5 px-3 bg-[var(--surface)] border-r border-[var(--edge)] sticky top-0 h-screen w-56 shrink-0">
         <div className="w-10 h-10 rounded-xl bg-[var(--gold)] text-[var(--ink)] font-display text-lg font-black flex items-center justify-center shadow-[var(--shadow-gold)]">A</div>
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-2 mt-10">
           {navTabs.map((tab) => (
             <button
               key={tab.id}
@@ -1064,18 +1036,20 @@ const Dashboard: React.FC<DashboardProps> = ({
               onClick={() => setActiveTab(tab.id)}
               title={tab.label}
               aria-label={tab.label}
-              className={`w-11 h-11 min-h-[44px] rounded-xl border ${activeTab === tab.id ? 'bg-[var(--gold-dim)] text-[var(--gold)] border-[var(--gold)]' : 'bg-transparent text-[var(--muted)] border-[var(--edge)] hover:bg-[var(--panel)]'}`}
+              className={`w-full min-h-[44px] px-3 rounded-xl border flex items-center gap-3 text-left text-sm font-semibold ${activeTab === tab.id ? 'bg-[var(--gold-dim)] text-[var(--gold)] border-[var(--gold)]' : 'bg-transparent text-[var(--muted)] border-[var(--edge)] hover:bg-[var(--panel)]'}`}
             >
               <span className="inline-flex items-center justify-center">{renderTabIcon(tab.id)}</span>
+              <span>{tab.label}</span>
             </button>
           ))}
         </div>
-        <button onClick={onLogout} title="Log Out" aria-label="Log Out" className="w-11 h-11 min-h-[44px] rounded-xl border border-[var(--edge)] text-[var(--rose)] hover:bg-[var(--rose-dim)] inline-flex items-center justify-center">
+        <button onClick={onLogout} title="Log Out" aria-label="Log Out" className="w-full min-h-[44px] px-3 rounded-xl border border-[var(--edge)] text-[var(--rose)] hover:bg-[var(--rose-dim)] inline-flex items-center gap-3 text-sm font-semibold">
           <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M15 17l5-5-5-5" />
             <path d="M20 12H9" />
             <path d="M11 4H6a2 2 0 00-2 2v12a2 2 0 002 2h5" />
           </svg>
+          <span>Log out</span>
         </button>
       </aside>
       <div className="flex flex-col min-h-0 overflow-hidden">
@@ -1168,91 +1142,35 @@ const Dashboard: React.FC<DashboardProps> = ({
             <div className="flex items-center gap-6">
               <img src={logo} alt="Logo" className="w-16 h-16" />
               <div>
-                <h1 className="text-2xl font-bold text-slate-950 uppercase tracking-tight leading-none">Student Dashboard</h1>
-                <p className="text-amber-600 text-xs font-black uppercase mt-1">Aureus Medicos CBT</p>
+                <h1 className="text-2xl font-bold text-slate-950 tracking-tight leading-none">Welcome back, {user.name.split(' ')[0]}</h1>
+                <p className="text-slate-500 text-sm mt-2">Choose a study activity and keep your momentum going.</p>
               </div>
             </div>
             {(user.role === 'admin' || user.role === 'root-admin') && onReturnToAdmin && (
               <button onClick={onReturnToAdmin} className="px-10 py-4 text-xs font-black text-amber-600 bg-amber-50 border border-amber-100 rounded-2xl hover:bg-amber-100 uppercase tracking-widest shadow-sm">Staff Settings</button>
             )}
-            <button
-              onClick={() => setActiveTab('reviews')}
-              className="px-6 py-3 text-xs font-black text-sky-700 bg-sky-50 border border-sky-100 rounded-2xl hover:bg-sky-100 uppercase tracking-widest shadow-sm"
-            >
-              Open Reviews
-            </button>
-            {onOpenCourses && (
-              <button
-                onClick={onOpenCourses}
-                className="px-6 py-3 text-xs font-black text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-2xl hover:bg-emerald-100 uppercase tracking-widest shadow-sm"
-              >
-                Open Courses
-              </button>
-            )}
-            {onOpenVideos && (
-              <button
-                onClick={onOpenVideos}
-                className="px-6 py-3 text-xs font-black text-violet-700 bg-violet-50 border border-violet-100 rounded-2xl hover:bg-violet-100 uppercase tracking-widest shadow-sm"
-              >
-                Watch Videos
-              </button>
-            )}
-          </div>
-
-          <div className="mb-8 bg-white rounded-2xl border border-slate-100 p-2 hidden md:inline-flex gap-2">
-            <button
-              onClick={() => setActiveTab('home')}
-              className={`px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest ${activeTab === 'home' ? 'bg-slate-950 text-amber-500' : 'text-slate-500 bg-slate-50'}`}
-            >
-              Home
-            </button>
-            <button
-              onClick={() => setActiveTab('ranks')}
-              className={`px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest ${activeTab === 'ranks' ? 'bg-slate-950 text-amber-500' : 'text-slate-500 bg-slate-50'}`}
-            >
-              Ranks
-            </button>
-            <button
-              onClick={() => setActiveTab('community')}
-              className={`px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest ${activeTab === 'community' ? 'bg-slate-950 text-amber-500' : 'text-slate-500 bg-slate-50'}`}
-            >
-              Community
-            </button>
-            <button
-              onClick={() => setActiveTab('videos')}
-              className={`px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest ${activeTab === 'videos' ? 'bg-slate-950 text-amber-500' : 'text-slate-500 bg-slate-50'}`}
-            >
-              Videos
-            </button>
-            <button
-              onClick={() => setActiveTab('flashcards')}
-              className={`px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest ${activeTab === 'flashcards' ? 'bg-slate-950 text-amber-500' : 'text-slate-500 bg-slate-50'}`}
-            >
-              Flashcards
-            </button>
-            <button
-              onClick={() => setActiveTab('reviews')}
-              className={`px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest ${activeTab === 'reviews' ? 'bg-slate-950 text-amber-500' : 'text-slate-500 bg-slate-50'}`}
-            >
-              Reviews
-            </button>
-            <button
-              onClick={() => setActiveTab('create')}
-              className={`px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest ${activeTab === 'create' ? 'bg-slate-950 text-amber-500' : 'text-slate-500 bg-slate-50'}`}
-            >
-              Create
-            </button>
-            <button
-              onClick={() => setActiveTab('profile')}
-              className={`px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest ${activeTab === 'profile' ? 'bg-slate-950 text-amber-500' : 'text-slate-500 bg-slate-50'}`}
-            >
-              Profile
-            </button>
+            <button onClick={() => document.getElementById('available-tests')?.scrollIntoView({ behavior: 'smooth', block: 'start' })} className="px-6 py-3 text-sm font-bold text-slate-950 bg-amber-500 rounded-2xl shadow-sm">Start practising</button>
           </div>
 
           {activeTab === 'home' && (
             <div className="space-y-6">
-              <section className="bg-white border border-slate-100 rounded-[2rem] p-6 shadow-sm">
+              <section className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <button type="button" onClick={() => document.getElementById('available-tests')?.scrollIntoView({ behavior: 'smooth', block: 'start' })} className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-left hover:border-amber-400">
+                  <p className="text-xs font-semibold text-amber-700">Practice</p><p className="mt-2 text-lg font-bold text-slate-950">{viewableTests.length} tests available</p>
+                </button>
+                <button type="button" onClick={() => setActiveTab('flashcards')} className="rounded-2xl border border-sky-100 bg-sky-50 p-5 text-left hover:border-sky-300">
+                  <p className="text-xs font-semibold text-sky-700">Recall</p><p className="mt-2 text-lg font-bold text-slate-950">Study flashcards</p>
+                </button>
+                <button type="button" onClick={() => setActiveTab('reviews')} className="rounded-2xl border border-emerald-100 bg-emerald-50 p-5 text-left hover:border-emerald-300">
+                  <p className="text-xs font-semibold text-emerald-700">Progress</p><p className="mt-2 text-lg font-bold text-slate-950">{history.length} completed attempts</p>
+                </button>
+              </section>
+              <div className="flex justify-end">
+                <button type="button" onClick={() => setShowOrganisation((open) => !open)} className="text-sm font-semibold text-slate-600 hover:text-slate-950">
+                  {showOrganisation ? 'Hide test organisation' : 'Organise tests'}
+                </button>
+              </div>
+              {showOrganisation && <section className="bg-white border border-slate-100 rounded-[2rem] p-6 shadow-sm">
                 <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4 mb-4">
                   <div>
                     <p className="text-xs font-black uppercase tracking-widest text-slate-500">Test Folders</p>
@@ -1336,10 +1254,10 @@ const Dashboard: React.FC<DashboardProps> = ({
                     ))}
                   </div>
                 </div>
-              </section>
-              <div className="v3-layout-split grid grid-cols-1 xl:grid-cols-3 gap-10">
-              <div className="xl:col-span-2 space-y-10">
-                <section>
+              </section>}
+              <div className="v3-layout-split grid grid-cols-1 gap-10">
+              <div className="space-y-10">
+                <section id="available-tests">
                   <div className="flex items-center justify-between mb-8">
                     <h2 className="text-xl font-bold text-slate-950 uppercase">{selectedFolderId === 'archived' ? 'Archived Tests' : 'Active Tests'}</h2>
                     <p className="text-xs font-black uppercase tracking-widest text-slate-400">{viewableTests.length} visible</p>
@@ -1481,7 +1399,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                 </section>
               </div>
 
-              <aside className={`hidden xl:block bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-200 h-fit sticky top-12 transition-all ${isReadOnly ? 'opacity-60' : ''}`}>
+              <aside className="hidden">
                 <h2 className="text-lg font-bold mb-5 text-slate-950 uppercase text-center">Quick Actions</h2>
                 <div className="space-y-3">
                   <button
@@ -2035,7 +1953,26 @@ const Dashboard: React.FC<DashboardProps> = ({
             <span className="inline-flex items-center justify-center leading-none">{renderTabIcon(tab.id)}</span>
           </button>
         ))}
+        <button
+          type="button"
+          onClick={() => setShowMoreMenu((open) => !open)}
+          aria-label="Open more sections"
+          className={`flex-1 max-w-[64px] flex items-center justify-center py-2 rounded-xl min-h-[46px] transition-all ${showMoreMenu ? 'text-[var(--gold)]' : 'text-[var(--muted)]'}`}
+        >
+          <span className="text-xl leading-none">•••</span>
+        </button>
       </nav>
+      {showMoreMenu && (
+        <div className="fixed inset-x-3 bottom-[76px] z-50 rounded-2xl border border-[var(--edge)] bg-[var(--surface)] p-3 shadow-[var(--shadow-lift)] md:hidden">
+          <div className="grid grid-cols-2 gap-2">
+            {moreNavTabs.map((tab) => (
+              <button key={tab.id} type="button" onClick={() => { setActiveTab(tab.id); setShowMoreMenu(false); }} className="flex items-center gap-2 rounded-xl bg-[var(--panel-2)] px-3 py-3 text-left text-sm font-semibold text-[var(--text)]">
+                {renderTabIcon(tab.id)}<span>{tab.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       </div>
     </div>
   );

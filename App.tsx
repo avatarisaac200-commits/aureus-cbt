@@ -8,6 +8,7 @@ import logo from './assets/logo.png';
 import { AppTheme } from './theme';
 import { clearGlassAccent, syncGlassAccent } from './glassAccent';
 import { toast } from './components/ui/Toast';
+import { confirmDialog } from './components/ui/ConfirmDialog';
 import { ATTENDANCE_ROUTE, BLACKLIST_ROUTE } from './brainstorm';
 import { refreshOwnLeaderboardPublic, toPublicLeaderboardRow } from './lib/leaderboard';
 import { fisherYatesShuffle } from './lib/shuffle';
@@ -83,12 +84,16 @@ const sanitizeHex = (value: string, fallback: string) => {
   return /^#([0-9a-fA-F]{6})$/.test(v) ? v : fallback;
 };
 
-const verifyTestPassword = (test: MockTest): 'granted' | 'incorrect' | 'cancelled' => {
+const verifyTestPassword = async (test: MockTest): Promise<'granted' | 'cancelled'> => {
   const requiredPassword = String(test.accessPassword || '').trim();
   if (!requiredPassword) return 'granted';
-  const entered = window.prompt(`Enter password for "${test.name}"`);
-  if (entered === null) return 'cancelled';
-  return entered.trim() === requiredPassword ? 'granted' : 'incorrect';
+  const granted = await confirmDialog({
+    title: 'Test password required',
+    message: `Enter the password to open “${test.name}”.`,
+    confirmText: 'Open test',
+    expectedPassword: requiredPassword
+  });
+  return granted ? 'granted' : 'cancelled';
 };
 
 const normalizeCustomTheme = (value: any): CustomThemeConfig => {
@@ -953,11 +958,8 @@ const App: React.FC = () => {
         clearLinkedTestId();
         return false;
       }
-      const passwordStatus = verifyTestPassword(test);
+      const passwordStatus = await verifyTestPassword(test);
       if (passwordStatus !== 'granted') {
-        if (passwordStatus === 'incorrect') {
-          toast.error('Access denied', 'Incorrect test password.');
-        }
         clearLinkedTestId();
         return false;
       }
@@ -1607,11 +1609,8 @@ const App: React.FC = () => {
               toast.warning('Activation required', 'Activate your license key in Settings before starting a test.');
               return;
             }
-            const passwordStatus = verifyTestPassword(test);
+            const passwordStatus = await verifyTestPassword(test);
             if (passwordStatus !== 'granted') {
-              if (passwordStatus === 'incorrect') {
-                toast.error('Access denied', 'Incorrect test password.');
-              }
               return;
             }
             try {
