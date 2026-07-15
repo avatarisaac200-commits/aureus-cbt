@@ -35,6 +35,16 @@ const confidenceButtonStyles: Record<FlashcardConfidence, string> = {
   easy: 'border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100'
 };
 
+type StudyFilter = 'all' | 'due' | 'new' | 'learning' | 'strong';
+
+const studyFilters: Array<{ id: StudyFilter; label: string }> = [
+  { id: 'all', label: 'All cards' },
+  { id: 'due', label: 'Due now' },
+  { id: 'new', label: 'New' },
+  { id: 'learning', label: 'Learning' },
+  { id: 'strong', label: 'Strong' }
+];
+
 const chunk = <T,>(items: T[], size: number) => {
   const chunks: T[][] = [];
   for (let index = 0; index < items.length; index += size) {
@@ -66,6 +76,8 @@ const FlashcardsHub: React.FC<FlashcardsHubProps> = ({ user, isReadOnly = false,
   const [isRevealed, setIsRevealed] = useState(false);
   const [isAdvancing, setIsAdvancing] = useState(false);
   const [session, setSession] = useState<FlashcardSession | null>(null);
+  const [studyFilter, setStudyFilter] = useState<StudyFilter>('all');
+  const [cardOrder, setCardOrder] = useState<string[]>([]);
   const advanceTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -181,11 +193,40 @@ const FlashcardsHub: React.FC<FlashcardsHubProps> = ({ user, isReadOnly = false,
     return sortFlashcardsForStudy(built, progressByCardId);
   }, [questions, selectedTest, progressByCardId, isCuratedDeck, curatedCards]);
 
-  const activeCard = cards[index] || null;
+  const filteredCards = useMemo(() => {
+    const now = Date.now();
+    return cards.filter((card) => {
+      const progress = progressByCardId[card.id];
+      const confidence = progress?.confidence;
+      const isDue = !progress?.nextReviewAt || Date.parse(progress.nextReviewAt) <= now;
+      if (studyFilter === 'due') return isDue;
+      if (studyFilter === 'new') return !progress?.reviewCount;
+      if (studyFilter === 'learning') return confidence === 'again' || confidence === 'hard';
+      if (studyFilter === 'strong') return confidence === 'good' || confidence === 'easy';
+      return true;
+    });
+  }, [cards, progressByCardId, studyFilter]);
+  const studyCards = useMemo(() => {
+    const position = new Map(cardOrder.map((id, orderIndex) => [id, orderIndex]));
+    return [...filteredCards].sort((a, b) => (position.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (position.get(b.id) ?? Number.MAX_SAFE_INTEGER));
+  }, [cardOrder, filteredCards]);
+  const activeCard = studyCards[index] || null;
   const dueCount = cards.filter((card) => !progressByCardId[card.id]?.nextReviewAt || Date.parse(progressByCardId[card.id].nextReviewAt!) <= Date.now()).length;
   const masteredCount = cards.filter((card) => ['good', 'easy'].includes(progressByCardId[card.id]?.confidence || '')).length;
   const breakdown = getSessionBreakdown(session);
-  const progressPercent = cards.length ? ((index + 1) / cards.length) * 100 : 0;
+  const progressPercent = studyCards.length ? ((index + 1) / studyCards.length) * 100 : 0;
+
+  useEffect(() => {
+    setCardOrder((current) => {
+      const currentSet = new Set(current);
+      return [...current.filter((id) => cards.some((card) => card.id === id)), ...cards.filter((card) => !currentSet.has(card.id)).map((card) => card.id)];
+    });
+  }, [cards]);
+
+  useEffect(() => {
+    setIndex(0);
+    setIsRevealed(false);
+  }, [studyFilter, selectedTestId]);
 
   useEffect(() => {
     setIsRevealed(false);
@@ -207,7 +248,7 @@ const FlashcardsHub: React.FC<FlashcardsHubProps> = ({ user, isReadOnly = false,
       userId: user.id,
       sourceTestId: selectedTest.id,
       sourceTestName: selectedTest.name,
-      cardCount: cards.length,
+      cardCount: studyCards.length,
       reviewedCount: 0,
       startedAt: new Date().toISOString(),
       confidenceBreakdown: { again: 0, hard: 0, good: 0, easy: 0 }
@@ -240,7 +281,7 @@ const FlashcardsHub: React.FC<FlashcardsHubProps> = ({ user, isReadOnly = false,
         ...(currentSession || {
           id: `local_${Date.now()}`,
           userId: user.id,
-          cardCount: cards.length,
+          cardCount: studyCards.length,
           reviewedCount: 0,
           startedAt: now,
           confidenceBreakdown: { again: 0, hard: 0, good: 0, easy: 0 }
@@ -253,7 +294,7 @@ const FlashcardsHub: React.FC<FlashcardsHubProps> = ({ user, isReadOnly = false,
       };
       setSession(nextSession);
 
-      const isLast = index >= cards.length - 1;
+      const isLast = index >= studyCards.length - 1;
       if (isLast) {
         const { id: _localId, ...sessionPayload } = nextSession;
         await addDoc(collection(db, 'flashcardSessions'), {
@@ -268,7 +309,7 @@ const FlashcardsHub: React.FC<FlashcardsHubProps> = ({ user, isReadOnly = false,
           window.clearTimeout(advanceTimerRef.current);
         }
         advanceTimerRef.current = window.setTimeout(() => {
-          setIndex((value) => Math.min(value + 1, cards.length - 1));
+          setIndex((value) => Math.min(value + 1, studyCards.length - 1));
           setIsAdvancing(false);
           advanceTimerRef.current = null;
         }, 220);
@@ -285,6 +326,38 @@ const FlashcardsHub: React.FC<FlashcardsHubProps> = ({ user, isReadOnly = false,
     setIsAdvancing(false);
     setSession(null);
   };
+
+  const moveCard = (direction: -1 | 1) => {
+    if (studyCards.length < 2 || isAdvancing) return;
+    setIndex((value) => (value + direction + studyCards.length) % studyCards.length);
+    setIsRevealed(false);
+  };
+
+  const shuffleDeck = () => {
+    setCardOrder((current) => {
+      const next = [...current];
+      for (let i = next.length - 1; i > 0; i -= 1) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [next[i], next[j]] = [next[j], next[i]];
+      }
+      return next;
+    });
+    setIndex(0);
+    setIsRevealed(false);
+    toast.info('Deck shuffled', 'Your current study order has been mixed.');
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA' || target?.tagName === 'SELECT' || !activeCard) return;
+      if (event.key === 'ArrowRight') { event.preventDefault(); moveCard(1); }
+      if (event.key === 'ArrowLeft') { event.preventDefault(); moveCard(-1); }
+      if (event.key === ' ' || event.key === 'Enter') { event.preventDefault(); setIsRevealed((value) => !value); }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeCard, studyCards.length, isAdvancing]);
 
   return (
     <div className="v2-page flex-1 min-h-0 bg-slate-50 overflow-hidden">
@@ -363,6 +436,20 @@ const FlashcardsHub: React.FC<FlashcardsHubProps> = ({ user, isReadOnly = false,
               {loadError && <p className="mt-4 text-xs font-bold text-red-600">{loadError}</p>}
             </section>
 
+            <section className="bg-white border border-slate-100 rounded-[2rem] p-5 shadow-sm">
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <p className="text-xs font-black uppercase tracking-widest text-slate-500">Study queue</p>
+                <button type="button" onClick={shuffleDeck} disabled={studyCards.length < 2} className="text-xs font-black uppercase tracking-widest text-amber-700 disabled:opacity-40">Shuffle</button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {studyFilters.map((filter) => {
+                  const count = filter.id === 'all' ? cards.length : filter.id === 'due' ? dueCount : filter.id === 'new' ? cards.filter((card) => !progressByCardId[card.id]?.reviewCount).length : filter.id === 'learning' ? cards.filter((card) => ['again', 'hard'].includes(progressByCardId[card.id]?.confidence || '')).length : masteredCount;
+                  return <button key={filter.id} type="button" onClick={() => setStudyFilter(filter.id)} className={`rounded-xl px-3 py-2 text-xs font-bold transition-colors ${studyFilter === filter.id ? 'bg-slate-950 text-amber-400' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>{filter.label} <span className="opacity-70">{count}</span></button>;
+                })}
+              </div>
+              <p className="mt-4 text-xs leading-relaxed text-slate-500">Use ← → to move between cards. Press Space or Enter to flip.</p>
+            </section>
+
             <section className="grid grid-cols-3 gap-2">
               <div className="bg-white border border-slate-100 rounded-2xl p-4">
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Cards</p>
@@ -418,7 +505,7 @@ const FlashcardsHub: React.FC<FlashcardsHubProps> = ({ user, isReadOnly = false,
                     <div className="min-w-[170px]">
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Progress</span>
-                        <span className="text-xs font-black uppercase tracking-widest text-slate-600">{index + 1} / {cards.length}</span>
+                        <span className="text-xs font-black uppercase tracking-widest text-slate-600">{studyCards.length ? index + 1 : 0} / {studyCards.length}</span>
                       </div>
                       <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
                         <div className="h-full rounded-full bg-gradient-to-r from-amber-400 via-teal-400 to-emerald-500 transition-all duration-300" style={{ width: `${progressPercent}%` }}></div>
@@ -463,14 +550,11 @@ const FlashcardsHub: React.FC<FlashcardsHubProps> = ({ user, isReadOnly = false,
                   </div>
 
                   <div className="mt-6 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setIsRevealed((value) => !value)}
-                      disabled={isAdvancing}
-                      className="px-5 py-4 rounded-2xl bg-slate-950 text-amber-500 text-xs font-black uppercase tracking-widest disabled:opacity-40"
-                    >
-                      {isRevealed ? 'Hide Answer' : 'Reveal Answer'}
-                    </button>
+                    <div className="grid grid-cols-3 gap-2">
+                      <button type="button" onClick={() => moveCard(-1)} disabled={isAdvancing || studyCards.length < 2} className="px-4 py-4 rounded-2xl border border-slate-200 bg-white text-xs font-black uppercase tracking-widest text-slate-600 disabled:opacity-40">Previous</button>
+                      <button type="button" onClick={() => setIsRevealed((value) => !value)} disabled={isAdvancing} className="px-4 py-4 rounded-2xl bg-slate-950 text-amber-500 text-xs font-black uppercase tracking-widest disabled:opacity-40">{isRevealed ? 'Hide' : 'Reveal'}</button>
+                      <button type="button" onClick={() => moveCard(1)} disabled={isAdvancing || studyCards.length < 2} className="px-4 py-4 rounded-2xl border border-slate-200 bg-white text-xs font-black uppercase tracking-widest text-slate-600 disabled:opacity-40">Next</button>
+                    </div>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                       {(Object.keys(confidenceLabels) as FlashcardConfidence[]).map((key) => (
                         <button
