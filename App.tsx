@@ -29,6 +29,7 @@ const CoursesHub = lazy(() => import('./components/CoursesHub'));
 const VideoLearningHub = lazy(() => import('./components/VideoLearningHub'));
 const FlashcardsHub = lazy(() => import('./components/FlashcardsHub'));
 const SocialProfileOnboarding = lazy(() => import('./components/SocialProfileOnboarding'));
+const AuriAssistant = lazy(() => import('./components/AuriAssistant'));
 
 const DEFAULT_FREE_ACCESS_ENDS_AT_ISO = '2026-04-01T23:00:00.000Z'; // April 2, 2026 00:00 WAT
 const DEADLINE_CONFIG_DOC_ID = 'deadline_config';
@@ -1764,6 +1765,12 @@ const App: React.FC = () => {
       )}
       {currentUser && currentView !== 'auth' && currentView !== 'verify-email' && (
         <FlashcardsIntro user={currentUser} onTryNow={() => setCurrentView('flashcards')} />
+      )}
+      {currentUser && currentView !== 'auth' && currentView !== 'verify-email' && currentView !== 'exam' && (
+        <AuriAssistant
+          userName={currentUser.name}
+          view={currentView}
+        />
       )}
       {currentUser && isSocialProfileEditorOpen && (
         <SocialProfileOnboarding

@@ -3,7 +3,6 @@ import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { User, Question, TestSection, MockTest, ExamResult, DifficultyLevel, TestGenerationMode, CsvBundleCategoryField, CsvQuestionBundle, QuestionTagInsight, Flashcard } from '../types';
 import { db } from '../firebase';
 import { collection, addDoc, getDocs, getDoc, deleteDoc, doc, query, updateDoc, setDoc, writeBatch, limit, where, documentId, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
-import { GoogleGenAI } from '@google/genai';
 import ScientificText from './ScientificText';
 import AdminAnalytics from './AdminAnalytics';
 import AdminVideoManager from './AdminVideoManager';
@@ -120,7 +119,6 @@ const makeLicenseKey = () => {
   return `${part()}-${part()}-${part()}`;
 };
 
-const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 const DEFAULT_DIFFICULTY: DifficultyLevel = 'medium';
 const TEST_EDIT_AUTOSAVE_PREFIX = 'adminTestEditAutosave';
 const TEST_EDIT_ACTIVE_AUTOSAVE_PREFIX = 'adminTestEditAutosaveActive';
@@ -588,54 +586,6 @@ const extractQuestionsFromPdfTextFallback = (rawText: string): StagedQuestion[] 
   return results;
 };
 
-const renderPdfPagesToBase64Images = async (_base64Data: string, _maxPages: number): Promise<string[]> => {
-  // Placeholder: browser-side PDF rasterization requires pdf.js, which is not currently bundled.
-  return [];
-};
-
-const extractQuestionsFromImagesWithGemini = async (ai: GoogleGenAI, pageImages: string[]): Promise<StagedQuestion[]> => {
-  if (pageImages.length === 0) return [];
-  const prompt = `
-Extract CBT multiple-choice questions from these page images.
-Return ONLY a JSON array in this exact shape:
-[
-  {
-    "subject": "string",
-    "topic": "string",
-    "text": "string",
-    "options": ["string","string","string","string"],
-    "correctAnswerIndex": 0,
-    "explanation": "string"
-  }
-]
-Rules:
-- Exactly 4 options per question.
-- correctAnswerIndex must be 0..3.
-- Skip incomplete questions.
-`.trim();
-
-  try {
-    const parts: any[] = pageImages.slice(0, 8).map((img) => ({
-      inlineData: { mimeType: 'image/png', data: img }
-    }));
-    parts.push({ text: prompt });
-
-    const response = await ai.models.generateContent({
-      model: 'gemini-1.5-flash',
-      contents: { parts },
-      config: { responseMimeType: 'application/json' }
-    });
-
-    const raw = (response.text || '').trim();
-    if (!raw) return [];
-    const cleaned = raw.startsWith('```')
-      ? raw.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```$/i, '').trim()
-      : raw;
-    return normalizeExtractedQuestions(JSON.parse(cleaned));
-  } catch {
-    return [];
-  }
-};
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'questions', onLogout, onSwitchToStudent, onOpenCourses }) => {
   const notify = (message: string) => {
@@ -736,7 +686,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
   const [qIsActive, setQIsActive] = useState(true);
   const [editingMediaTarget, setEditingMediaTarget] = useState<EditingMediaTarget>({ kind: 'question-form' });
 
-  // AI Import State
+  // Import state
   const [importStatus, setImportStatus] = useState<'idle' | 'parsing' | 'review'>('idle');
   const [stagedQuestions, setStagedQuestions] = useState<StagedQuestion[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1419,12 +1369,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
   };
 
   const processPDF = async (file: File) => {
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY as string | undefined;
-    if (!apiKey) {
-      notify('Missing Gemini API key. Add VITE_GEMINI_API_KEY to .env.local.');
-      return;
-    }
-
     setImportStatus('parsing');
     try {
       const fileToBase64 = (f: File): Promise<string> => {
@@ -1437,108 +1381,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, initialTab = 'que
       };
 
       const base64Data = await fileToBase64(file);
-      const ai = new GoogleGenAI({ apiKey });
-      const prompt = `
-Extract CBT multiple-choice questions from this PDF.
-Return ONLY a JSON array.
-Each item must use this exact shape:
-{
-  "subject": "string",
-  "topic": "string",
-  "text": "string",
-  "options": ["string","string","string","string"],
-  "correctAnswerIndex": 0,
-  "explanation": "string"
-}
-Rules:
-- Exactly 4 options per question.
-- correctAnswerIndex must be 0,1,2,3.
-- Skip incomplete questions.
-      `.trim();
-
-      let parsedQuestions: StagedQuestion[] = [];
-      const models = ['gemini-2.0-flash', 'gemini-1.5-flash'];
-      let lastError: any = null;
-
-      // New extraction algorithm:
-      // 1) Try lower-cost models first.
-      // 2) Retry with exponential backoff on quota spikes.
-      for (const model of models) {
-        for (let attempt = 0; attempt < 3; attempt++) {
-          try {
-            const response = await ai.models.generateContent({
-              model,
-              contents: {
-                parts: [
-                  { inlineData: { mimeType: 'application/pdf', data: base64Data } },
-                  { text: prompt }
-                ]
-              },
-              config: { responseMimeType: "application/json" }
-            });
-
-            const raw = (response.text || '').trim();
-            if (!raw) throw new Error('EMPTY_RESPONSE');
-
-            const cleaned = raw.startsWith('```')
-              ? raw.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```$/i, '').trim()
-              : raw;
-
-            const normalized = normalizeExtractedQuestions(JSON.parse(cleaned));
-            if (normalized.length === 0) {
-              throw new Error('NO_VALID_QUESTIONS');
-            }
-
-            parsedQuestions = normalized;
-            break;
-          } catch (err: any) {
-            lastError = err;
-            const isRateLimited = String(err?.message || '').includes('429') || String(err?.status || '') === '429';
-            if (isRateLimited && attempt < 2) {
-              await wait((attempt + 1) * 1500);
-              continue;
-            }
-          }
-        }
-        if (parsedQuestions.length > 0) break;
-      }
-
+      const parsedQuestions = extractQuestionsFromPdfTextFallback(decodePdfBase64ToText(base64Data));
       if (parsedQuestions.length === 0) {
-        // Non-AI fallback: attempt regex extraction directly from PDF text fragments.
-        const fallbackQuestions = extractQuestionsFromPdfTextFallback(decodePdfBase64ToText(base64Data));
-        if (fallbackQuestions.length > 0) {
-          setStagedQuestions(fallbackQuestions);
-          setImportStatus('review');
-          notify(`AI extraction failed, but fallback parser found ${fallbackQuestions.length} question(s). Please review carefully.`);
-          return;
-        }
-
-        // OCR + vision fallback for scanned/image PDFs.
-        try {
-          const pageImages = await renderPdfPagesToBase64Images(base64Data, 8);
-          if (pageImages.length > 0) {
-            const imageQuestions = await extractQuestionsFromImagesWithGemini(ai, pageImages);
-            if (imageQuestions.length > 0) {
-              setStagedQuestions(imageQuestions);
-              setImportStatus('review');
-              notify(`AI PDF parser failed, but OCR/vision fallback found ${imageQuestions.length} question(s). Please review carefully.`);
-              return;
-            }
-          }
-        } catch (ocrErr) {
-          console.error('OCR fallback error:', ocrErr);
-        }
-
-        const errorText = String(lastError?.message || '').includes('429')
-          ? 'Extraction limit reached. Please wait 1-2 minutes and try again.'
-          : 'AI extraction failed and fallback parser found no valid questions.';
-        throw new Error(errorText);
+        throw new Error('No questions were found. This importer supports text-based PDFs; use CSV for scanned PDFs.');
       }
-
       setStagedQuestions(parsedQuestions);
       setImportStatus('review');
     } catch (err: any) {
-      notify(err?.message || "AI reading failed. Check your API key and file.");
+      notify(err?.message || 'Could not read this PDF.');
       setImportStatus('idle');
     }
   };
@@ -3941,7 +3791,7 @@ Rules:
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <button onClick={() => fileInputRef.current?.click()} className="bg-white p-8 rounded-[2rem] border-2 border-dashed border-slate-100 hover:border-amber-400 transition-all shadow-sm group text-left">
                       <h3 className="text-sm font-bold mb-2 uppercase text-slate-900">Import From PDF</h3>
-                      <p className="text-xs text-slate-400 font-medium">AI extract questions and review before publish.</p>
+                      <p className="text-xs text-slate-400 font-medium">Extract text-based questions and review before publish.</p>
                     </button>
                     <button onClick={() => csvInputRef.current?.click()} className="bg-white p-8 rounded-[2rem] border-2 border-dashed border-slate-100 hover:border-emerald-400 transition-all shadow-sm group text-left">
                       <h3 className="text-sm font-bold mb-2 uppercase text-slate-900">Import From CSV</h3>

@@ -9,3 +9,6 @@ crons = ["*/1 * * * *", "*/5 * * * *"]
 [vars]
 FIREBASE_PROJECT_ID = "aureus-medicos-cbt"
 WEB_PUSH_SUBJECT = "mailto:support@example.com"
+FIREBASE_WEB_API_KEY = "AIzaSyCw9TAxS-fsJSpyXUI7z3GiuU_EGP24cus"
+# Add your Firebase Hosting/custom-app origin here before deploying Auri.
+AURI_ALLOWED_ORIGINS = "https://aureus-cbt.vercel.app,https://aureus-medicos-cbt.web.app,https://aureus-medicos-cbt.firebaseapp.com,http://localhost:5173"

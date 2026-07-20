@@ -5,7 +5,6 @@ import { db } from '../firebase';
 import { collection, getDocs, doc, getDoc, query, where, documentId, addDoc, updateDoc } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 import ScientificText from './ScientificText';
 import logo from '../assets/logo.png';
-import { getOrCreateAiExplanation } from './aiExplanationService';
 import { toast } from './ui/Toast';
 import { buildOptionMetadata, getCorrectOptionId, getDisplayedOptions, isCorrectAnswer } from '../lib/examOptions';
 
@@ -20,11 +19,6 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
   const [activeSectionIndex, setActiveSectionIndex] = useState(0);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [showMoreInfo, setShowMoreInfo] = useState(false);
-  const [aiExplanation, setAiExplanation] = useState('');
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiError, setAiError] = useState('');
-  const [aiSource, setAiSource] = useState<'cache' | 'generated' | 'fallback' | ''>('');
   const [isTagDialogOpen, setIsTagDialogOpen] = useState(false);
   const [tagNote, setTagNote] = useState('');
   const [isSubmittingTag, setIsSubmittingTag] = useState(false);
@@ -225,34 +219,6 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
     }
   }, [reviewedSections, activeSectionIndex, currentQuestionIndex]);
 
-  useEffect(() => {
-    setAiExplanation('');
-    setAiError('');
-    setAiSource('');
-  }, [activeReviewedQuestionId]);
-
-  useEffect(() => {
-    if (!showMoreInfo || !activeReviewedQuestion) return;
-    let cancelled = false;
-    const run = async () => {
-      try {
-        setAiLoading(true);
-        setAiError('');
-        const result = await getOrCreateAiExplanation(activeReviewedQuestion);
-        if (!cancelled) {
-          setAiExplanation(result.text);
-          setAiSource(result.source);
-        }
-      } catch (err: any) {
-        if (!cancelled) setAiError(err?.message || 'Could not load AI explanation.');
-      } finally {
-        if (!cancelled) setAiLoading(false);
-      }
-    };
-    run();
-    return () => { cancelled = true; };
-  }, [showMoreInfo, activeReviewedQuestionId]);
-
   const submitQuestionTag = async (includeNote: boolean) => {
     if (!activeReviewedQuestion || !activeReviewedQuestionId || isSubmittingTag) return;
     setIsSubmittingTag(true);
@@ -385,13 +351,6 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
                  >
                    Add Tag
                  </button>
-                 <button
-                   type="button"
-                   onClick={() => setShowMoreInfo(prev => !prev)}
-                   className={`text-xs font-black px-4 py-1.5 rounded-full uppercase tracking-widest border ${showMoreInfo ? 'text-sky-700 bg-sky-50 border-sky-200' : 'text-slate-500 bg-white border-slate-200'}`}
-                 >
-                   {showMoreInfo ? 'Hide More Info' : 'Show More Info'}
-                 </button>
                  {reviewedUserAnswer === undefined ? (
                    <span className="text-xs font-black text-slate-400 bg-slate-100 px-4 py-1.5 rounded-full uppercase tracking-widest">Unattempted</span>
                  ) : isReviewedCorrect ? (
@@ -464,23 +423,6 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
                 <div className="absolute top-0 right-0 p-8 opacity-5">
                    <img src={logo} className="w-40 h-40" alt="" />
                 </div>
-              </div>
-            )}
-            {showMoreInfo && (
-              <div className="mt-10 p-8 bg-sky-50 rounded-[2rem] border border-sky-100 text-slate-800">
-                <h4 className="text-[11px] font-black text-sky-700 uppercase tracking-[0.3em] mb-4">AI More Info</h4>
-                {aiLoading && <p className="text-xs font-bold uppercase tracking-widest text-sky-700">Loading explanation...</p>}
-                {!aiLoading && aiError && <p className="text-xs font-bold uppercase tracking-widest text-red-600">{aiError}</p>}
-                {!aiLoading && !aiError && aiSource === 'fallback' && (
-                  <p className="mb-3 text-xs font-bold uppercase tracking-widest text-amber-700 bg-amber-100 border border-amber-200 rounded-lg px-3 py-2">
-                    AI quota is unavailable. Showing stored local explanation.
-                  </p>
-                )}
-                {!aiLoading && !aiError && aiExplanation && (
-                  <div className="text-sm leading-relaxed">
-                    <ScientificText text={aiExplanation} />
-                  </div>
-                )}
               </div>
             )}
           </div>

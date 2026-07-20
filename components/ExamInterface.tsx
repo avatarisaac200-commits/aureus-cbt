@@ -6,7 +6,6 @@ import { collection, getDocs, addDoc, query, where, documentId, doc, setDoc } fr
 import Calculator from './Calculator';
 import ScientificText from './ScientificText';
 import logo from '../assets/logo.png';
-import { getOrCreateAiExplanation } from './aiExplanationService';
 import { confirmDialog } from './ui/ConfirmDialog';
 import { refreshOwnLeaderboardPublic, toPublicLeaderboardRow } from '../lib/leaderboard';
 import { fisherYatesShuffle } from '../lib/shuffle';
@@ -59,10 +58,6 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
   const [isFinishing, setIsFinishing] = useState(false);
   const [revealedAnswers, setRevealedAnswers] = useState<Record<string, boolean>>({});
   const [showMoreInfo, setShowMoreInfo] = useState(false);
-  const [aiExplanation, setAiExplanation] = useState('');
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiError, setAiError] = useState('');
-  const [aiSource, setAiSource] = useState<'cache' | 'generated' | 'fallback' | ''>('');
   const effectiveSections = resolvedSections || test.sections;
 
   // Store the randomized order of question IDs for each section.
@@ -324,39 +319,6 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
   const isCurrentRevealed = currentQuestionId ? Boolean(revealedAnswers[currentQuestionId]) : false;
   const timerToneClass = timeRemaining <= 60 ? 'text-red-500' : timeRemaining <= 300 ? 'text-amber-500' : 'text-emerald-500';
 
-  useEffect(() => {
-    setAiExplanation('');
-    setAiError('');
-    setAiSource('');
-  }, [currentQuestionId]);
-
-  useEffect(() => {
-    if (!instantFeedback || !showMoreInfo || !currentQuestion || !isCurrentRevealed) return;
-    let cancelled = false;
-    const run = async () => {
-      try {
-        const localExplanation = currentQuestion.explanation?.trim();
-        if (localExplanation) {
-          setAiExplanation(localExplanation);
-          setAiSource('fallback');
-        }
-        setAiLoading(true);
-        setAiError('');
-        const result = await getOrCreateAiExplanation(currentQuestion);
-        if (!cancelled) {
-          setAiExplanation(result.text);
-          setAiSource(result.source);
-        }
-      } catch (err: any) {
-        if (!cancelled) setAiError(err?.message || 'Could not load AI explanation.');
-      } finally {
-        if (!cancelled) setAiLoading(false);
-      }
-    };
-    run();
-    return () => { cancelled = true; };
-  }, [instantFeedback, showMoreInfo, currentQuestionId, isCurrentRevealed, currentQuestion]);
-
   if (isPreparingQuestions) {
     return (
       <div className="v2-page h-full w-full flex flex-col items-center justify-center bg-slate-950 p-8 text-center">
@@ -544,17 +506,12 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
             {instantFeedback && showMoreInfo && isCurrentRevealed && (
               <div className="mt-6 p-5 rounded-2xl border border-sky-100 bg-sky-50">
                 <h4 className="text-xs font-bold uppercase tracking-widest text-sky-700 mb-3">Explanation</h4>
-                {aiLoading && <p className="text-xs font-bold uppercase tracking-widest text-sky-700">Loading explanation...</p>}
-                {!aiLoading && aiError && <p className="text-xs font-bold uppercase tracking-widest text-red-600">{aiError}</p>}
-                {!aiLoading && !aiError && aiSource === 'fallback' && (
-                  <p className="mb-3 text-xs font-bold uppercase tracking-widest text-amber-700 bg-amber-100 border border-amber-200 rounded-lg px-3 py-2">
-                    AI quota is unavailable. Showing stored local explanation.
-                  </p>
-                )}
-                {!aiLoading && !aiError && aiExplanation && (
+                {currentQuestion?.explanation?.trim() ? (
                   <div className="text-sm leading-relaxed text-slate-700">
-                    <ScientificText text={aiExplanation} />
+                    <ScientificText text={currentQuestion.explanation.trim()} />
                   </div>
+                ) : (
+                  <p className="text-sm text-slate-600">No explanation has been added for this question yet.</p>
                 )}
               </div>
             )}
