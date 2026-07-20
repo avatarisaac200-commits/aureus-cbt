@@ -15,6 +15,7 @@ declare global {
  * Renders scientific notation:
  * - Supports MathJax (LaTeX via $...$ or \(...\))
  * - Legacy support for: ^{text}, _{text}, [num/den]
+ * - Lightweight textbook emphasis: **bold** and *italic*
  */
 const ScientificText: React.FC<ScientificTextProps> = ({ text, className = "" }) => {
   const containerRef = useRef<HTMLSpanElement>(null);
@@ -32,11 +33,17 @@ const ScientificText: React.FC<ScientificTextProps> = ({ text, className = "" })
   // Split by legacy patterns or math patterns if needed
   // For now, we mainly rely on MathJax if the user provides $...$
   // But we still process the custom ^{} and _{} for backward compatibility
-  const parts = text.split(/(\^\{[^}]+\}|\^[\w\d]|_{[^}]+}|_[\w\d]|\[[^\]]+\/[^\]]+\])/g);
+  const parts = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*|\^\{[^}]+\}|\^[\w\d]|_{[^}]+}|_[\w\d]|\[[^\]]+\/[^\]]+\])/g);
 
   return (
     <span ref={containerRef} className={`tex2jax_process inline-block ${className}`}>
       {parts.map((part, i) => {
+        if (part.startsWith('**') && part.endsWith('**')) {
+          return <strong key={i} className="font-bold">{part.slice(2, -2)}</strong>;
+        }
+        if (part.startsWith('*') && part.endsWith('*')) {
+          return <em key={i}>{part.slice(1, -1)}</em>;
+        }
         if (part.startsWith('^{')) {
           return <sup key={i} className="text-[0.8em]">{part.slice(2, -1)}</sup>;
         }

@@ -1,5 +1,6 @@
 import React, { FormEvent, useEffect, useRef, useState } from 'react';
 import { auth } from '../firebase';
+import ScientificText from './ScientificText';
 
 type AuriMessage = {
   id: string;
@@ -114,12 +115,12 @@ const AuriAssistant: React.FC<AuriAssistantProps> = ({ userName, view, isQuizMod
           <div className="flex-1 space-y-3 overflow-y-auto bg-slate-50 p-4">
             {messages.map((message) => (
               <div key={message.id} className={`flex ${message.role === 'student' ? 'justify-end' : 'justify-start'}`}>
-                <p className={`max-w-[88%] whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm ${message.role === 'student'
+                <div className={`auri-message max-w-[88%] whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm ${message.role === 'student'
                   ? 'rounded-br-md bg-amber-500 font-medium text-slate-950'
                   : 'rounded-bl-md border border-slate-200 bg-white text-slate-700'}`}
                 >
-                  {message.text}
-                </p>
+                  <ScientificText text={message.text} />
+                </div>
               </div>
             ))}
             {isSending && (

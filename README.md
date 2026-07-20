@@ -55,6 +55,12 @@ Auri is an authenticated, app-wide study companion. Its Gemini API key is stored
    npx wrangler secret put GEMINI_API_KEY
    ```
 
+   Optional but recommended: add a Groq fallback key. Auri uses it only when Gemini has a network error, rate limit, or server outage.
+
+   ```powershell
+   npx wrangler secret put GROQ_API_KEY
+   ```
+
 3. Deploy the Worker and copy its `https://...workers.dev` URL:
 
    ```powershell
