@@ -12,7 +12,7 @@ type AuriAssistantProps = {
   view: string;
 };
 
-const getWelcome = (name: string) => `Hey ${name}! I'm Auri — your study sidekick. I can help you study or find your way around the app. What are we conquering today?`;
+const getWelcome = (name: string) => `Hey ${name}! I'm Auri - your study sidekick. I can help you study or find your way around the app. What are we conquering today?`;
 
 const suggestions = ['Explain a topic simply', 'Help me make a study plan', 'Where do I find my flashcards?'];
 const AURI_WORKER_URL = (import.meta.env.VITE_AURI_WORKER_URL as string | undefined)?.replace(/\/$/, '') || '';
@@ -86,15 +86,15 @@ const AuriAssistant: React.FC<AuriAssistantProps> = ({ userName, view }) => {
   };
 
   return (
-    <div className="fixed bottom-5 right-4 z-[220] flex flex-col items-end gap-3 sm:bottom-6 sm:right-6">
+    <div className="auri-floating fixed right-4 z-[220] flex flex-col items-end gap-3 sm:right-6">
       {isOpen && (
-        <section className="flex h-[min(620px,calc(100svh-7rem))] w-[min(390px,calc(100vw-2rem))] flex-col overflow-hidden rounded-[2rem] border border-amber-200 bg-white shadow-2xl">
+        <section className="auri-panel flex w-[min(390px,calc(100vw-2rem))] flex-col overflow-hidden rounded-[2rem] border border-amber-200 bg-white shadow-2xl">
           <header className="flex items-center justify-between bg-slate-950 px-5 py-4 text-white">
             <div>
               <p className="text-sm font-black tracking-wide text-amber-400">Auri</p>
               <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Study companion</p>
             </div>
-            <button type="button" onClick={() => setIsOpen(false)} className="rounded-lg px-2 py-1 text-lg text-slate-300 hover:bg-slate-800 hover:text-white" aria-label="Close Auri">×</button>
+            <button type="button" onClick={() => setIsOpen(false)} className="rounded-lg px-3 py-2 text-lg text-slate-300 hover:bg-slate-800 hover:text-white" aria-label="Close Auri">x</button>
           </header>
 
           <div className="flex-1 space-y-3 overflow-y-auto bg-slate-50 p-4">
@@ -109,7 +109,7 @@ const AuriAssistant: React.FC<AuriAssistantProps> = ({ userName, view }) => {
               </div>
             ))}
             {isSending && (
-              <p className="w-fit rounded-2xl rounded-bl-md border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">Auri is thinking…</p>
+              <p className="w-fit rounded-2xl rounded-bl-md border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">Auri is thinking...</p>
             )}
             <div ref={messagesEndRef} />
           </div>
@@ -142,8 +142,8 @@ const AuriAssistant: React.FC<AuriAssistantProps> = ({ userName, view }) => {
                 }}
                 rows={2}
                 maxLength={2000}
-                placeholder="Ask Auri anything study-related…"
-                className="min-h-[46px] flex-1 resize-none rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
+                placeholder="Ask Auri anything study-related..."
+                className="auri-composer min-h-[48px] flex-1 resize-none rounded-xl border border-slate-200 px-3 py-2 outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
                 aria-label="Message Auri"
               />
               <button type="submit" disabled={!input.trim() || isSending} className="rounded-xl bg-slate-950 px-4 py-3 text-xs font-black uppercase tracking-wider text-amber-400 disabled:cursor-not-allowed disabled:opacity-40">Send</button>
@@ -158,7 +158,7 @@ const AuriAssistant: React.FC<AuriAssistantProps> = ({ userName, view }) => {
         aria-expanded={isOpen}
         aria-label={isOpen ? 'Close Auri assistant' : 'Open Auri assistant'}
       >
-        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-500 text-lg">✦</span>
+        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-500 text-lg">*</span>
         <span><span className="block text-sm font-black text-amber-400">Ask Auri</span><span className="block text-[10px] font-bold uppercase tracking-widest text-slate-300">Study sidekick</span></span>
       </button>
     </div>

@@ -207,6 +207,27 @@ label {
 .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
 .pb-safe { padding-bottom: env(safe-area-inset-bottom, 10px); }
 
+/* Auri stays clear of the mobile bottom navigation and keeps its composer at
+   the 16px threshold that prevents mobile browsers from zooming on focus. */
+.auri-floating {
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 5.5rem);
+}
+
+.auri-panel {
+  height: min(620px, calc(100svh - 11rem));
+}
+
+.auri-composer {
+  font-size: 16px !important;
+  line-height: 1.4;
+  touch-action: manipulation;
+}
+
+@media (min-width: 640px) {
+  .auri-floating { bottom: 1.5rem; }
+  .auri-panel { height: min(620px, calc(100svh - 7rem)); }
+}
+
 .v2-app, .v2-page { background: transparent; color: var(--text); }
 .v2-surface, .v2-shell, .v2-panel, .v2-app .bg-white, .v2-app aside, .v2-app nav, .v2-app header {
   background: var(--panel) !important;
@@ -611,6 +632,10 @@ label {
   .v2-app select,
   .v2-app textarea {
     font-size: 13px !important;
+  }
+
+  .v2-app .auri-composer {
+    font-size: 16px !important;
   }
 
   .v2-app .question-text {
