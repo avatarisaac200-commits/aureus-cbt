@@ -63,7 +63,7 @@ Auri is an authenticated, app-wide study companion. Its Gemini API key is stored
 
 4. Set `VITE_AURI_WORKER_URL` to that URL in your Vercel project environment variables, then redeploy the frontend.
 
-The assistant accepts signed-in users only, limits each user to 25 messages per UTC day, and is unavailable during active exams.
+The assistant accepts signed-in users only and is unavailable during active exams.
 
 ## Classboard On Firebase Spark
 

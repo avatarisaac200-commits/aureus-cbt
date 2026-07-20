@@ -245,6 +245,30 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
     }
   };
 
+  const askAuriForDeepDive = () => {
+    if (!activeReviewedQuestion || typeof window === 'undefined') return;
+    const options = getDisplayedOptions(
+      activeReviewedQuestion,
+      result.attemptOptionOrders?.[activeReviewedQuestion.id]
+    );
+    const selectedOption = options.find((option, index) => reviewedUserAnswer === option.id || reviewedUserAnswer === index);
+    const correctOption = options.find((option) => option.id === getCorrectOptionId(activeReviewedQuestion));
+    const clip = (value: string, maxLength: number) => value.trim().slice(0, maxLength);
+    const optionLines = options.map((option, index) => `${String.fromCharCode(65 + index)}. ${clip(option.text, 160)}`).join('\n');
+    const prompt = `Give me a deep, student-friendly review of this completed CBT question. Explain the core concept step by step, why the correct option is right, why the other options are tempting or wrong, and end with a memory trick. Be encouraging and practical.
+
+Question: ${clip(activeReviewedQuestion.text, 500)}
+
+Options:
+${optionLines}
+
+My selected answer: ${selectedOption ? `${String.fromCharCode(65 + options.indexOf(selectedOption))}. ${clip(selectedOption.text, 160)}` : 'No answer recorded'}
+Correct answer: ${correctOption ? `${String.fromCharCode(65 + options.indexOf(correctOption))}. ${clip(correctOption.text, 160)}` : 'Unavailable'}
+Stored explanation: ${clip(activeReviewedQuestion.explanation || 'None provided.', 350)}`;
+
+    window.dispatchEvent(new CustomEvent('auri:deep-dive', { detail: { prompt } }));
+  };
+
   if (loading) {
     return (
       <div className="v2-page h-full w-full flex flex-col items-center justify-center bg-slate-950 safe-top safe-bottom">
@@ -351,6 +375,15 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
                  >
                    Add Tag
                  </button>
+                 {activeReviewedQuestion && (
+                   <button
+                     type="button"
+                     onClick={askAuriForDeepDive}
+                     className="text-xs font-black px-4 py-1.5 rounded-full uppercase tracking-widest border text-sky-700 bg-sky-50 border-sky-200 hover:bg-sky-100"
+                   >
+                     Ask Auri
+                   </button>
+                 )}
                  {reviewedUserAnswer === undefined ? (
                    <span className="text-xs font-black text-slate-400 bg-slate-100 px-4 py-1.5 rounded-full uppercase tracking-widest">Unattempted</span>
                  ) : isReviewedCorrect ? (

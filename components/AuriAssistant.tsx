@@ -10,29 +10,32 @@ type AuriMessage = {
 type AuriAssistantProps = {
   userName: string;
   view: string;
+  isQuizMode?: boolean;
 };
 
-const getWelcome = (name: string) => `Hey ${name}! I'm Auri - your study sidekick. I can help you study or find your way around the app. What are we conquering today?`;
+const getWelcome = (name: string, isQuizMode: boolean) => isQuizMode
+  ? `Hey ${name}! Quiz mode means we can learn as we go. Show me what feels sneaky and we'll unpack it together.`
+  : `Hey ${name}! I'm Auri - your study sidekick. I can help you study or find your way around the app. What are we conquering today?`;
 
 const suggestions = ['Explain a topic simply', 'Help me make a study plan', 'Where do I find my flashcards?'];
 const AURI_WORKER_URL = (import.meta.env.VITE_AURI_WORKER_URL as string | undefined)?.replace(/\/$/, '') || '';
 
 const makeId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
-const AuriAssistant: React.FC<AuriAssistantProps> = ({ userName, view }) => {
+const AuriAssistant: React.FC<AuriAssistantProps> = ({ userName, view, isQuizMode = false }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [messages, setMessages] = useState<AuriMessage[]>(() => [{
     id: makeId(),
     role: 'auri',
-    text: getWelcome(userName)
+    text: getWelcome(userName, isQuizMode)
   }]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    setMessages([{ id: makeId(), role: 'auri', text: getWelcome(userName) }]);
-  }, [userName]);
+    setMessages([{ id: makeId(), role: 'auri', text: getWelcome(userName, isQuizMode) }]);
+  }, [userName, isQuizMode]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ block: 'end', behavior: 'smooth' });
@@ -60,7 +63,7 @@ const AuriAssistant: React.FC<AuriAssistantProps> = ({ userName, view }) => {
           'content-type': 'application/json',
           authorization: `Bearer ${idToken}`
         },
-        body: JSON.stringify({ message, context: { view } })
+        body: JSON.stringify({ message, context: { view, isQuizMode } })
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
@@ -84,6 +87,17 @@ const AuriAssistant: React.FC<AuriAssistantProps> = ({ userName, view }) => {
     event.preventDefault();
     void sendMessage();
   };
+
+  useEffect(() => {
+    const handleDeepDive = (event: Event) => {
+      const prompt = String((event as CustomEvent<{ prompt?: string }>).detail?.prompt || '').trim();
+      if (!prompt) return;
+      setIsOpen(true);
+      void sendMessage(prompt);
+    };
+    window.addEventListener('auri:deep-dive', handleDeepDive);
+    return () => window.removeEventListener('auri:deep-dive', handleDeepDive);
+  });
 
   return (
     <div className="auri-floating fixed right-4 z-[220] flex flex-col items-end gap-3 sm:right-6">

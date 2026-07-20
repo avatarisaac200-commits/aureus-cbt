@@ -1766,10 +1766,11 @@ const App: React.FC = () => {
       {currentUser && currentView !== 'auth' && currentView !== 'verify-email' && (
         <FlashcardsIntro user={currentUser} onTryNow={() => setCurrentView('flashcards')} />
       )}
-      {currentUser && currentView !== 'auth' && currentView !== 'verify-email' && currentView !== 'exam' && (
+      {currentUser && currentView !== 'auth' && currentView !== 'verify-email' && (currentView !== 'exam' || activeQuizMode) && (
         <AuriAssistant
           userName={currentUser.name}
           view={currentView}
+          isQuizMode={currentView === 'exam' && activeQuizMode}
         />
       )}
       {currentUser && isSocialProfileEditorOpen && (
