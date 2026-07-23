@@ -786,7 +786,20 @@ const CommunityHub: React.FC<CommunityHubProps> = ({ user, isReadOnly = false, o
                   const authorProfile = profileMap[thread.authorId];
                   const isFriend = Boolean(friendshipByPeerId[thread.authorId]);
                   return (
-                    <div key={thread.id} onClick={() => setSelectedThreadId(thread.id)} className={`rounded-[1.5rem] border px-4 py-4 cursor-pointer ${selectedThread?.id === thread.id ? 'border-amber-300 bg-amber-50' : 'border-slate-200 bg-slate-50'}`}>
+                    <div
+                      key={thread.id}
+                      role="button"
+                      tabIndex={0}
+                      aria-pressed={selectedThread?.id === thread.id}
+                      onClick={() => setSelectedThreadId(thread.id)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          setSelectedThreadId(thread.id);
+                        }
+                      }}
+                      className={`rounded-[1.5rem] border px-4 py-4 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 ${selectedThread?.id === thread.id ? 'border-amber-300 bg-amber-50' : 'border-slate-200 bg-slate-50'}`}
+                    >
                       <p className="text-[10px] font-black uppercase text-slate-400">{thread.channel} | {formatRelativeTime(thread.latestActivityAt)}</p>
                       <p className="mt-2 text-sm font-black uppercase text-slate-900">{thread.title}</p>
                       <p className="mt-2 text-xs text-slate-600 line-clamp-3">{thread.body}</p>

@@ -948,6 +948,14 @@ const Dashboard: React.FC<DashboardProps> = ({
   const mobileNavTabs = navTabs.filter((tab) => ['home', 'flashcards', 'reviews', 'profile'].includes(tab.id));
   const moreNavTabs = navTabs.filter((tab) => !mobileNavTabs.some((mobileTab) => mobileTab.id === tab.id));
 
+  useEffect(() => {
+    const closeMoreMenu = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setShowMoreMenu(false);
+    };
+    window.addEventListener('keydown', closeMoreMenu);
+    return () => window.removeEventListener('keydown', closeMoreMenu);
+  }, []);
+
   const renderTabIcon = (tabId: MainTab) => {
     if (tabId === 'home') {
       return (
@@ -1036,6 +1044,7 @@ const Dashboard: React.FC<DashboardProps> = ({
               onClick={() => setActiveTab(tab.id)}
               title={tab.label}
               aria-label={tab.label}
+              aria-current={activeTab === tab.id ? 'page' : undefined}
               className={`w-full min-h-[44px] px-3 rounded-xl border flex items-center gap-3 text-left text-sm font-semibold ${activeTab === tab.id ? 'bg-[var(--gold-dim)] text-[var(--gold)] border-[var(--gold)]' : 'bg-transparent text-[var(--muted)] border-[var(--edge)] hover:bg-[var(--panel)]'}`}
             >
               <span className="inline-flex items-center justify-center">{renderTabIcon(tab.id)}</span>
@@ -1941,29 +1950,35 @@ const Dashboard: React.FC<DashboardProps> = ({
           )}
         </div>
       </div>
-      <nav className="fixed bottom-0 left-0 right-0 z-50 flex justify-between items-center bg-[var(--surface)] backdrop-blur-xl border-t border-[var(--edge)] py-2 pb-safe px-1 md:hidden">
+      <nav aria-label="Primary navigation" className="bottom-nav fixed bottom-0 left-0 right-0 z-50 flex justify-between items-center bg-[var(--surface)] backdrop-blur-xl border-t border-[var(--edge)] py-2 pb-safe px-1 md:hidden">
         {mobileNavTabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             title={tab.label}
             aria-label={tab.label}
-            className={`flex-1 max-w-[64px] flex items-center justify-center py-2 rounded-xl min-h-[46px] transition-all ${activeTab === tab.id ? 'text-[var(--gold)]' : 'text-[var(--muted)]'}`}
+            aria-current={activeTab === tab.id ? 'page' : undefined}
+            className={`flex-1 max-w-[76px] flex flex-col gap-1 items-center justify-center py-1 rounded-xl min-h-[48px] transition-all ${activeTab === tab.id ? 'text-[var(--gold)] bg-[var(--gold-dim)]' : 'text-[var(--muted)]'}`}
           >
             <span className="inline-flex items-center justify-center leading-none">{renderTabIcon(tab.id)}</span>
+            <span className="text-[10px] font-semibold leading-none">{tab.label}</span>
           </button>
         ))}
         <button
           type="button"
           onClick={() => setShowMoreMenu((open) => !open)}
           aria-label="Open more sections"
-          className={`flex-1 max-w-[64px] flex items-center justify-center py-2 rounded-xl min-h-[46px] transition-all ${showMoreMenu ? 'text-[var(--gold)]' : 'text-[var(--muted)]'}`}
+          aria-expanded={showMoreMenu}
+          aria-controls="more-navigation"
+          className={`flex-1 max-w-[76px] flex flex-col gap-1 items-center justify-center py-1 rounded-xl min-h-[48px] transition-all ${showMoreMenu ? 'text-[var(--gold)] bg-[var(--gold-dim)]' : 'text-[var(--muted)]'}`}
         >
           <span className="text-xl leading-none">•••</span>
+          <span className="text-[10px] font-semibold leading-none">More</span>
         </button>
       </nav>
       {showMoreMenu && (
-        <div className="fixed inset-x-3 bottom-[76px] z-50 rounded-2xl border border-[var(--edge)] bg-[var(--surface)] p-3 shadow-[var(--shadow-lift)] md:hidden">
+        <div id="more-navigation" role="dialog" aria-label="More navigation" className="fixed inset-x-3 bottom-[76px] z-50 rounded-2xl border border-[var(--edge)] bg-[var(--surface)] p-3 shadow-[var(--shadow-lift)] md:hidden">
+          <p className="px-2 pb-2 text-xs font-semibold text-[var(--muted)]">More sections</p>
           <div className="grid grid-cols-2 gap-2">
             {moreNavTabs.map((tab) => (
               <button key={tab.id} type="button" onClick={() => { setActiveTab(tab.id); setShowMoreMenu(false); }} className="flex items-center gap-2 rounded-xl bg-[var(--panel-2)] px-3 py-3 text-left text-sm font-semibold text-[var(--text)]">

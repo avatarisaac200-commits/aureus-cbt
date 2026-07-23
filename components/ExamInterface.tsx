@@ -57,6 +57,7 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
   const [isPreparingQuestions, setIsPreparingQuestions] = useState(true);
   const [isFinishing, setIsFinishing] = useState(false);
   const [revealedAnswers, setRevealedAnswers] = useState<Record<string, boolean>>({});
+  const [flaggedQuestions, setFlaggedQuestions] = useState<Record<string, boolean>>({});
   const [showMoreInfo, setShowMoreInfo] = useState(false);
   const effectiveSections = resolvedSections || test.sections;
 
@@ -288,9 +289,13 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
   };
 
   const finalSubmit = async () => {
+    const sectionsForSummary = shuffledSections.length > 0 ? shuffledSections : effectiveSections;
+    const questionIds = sectionsForSummary.flatMap(section => section.questionIds);
+    const unansweredCount = questionIds.filter(id => answers[id] === undefined).length;
+    const flaggedCount = questionIds.filter(id => flaggedQuestions[id]).length;
     const confirmed = await confirmDialog({
       title: 'Submit test?',
-      message: 'Submit your entire test now?',
+      message: `${unansweredCount ? `${unansweredCount} unanswered question${unansweredCount === 1 ? '' : 's'}` : 'All questions answered'}${flaggedCount ? ` and ${flaggedCount} flagged for review` : ''}. Submit your entire test now?`,
       confirmText: 'Submit',
       variant: 'primary'
     });
@@ -317,6 +322,8 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
   const correctAnswerIndex = displayedOptions.findIndex(option => option.id === correctOptionId);
   const currentAnswer = currentQuestionId ? answers[currentQuestionId] : undefined;
   const isCurrentRevealed = currentQuestionId ? Boolean(revealedAnswers[currentQuestionId]) : false;
+  const isCurrentFlagged = currentQuestionId ? Boolean(flaggedQuestions[currentQuestionId]) : false;
+  const answeredCount = activeSection?.questionIds.filter(id => answers[id] !== undefined).length || 0;
   const timerToneClass = timeRemaining <= 60 ? 'text-red-500' : timeRemaining <= 300 ? 'text-amber-500' : 'text-emerald-500';
 
   useEffect(() => {
@@ -463,8 +470,16 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
         <main className="flex-1 flex flex-col p-4 md:p-8 overflow-hidden min-h-0">
           <div className="flex-1 bg-white rounded-[2rem] md:rounded-[3rem] shadow-sm border border-slate-100 v2-scroll p-8 md:p-12">
             <div className="mb-8 border-b border-slate-50 pb-4 flex justify-between items-center">
-               <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Question {currentQuestionIndex + 1} of {activeSection.questionIds.length}</span>
+               <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Question {currentQuestionIndex + 1} of {activeSection.questionIds.length} · {answeredCount} answered</span>
                <div className="flex items-center gap-2 q-action-row">
+                 <button
+                   type="button"
+                   onClick={() => currentQuestionId && setFlaggedQuestions(prev => ({ ...prev, [currentQuestionId]: !prev[currentQuestionId] }))}
+                   aria-pressed={isCurrentFlagged}
+                   className={`text-xs font-bold px-3 py-1 rounded-full uppercase tracking-widest border ${isCurrentFlagged ? 'text-amber-700 bg-amber-50 border-amber-200' : 'text-slate-500 bg-white border-slate-200'}`}
+                 >
+                   {isCurrentFlagged ? 'Flagged' : 'Flag for review'}
+                 </button>
                  {instantFeedback && (
                    <button
                      type="button"
@@ -548,10 +563,14 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
             </div>
             <div className="p-4 grid grid-cols-4 gap-2 content-start v2-scroll flex-1">
               {activeSection.questionIds.map((id, idx) => (
-                <button key={id} onClick={() => { setCurrentQuestionIndex(idx); setShowNav(false); }} className={`q-dot h-10 rounded-xl text-xs font-bold border transition-all ${idx === currentQuestionIndex ? 'active border-amber-500 bg-amber-500 text-slate-950 shadow-[var(--shadow-gold)]' : answers[id] !== undefined ? 'border-sky-200 bg-sky-50 text-sky-700' : 'border-slate-100 text-slate-300 bg-white hover:border-slate-300'}`}>{idx + 1}</button>
+                <button key={id} onClick={() => { setCurrentQuestionIndex(idx); setShowNav(false); }} aria-label={`Question ${idx + 1}${answers[id] !== undefined ? ', answered' : ', unanswered'}${flaggedQuestions[id] ? ', flagged for review' : ''}`} className={`q-dot h-10 rounded-xl text-xs font-bold border transition-all ${idx === currentQuestionIndex ? 'active border-amber-500 bg-amber-500 text-slate-950 shadow-[var(--shadow-gold)]' : flaggedQuestions[id] ? 'border-amber-300 bg-amber-50 text-amber-700' : answers[id] !== undefined ? 'border-sky-200 bg-sky-50 text-sky-700' : 'border-slate-100 text-slate-300 bg-white hover:border-slate-300'}`}>{idx + 1}</button>
               ))}
             </div>
             <div className="p-6 bg-slate-50 border-t border-slate-100">
+              <div className="mb-4 space-y-1 text-xs text-slate-500">
+                <p><span className="inline-block w-2 h-2 rounded-full bg-sky-500 mr-2" />Answered</p>
+                <p><span className="inline-block w-2 h-2 rounded-full bg-amber-500 mr-2" />Flagged for review</p>
+              </div>
               <button onClick={() => { setShowCalculator(!showCalculator); setShowNav(false); }} className="w-full py-4 bg-slate-950 text-amber-500 rounded-xl text-xs font-bold uppercase tracking-widest shadow-lg">Calculator</button>
             </div>
           </div>

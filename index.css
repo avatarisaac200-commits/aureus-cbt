@@ -108,7 +108,7 @@ html, body, #root {
 
 body {
   font-family: 'DM Sans', sans-serif;
-  font-size: 14px;
+  font-size: 15px;
   color: var(--text);
   background: radial-gradient(circle at 20% 0, var(--gold-dim), transparent 40%), var(--ink);
   -webkit-font-smoothing: antialiased;
@@ -142,7 +142,7 @@ select:focus, input:focus, textarea:focus {
 
 label {
   display: block;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--muted);
   font-weight: 500;
   margin-bottom: 6px;
@@ -264,6 +264,33 @@ label {
 .v2-app .bg-sky-50, .v2-app .bg-sky-100 { background: var(--sky-dim) !important; color: var(--sky) !important; }
 .v2-app .border-slate-100, .v2-app .border-slate-200, .v2-app .border-slate-700, .v2-app .border-slate-800, .v2-app .border-sky-100, .v2-app .border-sky-200, .v2-app .border-amber-100, .v2-app .border-amber-200, .v2-app .border-amber-500, .v2-app .border-red-100, .v2-app .border-red-400, .v2-app .border-rose-100, .v2-app .border-rose-500, .v2-app .border-emerald-100, .v2-app .border-emerald-500 { border-color: var(--edge) !important; }
 .v2-app button, button, [role='button'] { min-height: 44px; }
+
+/* A consistent focus treatment makes every interactive surface discoverable
+   for keyboard users without changing the product's visual identity. */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[role='button']:focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 3px;
+}
+
+/* Dense all-caps metadata is useful in small doses, but the original tracking
+   made labels visually louder than the study content. */
+.v2-app .tracking-widest {
+  letter-spacing: 0.075em !important;
+}
+
+.v2-app .tracking-\[0\.2em\],
+.v2-app .tracking-\[0\.24em\],
+.v2-app .tracking-\[0\.28em\],
+.v2-app .tracking-\[0\.3em\],
+.v2-app .tracking-\[0\.4em\],
+.v2-app .tracking-\[0\.5em\] {
+  letter-spacing: 0.1em !important;
+}
 
 .v2-app .text-\[8px\], .v2-app .text-\[9px\], .v2-app .text-\[10px\], .text-\[8px\], .text-\[9px\], .text-\[10px\] {
   font-size: 12px !important;
@@ -632,7 +659,7 @@ label {
 
   .v2-app button,
   .v2-app .btn {
-    min-height: 40px !important;
+    min-height: 44px !important;
     font-size: 11px !important;
     padding-top: 8px !important;
     padding-bottom: 8px !important;
