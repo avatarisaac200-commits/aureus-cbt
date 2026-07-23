@@ -319,6 +319,28 @@ const ExamInterface: React.FC<ExamInterfaceProps> = ({ test, user, instantFeedba
   const isCurrentRevealed = currentQuestionId ? Boolean(revealedAnswers[currentQuestionId]) : false;
   const timerToneClass = timeRemaining <= 60 ? 'text-red-500' : timeRemaining <= 300 ? 'text-amber-500' : 'text-emerald-500';
 
+  useEffect(() => {
+    if (!instantFeedback || view !== 'testing' || !currentQuestion || typeof window === 'undefined') return;
+    const selectedOption = displayedOptions.find((option) => option.id === currentAnswer);
+    const correctOption = displayedOptions.find((option) => option.id === correctOptionId);
+    window.dispatchEvent(new CustomEvent('auri:screen-context', {
+      detail: {
+        context: {
+          mode: 'quiz',
+          section: activeSection?.name,
+          questionNumber: currentQuestionIndex + 1,
+          text: currentQuestion.text,
+          options: displayedOptions.map((option) => option.text),
+          selectedOption: selectedOption?.text,
+          correctOption: isCurrentRevealed ? correctOption?.text : undefined,
+          explanation: isCurrentRevealed ? currentQuestion.explanation || '' : undefined,
+          answerRevealed: isCurrentRevealed
+        }
+      }
+    }));
+    return () => window.dispatchEvent(new CustomEvent('auri:screen-context', { detail: { context: null } }));
+  }, [activeSection?.name, correctOptionId, currentAnswer, currentQuestion, currentQuestionIndex, displayedOptions, instantFeedback, isCurrentRevealed, view]);
+
   if (isPreparingQuestions) {
     return (
       <div className="v2-page h-full w-full flex flex-col items-center justify-center bg-slate-950 p-8 text-center">

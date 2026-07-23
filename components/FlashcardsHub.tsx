@@ -234,6 +234,25 @@ const FlashcardsHub: React.FC<FlashcardsHubProps> = ({ user, isReadOnly = false,
   }, [activeCard?.id]);
 
   useEffect(() => {
+    if (!activeCard || typeof window === 'undefined') return;
+    window.dispatchEvent(new CustomEvent('auri:screen-context', {
+      detail: {
+        context: {
+          mode: 'flashcard',
+          section: `Flashcards: ${activeCard.subject}`,
+          questionNumber: index + 1,
+          text: activeCard.front,
+          options: [],
+          correctOption: isRevealed ? activeCard.back : undefined,
+          explanation: isRevealed ? activeCard.explanation || '' : undefined,
+          answerRevealed: isRevealed
+        }
+      }
+    }));
+    return () => window.dispatchEvent(new CustomEvent('auri:screen-context', { detail: { context: null } }));
+  }, [activeCard, index, isRevealed]);
+
+  useEffect(() => {
     return () => {
       if (advanceTimerRef.current !== null) {
         window.clearTimeout(advanceTimerRef.current);
@@ -318,6 +337,16 @@ const FlashcardsHub: React.FC<FlashcardsHubProps> = ({ user, isReadOnly = false,
       console.error('Flashcard progress save error:', err);
       toast.error('Progress not saved', err?.message || 'Could not save this card review.');
     }
+  };
+
+  const askAuriAboutCard = () => {
+    if (!activeCard) return;
+    const answer = isRevealed ? `\nAnswer: ${activeCard.back}${activeCard.explanation ? `\nExplanation: ${activeCard.explanation}` : ''}` : '';
+    window.dispatchEvent(new CustomEvent('auri:deep-dive', {
+      detail: {
+        prompt: `Help me learn the flashcard currently on screen. Explain the idea simply, give me a memorable hook, and end with one quick self-check question. If the answer has not been revealed, give a helpful hint rather than the answer.\n\nSubject: ${activeCard.subject}\nTopic: ${activeCard.topic}\nFlashcard prompt: ${activeCard.front}${answer}`
+      }
+    }));
   };
 
   const resetSession = () => {
@@ -512,6 +541,9 @@ const FlashcardsHub: React.FC<FlashcardsHubProps> = ({ user, isReadOnly = false,
                       </div>
                     </div>
                   </div>
+                  <button type="button" onClick={askAuriAboutCard} className="mb-5 self-start rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-black uppercase tracking-widest text-amber-800 transition hover:bg-amber-100">
+                    Ask Auri about this card
+                  </button>
 
                   <div className="flashcard-stage relative flex-1 min-h-[380px]">
                     <div className="flashcard-stack-card absolute inset-x-7 top-5 bottom-0 rounded-[2rem] border border-teal-100 bg-teal-50/70 shadow-sm" style={{ '--rotate': '-3deg', transform: 'rotate(-3deg)' } as React.CSSProperties}></div>

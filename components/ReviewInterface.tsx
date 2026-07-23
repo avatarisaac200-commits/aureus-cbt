@@ -219,6 +219,29 @@ const ReviewInterface: React.FC<ReviewInterfaceProps> = ({ result, onExit }) => 
     }
   }, [reviewedSections, activeSectionIndex, currentQuestionIndex]);
 
+  useEffect(() => {
+    if (!activeReviewedQuestion || typeof window === 'undefined') return;
+    const options = getDisplayedOptions(activeReviewedQuestion, result.attemptOptionOrders?.[activeReviewedQuestion.id]);
+    const selectedOption = options.find((option, index) => reviewedUserAnswer === option.id || reviewedUserAnswer === index);
+    const correctOption = options.find((option) => option.id === getCorrectOptionId(activeReviewedQuestion));
+    window.dispatchEvent(new CustomEvent('auri:screen-context', {
+      detail: {
+        context: {
+          mode: 'review',
+          section: activeReviewedSection?.name,
+          questionNumber: currentQuestionIndex + 1,
+          text: activeReviewedQuestion.text,
+          options: options.map((option) => option.text),
+          selectedOption: selectedOption?.text,
+          correctOption: correctOption?.text,
+          explanation: activeReviewedQuestion.explanation || '',
+          answerRevealed: true
+        }
+      }
+    }));
+    return () => window.dispatchEvent(new CustomEvent('auri:screen-context', { detail: { context: null } }));
+  }, [activeReviewedQuestion, activeReviewedSection?.name, currentQuestionIndex, result.attemptOptionOrders, reviewedUserAnswer]);
+
   const submitQuestionTag = async (includeNote: boolean) => {
     if (!activeReviewedQuestion || !activeReviewedQuestionId || isSubmittingTag) return;
     setIsSubmittingTag(true);

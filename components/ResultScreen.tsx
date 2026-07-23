@@ -18,6 +18,14 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ result, onClose, onReview }
     ? Math.round((correctAnsweredCount / answeredQuestionCount) * 100)
     : 0;
 
+  const askAuriAboutResult = () => {
+    window.dispatchEvent(new CustomEvent('auri:deep-dive', {
+      detail: {
+        prompt: `Help me review my just-completed test result. Give me an encouraging, practical next-step plan. Start with what went well, then explain what I should focus on before my next attempt.\n\nTest: ${result.testName}\nScore: ${result.score}/${result.maxScore} (${percentage}%)\nAnswered accuracy: ${correctAnsweredCount}/${answeredQuestionCount} (${answeredAccuracy}%)\nSection scores:\n${result.sectionBreakdown.map((section) => `- ${section.sectionName}: ${section.score}/${section.total}`).join('\n')}`
+      }
+    }));
+  };
+
   const bandClass = percentage >= 70 ? 'score-high' : percentage >= 40 ? 'score-mid' : 'score-low';
   const ringColor = percentage >= 70 ? 'var(--emerald)' : percentage >= 40 ? 'var(--gold)' : 'var(--rose)';
   const ringStyle = {
@@ -74,6 +82,9 @@ const ResultScreen: React.FC<ResultScreenProps> = ({ result, onClose, onReview }
           <button onClick={onReview} className="btn btn-outline-sky w-full">Review Test</button>
           <button onClick={onClose} className="btn btn-ghost w-full">Back to Dashboard</button>
         </div>
+        <button onClick={askAuriAboutResult} className="mt-3 w-full rounded-xl bg-slate-950 px-4 py-3 text-xs font-black uppercase tracking-widest text-amber-400 transition hover:bg-slate-800">
+          Ask Auri about this result
+        </button>
       </div>
     </div>
   );

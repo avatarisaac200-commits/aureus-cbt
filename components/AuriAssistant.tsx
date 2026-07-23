@@ -8,6 +8,18 @@ type AuriMessage = {
   text: string;
 };
 
+type ScreenQuestionContext = {
+  mode: 'review' | 'quiz' | 'flashcard';
+  section?: string;
+  questionNumber?: number;
+  text: string;
+  options: string[];
+  selectedOption?: string;
+  correctOption?: string;
+  explanation?: string;
+  answerRevealed?: boolean;
+};
+
 type AuriAssistantProps = {
   userName: string;
   view: string;
@@ -15,11 +27,25 @@ type AuriAssistantProps = {
 };
 
 const getWelcome = (name: string, isQuizMode: boolean) => isQuizMode
-  ? `Hey ${name}! Quiz mode means we can learn as we go. Show me what feels sneaky and we'll unpack it together.`
-  : `Hey ${name}! I'm Auri - your study sidekick. I can help you study or find your way around the app. What are we conquering today?`;
+  ? `Hi ${name}. I can help you reason through the question in front of you, explain a concept, or give a useful hint.`
+  : `Hi ${name}. I can help you study, review a question, or find your way around the app.`;
 
 const suggestions = ['Explain a topic simply', 'Help me make a study plan', 'Where do I find my flashcards?'];
 const AURI_WORKER_URL = (import.meta.env.VITE_AURI_WORKER_URL as string | undefined)?.replace(/\/$/, '') || '';
+const pageLabels: Record<string, string> = {
+  dashboard: 'Student dashboard',
+  courses: 'Courses',
+  videos: 'Video learning hub',
+  flashcards: 'Flashcards',
+  attendance: 'Attendance',
+  blacklist: 'Blacklist',
+  exam: 'Quiz mode',
+  results: 'Test results',
+  review: 'Test review',
+  admin: 'Admin dashboard',
+  'root-admin': 'Root admin dashboard',
+  'update-manual': "What's New"
+};
 
 const makeId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -27,6 +53,7 @@ const AuriAssistant: React.FC<AuriAssistantProps> = ({ userName, view, isQuizMod
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState('');
   const [isSending, setIsSending] = useState(false);
+  const [screenQuestion, setScreenQuestion] = useState<ScreenQuestionContext | null>(null);
   const [messages, setMessages] = useState<AuriMessage[]>(() => [{
     id: makeId(),
     role: 'auri',
@@ -73,7 +100,20 @@ const AuriAssistant: React.FC<AuriAssistantProps> = ({ userName, view, isQuizMod
           'content-type': 'application/json',
           authorization: `Bearer ${idToken}`
         },
-        body: JSON.stringify({ message, context: { view, isQuizMode } })
+        body: JSON.stringify({
+          message,
+          context: {
+            view,
+            pageLabel: pageLabels[view] || view,
+            path: window.location.pathname,
+            isQuizMode,
+            screenQuestion,
+            recentAuriMessages: messages
+              .filter((item) => item.role === 'auri')
+              .slice(-3)
+              .map((item) => item.text.slice(0, 450))
+          }
+        })
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
@@ -113,6 +153,15 @@ const AuriAssistant: React.FC<AuriAssistantProps> = ({ userName, view, isQuizMod
     window.addEventListener('auri:deep-dive', handleDeepDive);
     return () => window.removeEventListener('auri:deep-dive', handleDeepDive);
   });
+
+  useEffect(() => {
+    const handleScreenContext = (event: Event) => {
+      const detail = (event as CustomEvent<{ context?: ScreenQuestionContext | null }>).detail;
+      setScreenQuestion(detail?.context || null);
+    };
+    window.addEventListener('auri:screen-context', handleScreenContext);
+    return () => window.removeEventListener('auri:screen-context', handleScreenContext);
+  }, []);
 
   return (
     <>
